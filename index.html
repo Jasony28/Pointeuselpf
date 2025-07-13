@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ma Pointeuse Pro</title>
+    <link rel="manifest" href="./manifest.json">
+    <link rel="icon" href="./favicon.ico" type="image/x-icon">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+        }
+        .hidden-by-default { 
+            display: none; 
+        }
+        .nav-active { 
+            background-color: #E5E7EB;
+            font-weight: 600; 
+        }
+        #mobile-nav::-webkit-scrollbar {
+            display: none;
+        }
+        #mobile-nav {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div id="app-loader" class="flex justify-center items-center min-h-screen">
+        <p class="text-lg font-semibold animate-pulse">Chargement de l'application...</p>
+    </div>
+
+    <div id="auth-container" class="hidden-by-default min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white shadow-lg rounded-xl p-8 w-full max-w-sm space-y-6 text-center">
+            <h1 class="text-3xl font-bold flex items-center justify-center gap-2">
+                <span>🕒</span>Ma Pointeuse Pro
+            </h1>
+            <p class="text-gray-600">Veuillez vous connecter pour commencer.</p>
+            <button id="loginBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-3 rounded-lg w-full transition-transform transform hover:scale-105">
+                Se connecter avec Google
+            </button>
+        </div>
+    </div>
+
+    <div id="pending-approval-container" class="hidden-by-default min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white shadow-lg rounded-xl p-8 w-full max-w-sm space-y-4 text-center">
+            <h1 class="text-2xl font-bold">⌛ En attente d'approbation</h1>
+            <p class="text-gray-600">Votre compte a bien été créé. Un administrateur doit maintenant valider votre accès. Veuillez réessayer plus tard.</p>
+            <button id="logoutPendingBtn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold px-4 py-2 rounded-lg w-full">
+                Se déconnecter
+            </button>
+        </div>
+    </div>
+
+    <div id="app-container" class="hidden-by-default">
+        <header class="bg-white shadow-md p-4 flex justify-between items-center sticky top-0 z-10">
+            <h1 class="text-xl font-bold">Pointeuse Lpf</h1>
+            <nav id="main-nav" class="hidden md:flex items-center gap-2"></nav>
+            <div class="flex items-center">
+                <span id="currentUserDisplay" class="text-sm mr-4 hidden sm:inline"></span>
+                <button id="logoutBtn" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-md text-sm">Déconnexion</button>
+            </div>
+        </header>
+        <nav id="mobile-nav" class="md:hidden bg-white shadow-inner p-2 flex justify-start overflow-x-auto whitespace-nowrap border-t sticky top-[65px] z-10"></nav>
+        <main id="page-content" class="p-4 md:p-6"></main>
+    </div>
+
+    <script src="https://unpkg.com/jspdf@latest/dist/jspdf.umd.min.js"></script>
+    <script src="https://unpkg.com/jspdf-autotable@latest/dist/jspdf.plugin.autotable.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    
+    <script type="module" src="./app.js"></script>
+
+</body>
+</html>
