@@ -27,8 +27,8 @@ export async function render() {
                                 <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
                             </svg>
                         </button>
-                        <button id="publishWeekBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded-lg disabled:bg-gray-400 disabled:cursor-not-allowed">
-                            Publier la semaine
+                        <button id="publishBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded-lg disabled:bg-gray-400">
+                            {/* Le texte sera dynamique */}
                         </button>
                     </div>
                 </div>
@@ -41,6 +41,7 @@ export async function render() {
                 <div class="flex-grow grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3" id="planning-grid"></div>
             </div>
         </div>
+
         <div id="planningItemModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-20 p-4">
             <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
                 <h3 id="modalTitle" class="text-xl font-bold mb-4"></h3>
@@ -63,7 +64,6 @@ export async function render() {
 function setupEventListeners() {
     document.getElementById("prevWeekBtn").onclick = () => { currentWeekOffset--; displayWeek(); };
     document.getElementById("nextWeekBtn").onclick = () => { currentWeekOffset++; displayWeek(); };
-    document.getElementById("publishWeekBtn").onclick = publishWeek;
     document.getElementById("planningItemForm").onsubmit = savePlanningItem;
     document.getElementById("cancelPlanningItem").onclick = closePlanningItemModal;
     document.getElementById("refreshPlanningBtn").onclick = displayWeek;
@@ -72,20 +72,55 @@ function setupEventListeners() {
 async function publishWeek() {
     const { startOfWeek } = getWeekDateRange(currentWeekOffset);
     const weekId = startOfWeek.toISOString().split('T')[0];
-    if (confirm(`Voulez-vous publier le planning pour la semaine du ${startOfWeek.toLocaleDateString('fr-FR')} ?`)) {
+    const weekString = startOfWeek.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+    
+    if (confirm(`Voulez-vous PUBLIER le planning pour la semaine du ${weekString} ?`)) {
         const publishDocRef = doc(db, "publishedSchedules", weekId);
+        const notificationRef = collection(db, "notifications");
         try {
             await setDoc(publishDocRef, { published: true, publishedAt: serverTimestamp(), publishedBy: currentUser.displayName });
-            alert("Planning publié !");
+            await addDoc(notificationRef, {
+                title: "Nouveau Planning Publié",
+                body: `Le planning pour la semaine du ${weekString} est maintenant disponible.`,
+                createdAt: serverTimestamp(),
+                author: currentUser.displayName
+            });
+            alert("Planning publié et notification envoyée !");
             updatePublishButton(true);
         } catch (error) { console.error("Erreur de publication:", error); alert("La publication a échoué."); }
     }
 }
 
+async function sendUpdateNotification() {
+    const { startOfWeek } = getWeekDateRange(currentWeekOffset);
+    const weekString = startOfWeek.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+
+    if (confirm(`Voulez-vous envoyer une notification de MISE À JOUR pour le planning de la semaine du ${weekString} ?`)) {
+        const notificationRef = collection(db, "notifications");
+        try {
+            await addDoc(notificationRef, {
+                title: "Planning Mis à Jour",
+                body: `Le planning de la semaine du ${weekString} a été modifié.`,
+                createdAt: serverTimestamp(),
+                author: currentUser.displayName
+            });
+            alert("Notification de mise à jour envoyée !");
+        } catch (error) { console.error("Erreur de notification:", error); alert("L'envoi a échoué."); }
+    }
+}
+
 async function updatePublishButton(isPublished) {
-    const btn = document.getElementById('publishWeekBtn');
-    btn.textContent = isPublished ? 'Publié ✔' : 'Publier la semaine';
-    btn.disabled = isPublished;
+    const btn = document.getElementById('publishBtn');
+    btn.disabled = false;
+    if (isPublished) {
+        btn.textContent = 'Notifier les changements';
+        btn.className = 'bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-lg';
+        btn.onclick = sendUpdateNotification;
+    } else {
+        btn.textContent = 'Publier la semaine';
+        btn.className = 'bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded-lg';
+        btn.onclick = publishWeek;
+    }
 }
 
 async function displayWeek() {
@@ -115,7 +150,7 @@ async function displayWeek() {
 }
 
 function createChantierBlock(planningDoc) {
-    const { id, chantierId, chantierName, teamNames, duration, notes } = planningDoc;
+    const { id, chantierName, teamNames, duration, notes } = planningDoc;
     const block = document.createElement('div');
     block.className = 'p-2 bg-white rounded shadow cursor-pointer hover:bg-gray-50';
     block.dataset.planningId = id;
@@ -136,7 +171,15 @@ function createChantierBlock(planningDoc) {
     };
 
     const dropZone = block.querySelector('.colleague-drop-zone');
-    if (teamNames) {teamNames.forEach(name => {const item = document.createElement('div');item.className = 'p-1 bg-blue-100 text-blue-800 rounded text-xs';item.textContent = name;item.dataset.colleagueName = name;dropZone.appendChild(item);});}
+    if (teamNames) {
+        teamNames.forEach(name => {
+            const item = document.createElement('div');
+            item.className = 'p-1 bg-blue-100 text-blue-800 rounded text-xs';
+            item.textContent = name;
+            item.dataset.colleagueName = name;
+            dropZone.appendChild(item);
+        });
+    }
     
     new Sortable(dropZone, {
         group: 'shared',
@@ -201,7 +244,13 @@ async function savePlanningItem(e) {
     try {
         if (currentEditingId) {
             const docRef = doc(db, "planning", currentEditingId);
-            await updateDoc(docRef, { chantierId, chantierName, duration, notes });
+            const planningDoc = (await getDoc(docRef)).data();
+            await updateDoc(docRef, { 
+                chantierId, 
+                chantierName, 
+                duration: duration || planningDoc.duration, // Conserve l'ancienne valeur si le champ est vide
+                notes: notes || planningDoc.notes,
+            });
         } else {
             await addDoc(collection(db, "planning"), {
                 date: currentEditingDate,

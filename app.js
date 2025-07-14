@@ -4,37 +4,33 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebas
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit, updateDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 
+// !!! ATTENTION : REMPLACEZ CECI PAR VOTRE VRAIE CONFIGURATION FIREBASE !!!
+// Vous la trouverez dans votre console Firebase > Paramètres du projet
 const firebaseConfig = {
   apiKey: "AIzaSyDm-C8VDT1Td85WUBWR7MxlrjDkY78eoHs",
   authDomain: "pointeuse-lpf.firebaseapp.com",
   projectId: "pointeuse-lpf",
-  storageBucket: "pointeuse-lpf.appspot.com",
+  storageBucket: "pointeuse-lpf.firebasestorage.app",
   messagingSenderId: "649868999549",
   appId: "1:649868999549:web:aa54b056faaca0924f6a14",
   measurementId: "G-Q8WQGCDPFX"
 };
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 export const db = getFirestore(app);
 
-const loader = document.getElementById('app-loader');
-const authContainer = document.getElementById('auth-container');
-const pendingContainer = document.getElementById('pending-approval-container');
-const appContainer = document.getElementById('app-container');
-const loginBtn = document.getElementById('loginBtn');
-const logoutBtn = document.getElementById('logoutBtn');
-const logoutPendingBtn = document.getElementById('logoutPendingBtn');
 export const pageContent = document.getElementById('page-content');
-const notificationBell = document.getElementById('notification-bell');
-const notificationPanel = document.getElementById('notification-panel');
-const notificationDot = document.getElementById('notification-dot');
-const notificationList = document.getElementById('notification-list');
-
 export let currentUser = null;
 export let isAdmin = false;
 
 onAuthStateChanged(auth, async (user) => {
+    const loader = document.getElementById('app-loader');
+    const authContainer = document.getElementById('auth-container');
+    const pendingContainer = document.getElementById('pending-approval-container');
+    const appContainer = document.getElementById('app-container');
+
     try {
         loader.style.display = 'flex';
         authContainer.style.display = 'none';
@@ -94,7 +90,7 @@ onAuthStateChanged(auth, async (user) => {
         }
     } catch (error) {
         console.error("Erreur critique lors de l'initialisation de l'utilisateur :", error);
-        alert("Une erreur critique est survenue au démarrage. Vérifiez la console (F12) pour les détails.");
+        alert("Une erreur critique est survenue. Vérifiez la console (F12) et assurez-vous que votre 'firebaseConfig' est correcte.");
         loader.style.display = 'none';
         if (auth.currentUser) {
             signOut(auth);
@@ -104,11 +100,16 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-loginBtn.onclick = () => signInWithPopup(auth, new GoogleAuthProvider());
-logoutBtn.onclick = () => signOut(auth);
-logoutPendingBtn.onclick = () => signOut(auth);
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('loginBtn').onclick = () => signInWithPopup(auth, new GoogleAuthProvider());
+    document.getElementById('logoutBtn').onclick = () => signOut(auth);
+    document.getElementById('logoutPendingBtn').onclick = () => signOut(auth);
+});
 
 function setupNotifications() {
+    const notificationBell = document.getElementById('notification-bell');
+    const notificationPanel = document.getElementById('notification-panel');
+    
     notificationBell.onclick = () => {
         notificationPanel.classList.toggle('hidden');
         if (!notificationPanel.classList.contains('hidden')) {
@@ -118,42 +119,58 @@ function setupNotifications() {
     checkForUnreadNotifications();
 }
 
+// Dans app.js, remplacez ces deux fonctions
+
 async function loadNotifications() {
+    const notificationList = document.getElementById('notification-list');
     notificationList.innerHTML = '<p class="p-4 text-sm text-gray-500">Chargement...</p>';
-    const q = query(collection(db, "notifications"), orderBy("createdAt", "desc"), limit(10));
-    const snapshot = await getDocs(q);
-    if (snapshot.empty) {
-        notificationList.innerHTML = '<p class="p-4 text-sm text-gray-500">Aucune notification.</p>';
-        return;
+    
+    try {
+        const q = query(collection(db, "notifications"), orderBy("createdAt", "desc"), limit(10));
+        const snapshot = await getDocs(q);
+
+        if (snapshot.empty) {
+            notificationList.innerHTML = '<p class="p-4 text-sm text-gray-500">Aucune notification.</p>';
+            return;
+        }
+        
+        notificationList.innerHTML = '';
+        snapshot.forEach(docSnap => {
+            const notif = docSnap.data();
+            const div = document.createElement('div');
+            div.className = 'p-3 border-b hover:bg-gray-50';
+            div.innerHTML = `<p class="font-semibold">${notif.title}</p><p class="text-sm text-gray-600">${notif.body}</p><p class="text-xs text-gray-400 mt-1">${new Date(notif.createdAt.seconds * 1000).toLocaleString('fr-FR')}</p>`;
+            notificationList.appendChild(div);
+        });
+
+        markNotificationsAsRead();
+    } catch (error) {
+        console.error("Erreur de chargement des notifications:", error);
+        notificationList.innerHTML = '<p class="p-4 text-sm text-red-500">Erreur de chargement. Un index est peut-être nécessaire (voir console F12).</p>';
     }
-    notificationList.innerHTML = '';
-    snapshot.forEach(docSnap => {
-        const notif = docSnap.data();
-        const div = document.createElement('div');
-        div.className = 'p-3 border-b hover:bg-gray-50';
-        div.innerHTML = `<p class="font-semibold">${notif.title}</p><p class="text-sm text-gray-600">${notif.body}</p><p class="text-xs text-gray-400 mt-1">${new Date(notif.createdAt.seconds * 1000).toLocaleString('fr-FR')}</p>`;
-        notificationList.appendChild(div);
-    });
-    markNotificationsAsRead();
 }
 
 async function checkForUnreadNotifications() {
-    const lastCheck = localStorage.getItem('lastNotificationCheck');
-    if (!lastCheck) {
-        notificationDot.classList.remove('hidden');
-        return;
-    }
-    const q = query(collection(db, "notifications"), where("createdAt", ">", new Date(lastCheck)), limit(1));
-    const snapshot = await getDocs(q);
-    if (!snapshot.empty) {
-        notificationDot.classList.remove('hidden');
-    } else {
-        notificationDot.classList.add('hidden');
+    try {
+        const notificationDot = document.getElementById('notification-dot');
+        const lastCheck = localStorage.getItem('lastNotificationCheck');
+        
+        if (!lastCheck) {
+            notificationDot.classList.remove('hidden');
+            return;
+        }
+        
+        const q = query(collection(db, "notifications"), where("createdAt", ">", new Date(lastCheck)), limit(1));
+        const snapshot = await getDocs(q);
+
+        notificationDot.classList.toggle('hidden', snapshot.empty);
+    } catch (error) {
+        console.error("Erreur de vérification des notifications:", error);
     }
 }
 
 function markNotificationsAsRead() {
-    notificationDot.classList.add('hidden');
+    document.getElementById('notification-dot').classList.add('hidden');
     localStorage.setItem('lastNotificationCheck', new Date().toISOString());
 }
 
@@ -163,6 +180,7 @@ const userTabs = [
     { id: 'add-entry', name: 'Nouveau Pointage' },
     { id: 'user-history', name: 'Mon Historique' },
 ];
+
 const adminTabs = [
     { id: 'admin-dashboard', name: 'Tableau de Bord' },
     { id: 'admin-planning', name: 'Planification' },

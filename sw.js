@@ -1,6 +1,6 @@
 // sw.js - Service Worker pour le mode hors ligne
 
-const CACHE_NAME = 'pointeuse-pro-cache-v5'; // IMPORTANT : Version du cache mise à jour
+const CACHE_NAME = 'pointeuse-pro-cache-v6'; // On incrémente encore la version
 const urlsToCache = [
   './',
   './index.html',
@@ -22,19 +22,18 @@ const urlsToCache = [
   './icons/icon-192x192.png',
   './icons/icon-512x512.png',
 
-  // NOUVEAU : On ajoute les librairies externes au cache
-  'https://cdn.tailwindcss.com',
+  // On met en cache les librairies JS externes
   'https://unpkg.com/jspdf@latest/dist/jspdf.umd.min.js',
   'https://unpkg.com/jspdf-autotable@latest/dist/jspdf.plugin.autotable.js',
   'https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap'
+
+  // ON RETIRE TAILWIND ET GOOGLE FONTS DU CACHE CAR ILS POSENT DES PROBLÈMES DE CORS
 ];
 
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
       console.log('Cache ouvert et mise à jour des fichiers.');
-      // On utilise 'add' pour les requêtes individuelles pour plus de robustesse
       const promises = urlsToCache.map(url => {
         return cache.add(url).catch(err => {
           console.warn(`Échec de la mise en cache de ${url}`, err);
