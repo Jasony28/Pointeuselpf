@@ -2,7 +2,7 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit, updateDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDm-C8VDT1Td85WUBWR7MxlrjDkY78eoHs",
@@ -26,12 +26,15 @@ const loginBtn = document.getElementById('loginBtn');
 const logoutBtn = document.getElementById('logoutBtn');
 const logoutPendingBtn = document.getElementById('logoutPendingBtn');
 export const pageContent = document.getElementById('page-content');
+const notificationBell = document.getElementById('notification-bell');
+const notificationPanel = document.getElementById('notification-panel');
+const notificationDot = document.getElementById('notification-dot');
+const notificationList = document.getElementById('notification-list');
 
 export let currentUser = null;
 export let isAdmin = false;
 
 onAuthStateChanged(auth, async (user) => {
-    // NOUVEAU : On entoure toute la logique d'un bloc try...catch
     try {
         loader.style.display = 'flex';
         authContainer.style.display = 'none';
@@ -76,6 +79,7 @@ onAuthStateChanged(auth, async (user) => {
                     loader.style.display = 'none';
                     appContainer.style.display = 'block';
                     setupNavigation();
+                    setupNotifications();
                     navigateTo(isAdmin ? 'admin-dashboard' : 'user-dashboard');
                     break;
                 default:
@@ -92,7 +96,6 @@ onAuthStateChanged(auth, async (user) => {
         console.error("Erreur critique lors de l'initialisation de l'utilisateur :", error);
         alert("Une erreur critique est survenue au démarrage. Vérifiez la console (F12) pour les détails.");
         loader.style.display = 'none';
-        // On déconnecte l'utilisateur en cas d'erreur pour éviter une boucle
         if (auth.currentUser) {
             signOut(auth);
         } else {
@@ -101,13 +104,112 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-
 loginBtn.onclick = () => signInWithPopup(auth, new GoogleAuthProvider());
 logoutBtn.onclick = () => signOut(auth);
 logoutPendingBtn.onclick = () => signOut(auth);
 
-const userTabs = [ { id: 'user-dashboard', name: 'Planning' }, { id: 'chantiers', name: 'Infos Chantiers' }, { id: 'add-entry', name: 'Nouveau Pointage' }, { id: 'user-history', name: 'Mon Historique' }, ];
-const adminTabs = [ { id: 'admin-dashboard', name: 'Tableau de Bord' }, { id: 'admin-planning', name: 'Planification' }, { id: 'admin-chantiers', name: 'Gestion Chantiers' }, { id: 'chantiers', name: 'Infos Chantiers' }, { id: 'admin-colleagues', name: 'Collègues' }, { id: 'admin-users', name: 'Utilisateurs' }, ];
-function setupNavigation() {const tabs = isAdmin ? adminTabs : userTabs;const mainNav = document.getElementById('main-nav'); const mobileNav = document.getElementById('mobile-nav');[mainNav, mobileNav].forEach(nav => {nav.innerHTML = '';tabs.forEach(tab => {const tabButton = document.createElement('button');tabButton.id = `nav-${tab.id}`;tabButton.textContent = tab.name;tabButton.className = 'px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-200';tabButton.onclick = () => navigateTo(tab.id);nav.appendChild(tabButton);});});}
-export async function navigateTo(pageId, params = {}) {if (pageId === 'user-details') {pageId = 'user-history';}document.querySelectorAll('#main-nav button, #mobile-nav button').forEach(btn => {btn.classList.toggle('nav-active', btn.id === `nav-${pageId}`);});pageContent.innerHTML = `<p class="text-center mt-8 animate-pulse">Chargement...</p>`;try {const pageModule = await import(`./modules/${pageId}.js`);await pageModule.render(params);} catch (error) {console.error(`Erreur de chargement du module ${pageId}:`, error);pageContent.innerHTML = `<p class="text-red-500 text-center mt-8">Erreur: Impossible de charger la page "${pageId}".</p>`;}}
-if ('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('./sw.js').then(reg => console.log('Service Worker enregistré.', reg.scope)).catch(err => console.log('Erreur Service Worker:', err));});}
+function setupNotifications() {
+    notificationBell.onclick = () => {
+        notificationPanel.classList.toggle('hidden');
+        if (!notificationPanel.classList.contains('hidden')) {
+            loadNotifications();
+        }
+    };
+    checkForUnreadNotifications();
+}
+
+async function loadNotifications() {
+    notificationList.innerHTML = '<p class="p-4 text-sm text-gray-500">Chargement...</p>';
+    const q = query(collection(db, "notifications"), orderBy("createdAt", "desc"), limit(10));
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) {
+        notificationList.innerHTML = '<p class="p-4 text-sm text-gray-500">Aucune notification.</p>';
+        return;
+    }
+    notificationList.innerHTML = '';
+    snapshot.forEach(docSnap => {
+        const notif = docSnap.data();
+        const div = document.createElement('div');
+        div.className = 'p-3 border-b hover:bg-gray-50';
+        div.innerHTML = `<p class="font-semibold">${notif.title}</p><p class="text-sm text-gray-600">${notif.body}</p><p class="text-xs text-gray-400 mt-1">${new Date(notif.createdAt.seconds * 1000).toLocaleString('fr-FR')}</p>`;
+        notificationList.appendChild(div);
+    });
+    markNotificationsAsRead();
+}
+
+async function checkForUnreadNotifications() {
+    const lastCheck = localStorage.getItem('lastNotificationCheck');
+    if (!lastCheck) {
+        notificationDot.classList.remove('hidden');
+        return;
+    }
+    const q = query(collection(db, "notifications"), where("createdAt", ">", new Date(lastCheck)), limit(1));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+        notificationDot.classList.remove('hidden');
+    } else {
+        notificationDot.classList.add('hidden');
+    }
+}
+
+function markNotificationsAsRead() {
+    notificationDot.classList.add('hidden');
+    localStorage.setItem('lastNotificationCheck', new Date().toISOString());
+}
+
+const userTabs = [
+    { id: 'user-dashboard', name: 'Planning' },
+    { id: 'chantiers', name: 'Infos Chantiers' },
+    { id: 'add-entry', name: 'Nouveau Pointage' },
+    { id: 'user-history', name: 'Mon Historique' },
+];
+const adminTabs = [
+    { id: 'admin-dashboard', name: 'Tableau de Bord' },
+    { id: 'admin-planning', name: 'Planification' },
+    { id: 'admin-chantiers', name: 'Gestion Chantiers' },
+    { id: 'chantiers', name: 'Infos Chantiers' },
+    { id: 'admin-colleagues', name: 'Collègues' },
+    { id: 'admin-users', name: 'Utilisateurs' },
+];
+
+function setupNavigation() {
+    const tabs = isAdmin ? adminTabs : userTabs;
+    const mainNav = document.getElementById('main-nav');
+    const mobileNav = document.getElementById('mobile-nav');
+    [mainNav, mobileNav].forEach(nav => {
+        nav.innerHTML = '';
+        tabs.forEach(tab => {
+            const tabButton = document.createElement('button');
+            tabButton.id = `nav-${tab.id}`;
+            tabButton.textContent = tab.name;
+            tabButton.className = 'px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-200';
+            tabButton.onclick = () => navigateTo(tab.id);
+            nav.appendChild(tabButton);
+        });
+    });
+}
+
+export async function navigateTo(pageId, params = {}) {
+    if (pageId === 'user-details') {
+        pageId = 'user-history';
+    }
+    document.querySelectorAll('#main-nav button, #mobile-nav button').forEach(btn => {
+        btn.classList.toggle('nav-active', btn.id === `nav-${pageId}`);
+    });
+    pageContent.innerHTML = `<p class="text-center mt-8 animate-pulse">Chargement...</p>`;
+    try {
+        const pageModule = await import(`./modules/${pageId}.js`);
+        await pageModule.render(params);
+    } catch (error) {
+        console.error(`Erreur de chargement du module ${pageId}:`, error);
+        pageContent.innerHTML = `<p class="text-red-500 text-center mt-8">Erreur: Impossible de charger la page "${pageId}".</p>`;
+    }
+}
+
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+            .then(reg => console.log('Service Worker enregistré.', reg.scope))
+            .catch(err => console.log('Erreur Service Worker:', err));
+    });
+}

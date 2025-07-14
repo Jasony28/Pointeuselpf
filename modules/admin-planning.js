@@ -41,7 +41,6 @@ export async function render() {
                 <div class="flex-grow grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3" id="planning-grid"></div>
             </div>
         </div>
-
         <div id="planningItemModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-20 p-4">
             <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
                 <h3 id="modalTitle" class="text-xl font-bold mb-4"></h3>
@@ -67,12 +66,9 @@ function setupEventListeners() {
     document.getElementById("publishWeekBtn").onclick = publishWeek;
     document.getElementById("planningItemForm").onsubmit = savePlanningItem;
     document.getElementById("cancelPlanningItem").onclick = closePlanningItemModal;
-    
-    // NOUVEAU : On attache l'événement au bouton d'actualisation
     document.getElementById("refreshPlanningBtn").onclick = displayWeek;
 }
 
-// --- LOGIQUE DE PUBLICATION ---
 async function publishWeek() {
     const { startOfWeek } = getWeekDateRange(currentWeekOffset);
     const weekId = startOfWeek.toISOString().split('T')[0];
@@ -92,7 +88,6 @@ async function updatePublishButton(isPublished) {
     btn.disabled = isPublished;
 }
 
-// --- AFFICHAGE PRINCIPAL ---
 async function displayWeek() {
     const { startOfWeek } = getWeekDateRange(currentWeekOffset);
     const endOfWeek = new Date(startOfWeek);
@@ -119,14 +114,12 @@ async function displayWeek() {
     loadPlanningForWeek(startOfWeek, endOfWeek);
 }
 
-// --- LOGIQUE DRAG & DROP & AFFICHAGE DES BLOCS ---
 function createChantierBlock(planningDoc) {
     const { id, chantierId, chantierName, teamNames, duration, notes } = planningDoc;
     const block = document.createElement('div');
     block.className = 'p-2 bg-white rounded shadow cursor-pointer hover:bg-gray-50';
     block.dataset.planningId = id;
     
-    // MODIFIÉ : Affichage des heures et d'un indicateur de note
     const noteIndicator = notes ? `📝` : '';
     block.innerHTML = `
         <div class="flex justify-between items-center">
@@ -137,34 +130,56 @@ function createChantierBlock(planningDoc) {
         <div class="colleague-drop-zone min-h-[30px] mt-2 space-y-1 bg-gray-50 p-1 rounded"></div>
     `;
     
-    // MODIFIÉ : Le clic sur le bloc ouvre la modale d'édition
     block.onclick = (e) => {
         if (e.target.classList.contains('delete-planning-btn')) return;
         openPlanningItemModal(planningDoc);
     };
 
     const dropZone = block.querySelector('.colleague-drop-zone');
-    // ... (le reste de la logique de création de bloc est inchangé)
     if (teamNames) {teamNames.forEach(name => {const item = document.createElement('div');item.className = 'p-1 bg-blue-100 text-blue-800 rounded text-xs';item.textContent = name;item.dataset.colleagueName = name;dropZone.appendChild(item);});}
-    new Sortable(dropZone, {group: 'shared',onAdd: async function (evt) {const droppedName = evt.item.dataset.colleagueName;let isDuplicate = false;evt.to.querySelectorAll('div').forEach(el => {if (el !== evt.item && el.dataset.colleagueName === droppedName) {isDuplicate = true;}});if (isDuplicate) {evt.item.remove();alert(`"${droppedName}" est déjà sur ce chantier.`);return;}evt.item.className = 'p-1 bg-blue-100 text-blue-800 rounded text-xs';await updatePlanningTeam(id, dropZone);},onRemove: async function (evt) {await updatePlanningTeam(id, dropZone);}});
-    block.querySelector('.delete-planning-btn').onclick = async (e) => {e.stopPropagation(); if(confirm(`Supprimer le chantier "${chantierName}" de ce jour ?`)) {await deleteDoc(doc(db, "planning", id));block.remove();}};
+    
+    new Sortable(dropZone, {
+        group: 'shared',
+        onAdd: async function (evt) {
+            const droppedName = evt.item.dataset.colleagueName;
+            let isDuplicate = false;
+            evt.to.querySelectorAll('div').forEach(el => {
+                if (el !== evt.item && el.dataset.colleagueName === droppedName) { isDuplicate = true; }
+            });
+            if (isDuplicate) {
+                evt.item.remove();
+                alert(`"${droppedName}" est déjà sur ce chantier.`);
+                return;
+            }
+            evt.item.className = 'p-1 bg-blue-100 text-blue-800 rounded text-xs';
+            await updatePlanningTeam(id, dropZone);
+        },
+        onRemove: async function () { await updatePlanningTeam(id, dropZone); }
+    });
+    
+    block.querySelector('.delete-planning-btn').onclick = async (e) => {
+        e.stopPropagation(); 
+        if(confirm(`Supprimer le chantier "${chantierName}" de ce jour ?`)) {
+            await deleteDoc(doc(db, "planning", id));
+            block.remove();
+        }
+    };
     return block;
 }
 
-// --- GESTION DES DONNÉES ET MODALES ---
 function openPlanningItemModal(planningDoc = null, date = null) {
     const modal = document.getElementById('planningItemModal');
     const form = document.getElementById('planningItemForm');
     const select = document.getElementById('chantierSelect');
     form.reset();
 
-    if (planningDoc) { // Mode Édition
+    if (planningDoc) {
         currentEditingId = planningDoc.id;
         document.getElementById('modalTitle').textContent = 'Modifier le travail';
         select.innerHTML = chantiersCache.map(c => `<option value="${c.id}|${c.name}" ${c.id === planningDoc.chantierId ? 'selected' : ''}>${c.name}</option>`).join('');
         document.getElementById('planningDuration').value = planningDoc.duration || '';
         document.getElementById('planningNotes').value = planningDoc.notes || '';
-    } else { // Mode Ajout
+    } else {
         currentEditingId = null;
         currentEditingDate = date;
         document.getElementById('modalTitle').textContent = 'Ajouter un chantier';
@@ -184,10 +199,10 @@ async function savePlanningItem(e) {
     const notes = document.getElementById('planningNotes').value.trim();
 
     try {
-        if (currentEditingId) { // Mise à jour
+        if (currentEditingId) {
             const docRef = doc(db, "planning", currentEditingId);
             await updateDoc(docRef, { chantierId, chantierName, duration, notes });
-        } else { // Création
+        } else {
             await addDoc(collection(db, "planning"), {
                 date: currentEditingDate,
                 chantierId,
@@ -199,12 +214,13 @@ async function savePlanningItem(e) {
             });
         }
         closePlanningItemModal();
-        displayWeek(); // Rafraîchir la vue
+        displayWeek();
     } catch (error) {
         console.error("Erreur de sauvegarde:", error);
         alert("Une erreur est survenue.");
     }
 }
+
 async function cacheData() {
     const chantiersQuery = query(collection(db, "chantiers"), where("status", "==", "active"), orderBy("name"));
     const chantiersSnapshot = await getDocs(chantiersQuery);
@@ -225,55 +241,16 @@ function populateColleaguesPool() {
         item.dataset.colleagueName = name;
         pool.appendChild(item);
     });
-
     new Sortable(pool, {
         group: { name: 'shared', pull: 'clone', put: false },
         sort: false
     });
 }
 
-
-
 async function updatePlanningTeam(planningId, dropZone) {
     const teamNames = Array.from(dropZone.querySelectorAll('div')).map(el => el.dataset.colleagueName);
     const planningDocRef = doc(db, "planning", planningId);
     await updateDoc(planningDocRef, { teamNames: teamNames });
-}
-
-function openAddChantierModal(date) {
-    const modal = document.getElementById('addChantierModal');
-    const form = document.getElementById('addChantierForm');
-    const select = document.getElementById('chantierSelect');
-    
-    select.innerHTML = '<option value="" disabled selected>-- Choisissez un chantier --</option>';
-    chantiersCache.forEach(c => {
-        select.innerHTML += `<option value="${c.id}|${c.name}">${c.name}</option>`;
-    });
-
-    form.onsubmit = async (e) => {
-        e.preventDefault();
-        const [chantierId, chantierName] = select.value.split('|');
-        
-        const newPlanningDoc = {
-            date: date,
-            chantierId: chantierId,
-            chantierName: chantierName,
-            teamNames: [],
-            createdAt: serverTimestamp()
-        };
-
-        const docRef = await addDoc(collection(db, "planning"), newPlanningDoc);
-        
-        const container = document.getElementById(`day-col-${date}`);
-        if (container) {
-            const block = createChantierBlock({ id: docRef.id, ...newPlanningDoc });
-            container.appendChild(block);
-        }
-        closeAddChantierModal();
-    };
-    
-    document.getElementById('cancelAddChantier').onclick = closeAddChantierModal;
-    modal.classList.remove('hidden');
 }
 
 async function loadPlanningForWeek(start, end) {
@@ -287,10 +264,6 @@ async function loadPlanningForWeek(start, end) {
             container.appendChild(block);
         }
     });
-}
-
-function closeAddChantierModal() {
-    document.getElementById('addChantierModal').classList.add('hidden');
 }
 
 function getWeekDateRange(offset = 0) {

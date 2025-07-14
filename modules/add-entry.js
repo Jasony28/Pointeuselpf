@@ -4,7 +4,7 @@ import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs } f
 import { db, currentUser, pageContent } from "../app.js";
 
 let selectedColleagues = [];
-let allColleaguesCache = []; // Pour stocker la liste des collègues
+let allColleaguesCache = [];
 
 export async function render() {
     pageContent.innerHTML = `
@@ -17,39 +17,23 @@ export async function render() {
                 </select>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                    <label for="manualDate" class="text-sm font-medium">Date</label>
-                    <input id="manualDate" type="date" class="w-full border p-2 rounded mt-1" required />
-                </div>
-                <div>
-                    <label for="manualStart" class="text-sm font-medium">Début</label>
-                    <input id="manualStart" type="time" class="w-full border p-2 rounded mt-1" required />
-                </div>
-                <div>
-                    <label for="manualEnd" class="text-sm font-medium">Fin</label>
-                    <input id="manualEnd" type="time" class="w-full border p-2 rounded mt-1" required />
-                </div>
+                <div><label for="manualDate" class="text-sm font-medium">Date</label><input id="manualDate" type="date" class="w-full border p-2 rounded mt-1" required /></div>
+                <div><label for="manualStart" class="text-sm font-medium">Début</label><input id="manualStart" type="time" class="w-full border p-2 rounded mt-1" required /></div>
+                <div><label for="manualEnd" class="text-sm font-medium">Fin</label><input id="manualEnd" type="time" class="w-full border p-2 rounded mt-1" required /></div>
             </div>
             <div>
                 <label class="text-sm font-medium text-center block">Collègues</label>
-                <div id="manualColleaguesContainer" class="flex flex-wrap gap-2 justify-center mt-2">
-                    <p class="text-gray-500">Chargement...</p>
-                </div>
+                <div id="manualColleaguesContainer" class="flex flex-wrap gap-2 justify-center mt-2"><p class="text-gray-500">Chargement...</p></div>
             </div>
-            <div>
-                <label for="manualNotes" class="text-sm font-medium">Notes (optionnel)</label>
-                <textarea id="manualNotes" class="w-full border p-2 rounded mt-1"></textarea>
-            </div>
-            <button type="submit" class="bg-purple-700 hover:bg-purple-800 text-white font-bold px-4 py-3 rounded w-full">
-                Enregistrer le pointage
-            </button>
+            <div><label for="manualNotes" class="text-sm font-medium">Notes (optionnel)</label><textarea id="manualNotes" class="w-full border p-2 rounded mt-1"></textarea></div>
+            <button type="submit" class="bg-purple-700 hover:bg-purple-800 text-white font-bold px-4 py-3 rounded w-full">Enregistrer le pointage</button>
         </form>
     `;
 
     const manualForm = document.getElementById("manualForm");
     
     loadChantiersIntoSelect();
-    loadColleaguesForSelection(); // On charge la liste des collègues
+    loadColleaguesForSelection();
 
     manualForm.onsubmit = async (e) => {
         e.preventDefault();
@@ -82,13 +66,9 @@ export async function render() {
         
         const pointagesCollectionRef = collection(db, "pointages");
         const docData = {
-            uid: currentUser.uid,
-            userEmail: currentUser.email,
-            userName: currentUser.displayName,
-            timestamp: startDateTime.toISOString(),
-            endTime: endDateTime.toISOString(),
-            chantier,
-            notes: `(Saisie manuelle)${notes ? " " + notes : ""}`,
+            uid: currentUser.uid, userEmail: currentUser.email, userName: currentUser.displayName,
+            timestamp: startDateTime.toISOString(), endTime: endDateTime.toISOString(),
+            chantier, notes: `(Saisie manuelle)${notes ? " " + notes : ""}`,
             colleagues: selectedColleagues.length ? selectedColleagues : ["Seul"],
             createdAt: serverTimestamp()
         };
@@ -98,7 +78,6 @@ export async function render() {
             alert("Pointage manuel enregistré !");
             manualForm.reset();
             document.getElementById('manualChantier').selectedIndex = 0;
-            // On réinitialise la sélection des collègues
             selectedColleagues = [];
             renderColleaguesSelection();
         } catch (error) {
@@ -126,21 +105,20 @@ async function loadChantiersIntoSelect() {
         });
     } catch (error) {
         console.error("Erreur de chargement des chantiers :", error);
-        chantierSelect.innerHTML = '<option value="" disabled>Erreur de chargement</option>';
+        chantierSelect.innerHTML = '<option value="" disabled>Erreur</option>';
     }
 }
 
-// NOUVELLE FONCTION pour charger les collègues
 async function loadColleaguesForSelection() {
     try {
         const q = query(collection(db, "colleagues"), orderBy("name"));
         const querySnapshot = await getDocs(q);
         allColleaguesCache = querySnapshot.docs.map(doc => doc.data().name);
-        selectedColleagues = []; // On réinitialise la sélection
+        selectedColleagues = [];
         renderColleaguesSelection();
     } catch (error) {
         console.error("Erreur de chargement des collègues:", error);
-        document.getElementById("manualColleaguesContainer").innerHTML = "<p class='text-red-500'>Erreur de chargement des collègues.</p>";
+        document.getElementById("manualColleaguesContainer").innerHTML = "<p class='text-red-500'>Erreur</p>";
     }
 }
 
