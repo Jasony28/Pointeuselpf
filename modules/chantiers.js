@@ -16,18 +16,9 @@ export async function render() {
             <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-lg space-y-4 relative">
                 <button id="closeDetailsBtn" class="absolute top-2 right-3 text-2xl font-bold text-gray-500 hover:text-gray-800">×</button>
                 <h3 id="modalChantierName" class="text-2xl font-bold border-b pb-2"></h3>
-                <div>
-                    <h4 class="font-semibold text-sm text-gray-500">ADRESSE</h4>
-                    <a id="modalChantierAddress" href="#" target="_blank" class="text-blue-600 hover:underline text-lg"></a>
-                </div>
-                <div>
-                    <h4 class="font-semibold text-sm text-gray-500">CODES & ACCÈS</h4>
-                    <div id="modalChantierKeybox" class="text-lg"></div>
-                </div>
-                <div>
-                    <h4 class="font-semibold text-sm text-gray-500">INFOS SUPPLÉMENTAIRES</h4>
-                    <p id="modalChantierInfo" class="text-lg whitespace-pre-wrap"></p>
-                </div>
+                <div><h4 class="font-semibold text-sm text-gray-500">ADRESSE</h4><a id="modalChantierAddress" href="#" target="_blank" class="text-blue-600 hover:underline text-lg"></a></div>
+                <div><h4 class="font-semibold text-sm text-gray-500">CODES & ACCÈS</h4><div id="modalChantierKeybox" class="text-lg"></div></div>
+                <div><h4 class="font-semibold text-sm text-gray-500">INFOS SUPPLÉMENTAIRES</h4><p id="modalChantierInfo" class="text-lg whitespace-pre-wrap"></p></div>
                 ${isAdmin ? `<div class="text-right pt-4 border-t"><button id="editChantierBtn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-5 py-2 rounded">Modifier</button></div>` : ''}
             </div>
         </div>
@@ -38,8 +29,8 @@ export async function render() {
                 <input type="hidden" id="editChantierId">
                 <div><label for="editChantierName" class="text-sm font-medium">Nom</label><input id="editChantierName" type="text" class="w-full border p-2 rounded mt-1" required /></div>
                 <div><label for="editChantierAddress" class="text-sm font-medium">Adresse</label><input id="editChantierAddress" type="text" class="w-full border p-2 rounded mt-1" /></div>
-                <div><label class="text-sm font-medium">Codes boîtiers / Accès</label><div class="flex items-center gap-2 mt-1"><input id="editNewKeyCodeInput" type="text" placeholder="Entrez un code" class="flex-grow border p-2 rounded" /><button type="button" id="editAddKeyCodeBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold px-4 py-2 rounded">Ajouter</button></div><ul id="editKeyCodesList" class="mt-2 space-y-1"></ul></div>
-                <div><label for="editChantierInfo" class="text-sm font-medium">Infos supplémentaires</label><textarea id="editChantierInfo" class="w-full border p-2 rounded mt-1"></textarea></div>
+                <div><label class="text-sm font-medium">Codes</label><div class="flex items-center gap-2 mt-1"><input id="editNewKeyCodeInput" type="text" placeholder="Entrez un code" class="flex-grow border p-2 rounded" /><button type="button" id="editAddKeyCodeBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold px-4 py-2 rounded">Ajouter</button></div><ul id="editKeyCodesList" class="mt-2 space-y-1"></ul></div>
+                <div><label for="editChantierInfo" class="text-sm font-medium">Infos</label><textarea id="editChantierInfo" class="w-full border p-2 rounded mt-1"></textarea></div>
                 <div class="flex justify-end gap-4 pt-4"><button type="button" id="cancelEditBtn" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">Annuler</button><button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Enregistrer</button></div>
             </form>
         </div>
@@ -63,14 +54,11 @@ async function loadChantiersList() {
 function displayChantierCards() {
     const listContainer = document.getElementById('chantiers-list');
     listContainer.innerHTML = '';
-
     if (chantiersCache.length === 0) {
         listContainer.innerHTML = '<p class="col-span-full text-center text-gray-500">Aucun chantier à afficher.</p>';
         return;
     }
-    
     chantiersCache.sort((a, b) => a.name.localeCompare(b.name));
-
     chantiersCache.forEach(chantier => {
         const card = document.createElement('div');
         card.className = 'bg-white p-4 rounded-lg shadow-sm cursor-pointer hover:shadow-md hover:scale-105 transition-transform';
@@ -89,7 +77,8 @@ function showDetailsModal(chantierId) {
     const addressLink = document.getElementById('modalChantierAddress');
     if (chantier.address) {
         addressLink.textContent = chantier.address;
-        addressLink.href = `http://googleusercontent.com/maps.google.com/7{encodeURIComponent(chantier.address)}`;
+        // --- LIEN CORRIGÉ ICI ---
+        addressLink.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(chantier.address)}`;
         addressLink.parentElement.style.display = 'block';
     } else {
         addressLink.parentElement.style.display = 'none';
@@ -125,7 +114,6 @@ function showEditModal(chantier) {
     document.getElementById('editChantierName').value = chantier.name;
     document.getElementById('editChantierAddress').value = chantier.address || '';
     document.getElementById('editChantierInfo').value = chantier.additionalInfo || '';
-
     const editList = document.getElementById('editKeyCodesList');
     editList.innerHTML = '';
     if (Array.isArray(chantier.keyboxCodes)) {
@@ -137,14 +125,12 @@ function showEditModal(chantier) {
             editList.appendChild(li);
         });
     }
-
     document.getElementById('editModal').classList.remove('hidden');
 }
 
 function setupKeyCodeHandlers(inputId, addButtonId, listId) {
     const newKeyCodeInput = document.getElementById(inputId);
     const addKeyCodeBtn = document.getElementById(addButtonId);
-    
     const addCode = () => {
         const codeText = newKeyCodeInput.value.trim();
         if (codeText) {
@@ -158,39 +144,29 @@ function setupKeyCodeHandlers(inputId, addButtonId, listId) {
             newKeyCodeInput.focus();
         }
     };
-
     addKeyCodeBtn.onclick = addCode;
     newKeyCodeInput.onkeydown = (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            addCode();
-        }
+        if (e.key === 'Enter') { e.preventDefault(); addCode(); }
     };
 }
 
 function setupEventListeners() {
     document.getElementById('closeDetailsBtn').onclick = () => document.getElementById('detailsModal').classList.add('hidden');
-    
     if (isAdmin) {
         document.getElementById('cancelEditBtn').onclick = () => document.getElementById('editModal').classList.add('hidden');
-        
         setupKeyCodeHandlers('editNewKeyCodeInput', 'editAddKeyCodeBtn', 'editKeyCodesList');
-
         document.getElementById('editForm').onsubmit = async (e) => {
             e.preventDefault();
             const chantierId = document.getElementById('editChantierId').value;
             const docRef = doc(db, "chantiers", chantierId);
-
             const editList = document.getElementById("editKeyCodesList");
             const keyboxCodes = Array.from(editList.querySelectorAll('li span')).map(span => span.textContent);
-
             const updatedData = {
                 name: document.getElementById('editChantierName').value,
                 address: document.getElementById('editChantierAddress').value,
                 keyboxCodes: keyboxCodes,
                 additionalInfo: document.getElementById('editChantierInfo').value
             };
-
             try {
                 await updateDoc(docRef, updatedData);
                 document.getElementById('editModal').classList.add('hidden');
