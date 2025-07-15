@@ -1,6 +1,6 @@
 // sw.js - Service Worker
 
-const CACHE_NAME = 'pointeuse-pro-cache-v7';
+const CACHE_NAME = 'pointeuse-pro-cache-v7.1';
 const urlsToCache = [
   './',
   './index.html',
