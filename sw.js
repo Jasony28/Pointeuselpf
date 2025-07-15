@@ -1,6 +1,6 @@
-// sw.js - Service Worker pour le mode hors ligne
+// sw.js - Service Worker
 
-const CACHE_NAME = 'pointeuse-pro-cache-v6'; // On incrémente encore la version
+const CACHE_NAME = 'pointeuse-pro-cache-v7';
 const urlsToCache = [
   './',
   './index.html',
@@ -22,27 +22,29 @@ const urlsToCache = [
   './icons/icon-192x192.png',
   './icons/icon-512x512.png',
 
-  // On met en cache les librairies JS externes
+  // Librairies JS externes pour le mode hors ligne
   'https://unpkg.com/jspdf@latest/dist/jspdf.umd.min.js',
   'https://unpkg.com/jspdf-autotable@latest/dist/jspdf.plugin.autotable.js',
   'https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js',
-
-  // ON RETIRE TAILWIND ET GOOGLE FONTS DU CACHE CAR ILS POSENT DES PROBLÈMES DE CORS
 ];
 
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
       console.log('Cache ouvert et mise à jour des fichiers.');
-      const promises = urlsToCache.map(url => {
-        return cache.add(url).catch(err => {
-          console.warn(`Échec de la mise en cache de ${url}`, err);
-        });
+      // Utiliser addAll est plus simple et fait la même chose
+      return cache.addAll(urlsToCache).catch(err => {
+        console.warn("Certains fichiers externes n'ont pas pu être mis en cache. Le mode hors ligne peut être limité.", err);
       });
-      return Promise.all(promises);
     })
   );
-  self.skipWaiting();
+  // On ne met plus self.skipWaiting() ici pour la nouvelle logique de mise à jour
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('activate', event => {
@@ -62,6 +64,7 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request).then(response => {
+      // Si la ressource est dans le cache, on la sert, sinon on va la chercher sur le réseau
       return response || fetch(event.request);
     })
   );

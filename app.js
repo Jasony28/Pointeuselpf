@@ -226,8 +226,34 @@ export async function navigateTo(pageId, params = {}) {
 
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-            .then(reg => console.log('Service Worker enregistré.', reg.scope))
-            .catch(err => console.log('Erreur Service Worker:', err));
+        let newWorker;
+        const updateBanner = document.getElementById('update-banner');
+        const updateBtn = document.getElementById('update-btn');
+
+        navigator.serviceWorker.register('./sw.js').then(reg => {
+            console.log('Service Worker enregistré.');
+            reg.addEventListener('updatefound', () => {
+                console.log('Nouvelle version du Service Worker trouvée.');
+                newWorker = reg.installing;
+                newWorker.addEventListener('statechange', () => {
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        // Nouvelle version prête, on affiche la bannière
+                        updateBanner.classList.remove('hidden');
+                    }
+                });
+            });
+        });
+
+        updateBtn.addEventListener('click', () => {
+            // On envoie un message au nouveau Service Worker pour qu'il s'active
+            newWorker.postMessage({ type: 'SKIP_WAITING' });
+        });
+
+        let refreshing;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (refreshing) return;
+            window.location.reload();
+            refreshing = true;
+        });
     });
 }
