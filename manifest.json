@@ -1,6 +1,7 @@
 {
   "name": "Ma Pointeuse Pro",
   "short_name": "Pointeuse",
+  "id": "/Pointeuse/",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#ffffff",
@@ -17,5 +18,8 @@
       "sizes": "512x512",
       "type": "image/png"
     }
-  ]
+  ],
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  }
 }
