@@ -1,7 +1,5 @@
-// modules/admin-colleagues.js
-
 import { collection, getDocs, addDoc, deleteDoc, doc, orderBy, query } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, pageContent } from "../app.js";
+import { db, pageContent, showInfoModal, showConfirmationModal } from "../app.js";
 
 const colleaguesCollection = collection(db, "colleagues");
 
@@ -37,10 +35,10 @@ export async function render() {
             try {
                 await addDoc(colleaguesCollection, { name: colleagueName });
                 input.value = '';
-                loadColleagues(); // Recharger la liste
+                loadColleagues();
             } catch (error) {
                 console.error("Erreur ajout collègue:", error);
-                alert("Une erreur est survenue.");
+                showInfoModal("Erreur", "Une erreur est survenue lors de l'ajout.");
             }
         }
     };
@@ -86,13 +84,14 @@ function createColleagueElement(id, name) {
     deleteBtn.textContent = 'Supprimer';
     deleteBtn.className = 'px-3 py-1 text-sm rounded bg-red-500 hover:bg-red-600 text-white';
     deleteBtn.onclick = async () => {
-        if (confirm(`Voulez-vous vraiment supprimer "${name}" ?`)) {
+        const confirmed = await showConfirmationModal("Confirmation", `Voulez-vous vraiment supprimer "${name}" ?`);
+        if (confirmed) {
             try {
                 await deleteDoc(doc(db, "colleagues", id));
-                loadColleagues(); // Recharger la liste
+                loadColleagues();
             } catch (error) {
                 console.error("Erreur suppression collègue:", error);
-                alert("La suppression a échoué.");
+                showInfoModal("Erreur", "La suppression a échoué.");
             }
         }
     };

@@ -1,14 +1,12 @@
-// modules/user-history.js
-
 import { collection, query, where, orderBy, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, currentUser, isAdmin, pageContent } from "../app.js";
+import { db, currentUser, isAdmin, pageContent, showConfirmationModal, showInfoModal } from "../app.js";
 
 let currentWeekOffset = 0;
 let targetUser = null; 
-let historyDataCache = []; // NOUVEAU : Pour garder les données de la semaine en mémoire
+let historyDataCache = [];
 
 export function render(params = {}) {
-    if (params.userId) {
+    if (params.userId && isAdmin) {
         targetUser = { uid: params.userId, name: params.userName };
     } else {
         targetUser = { uid: currentUser.uid, name: "Mon" };
@@ -40,7 +38,7 @@ export function render(params = {}) {
 
     document.getElementById("prevWeekBtn").onclick = () => { currentWeekOffset--; loadHistoryForWeek(); };
     document.getElementById("nextWeekBtn").onclick = () => { currentWeekOffset++; loadHistoryForWeek(); };
-    document.getElementById("downloadPdfBtn").onclick = generateHistoryPDF; // On lie le bouton à la fonction PDF
+    document.getElementById("downloadPdfBtn").onclick = generateHistoryPDF;
 
     currentWeekOffset = 0;
     loadHistoryForWeek();
@@ -60,7 +58,7 @@ function getWeekDateRange(offset = 0) {
 
 async function loadHistoryForWeek() {
     if (!targetUser) return;
-    historyDataCache = []; // On vide le cache
+    historyDataCache = [];
 
     const historyList = document.getElementById("historyList");
     const weekTotalsDisplay = document.getElementById("weekTotalsDisplay");
@@ -73,9 +71,8 @@ async function loadHistoryForWeek() {
     historyList.innerHTML = "<p class='text-center p-4'>Chargement...</p>";
     weekTotalsDisplay.innerHTML = "";
     
-    const pointagesCollectionRef = collection(db, "pointages");
     const q = query(
-        pointagesCollectionRef,
+        collection(db, "pointages"),
         where("uid", "==", targetUser.uid),
         where("timestamp", ">=", startOfWeek.toISOString()),
         where("timestamp", "<=", endOfWeek.toISOString()),
@@ -90,7 +87,6 @@ async function loadHistoryForWeek() {
         if (querySnapshot.empty) {
             historyList.innerHTML = "<p class='text-center text-gray-500 p-4'>Aucun pointage trouvé pour cette période.</p>";
         } else {
-            // On stocke les données dans le cache pour le PDF
             historyDataCache = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             
             historyDataCache.forEach(d => {
@@ -137,23 +133,27 @@ function createHistoryEntryElement(docId, d) {
       ${d.notes ? `<div class="mt-1 pt-2 border-t text-sm"><strong>Notes :</strong> ${d.notes}</div>` : ""}
     `;
 
-    const deleteBtn = document.createElement("button");
-    deleteBtn.textContent = "✖";
-    deleteBtn.className = "absolute top-2 right-3 text-gray-400 hover:text-red-600 font-bold";
-    deleteBtn.onclick = async () => {
-        if (confirm("Supprimer ce pointage ?")) {
-            await deleteDoc(doc(db, "pointages", docId));
-            loadHistoryForWeek();
-        }
-    };
-    wrapper.appendChild(deleteBtn);
+    // --- CORRECTION ---
+    // Affiche le bouton si l'utilisateur est admin OU s'il regarde son propre historique.
+    if (isAdmin || currentUser.uid === targetUser.uid) {
+        const deleteBtn = document.createElement("button");
+        deleteBtn.textContent = "✖";
+        deleteBtn.className = "absolute top-2 right-3 text-gray-400 hover:text-red-600 font-bold";
+        deleteBtn.onclick = async () => {
+            const confirmed = await showConfirmationModal("Confirmation", "Supprimer ce pointage ?");
+            if (confirmed) {
+                await deleteDoc(doc(db, "pointages", docId));
+                loadHistoryForWeek();
+            }
+        };
+        wrapper.appendChild(deleteBtn);
+    }
     return wrapper;
 }
 
-// NOUVELLE FONCTION POUR GÉNÉRER LE PDF DE L'HISTORIQUE
 function generateHistoryPDF() {
     if (historyDataCache.length === 0) {
-        alert("Il n'y a rien à télécharger pour cette période.");
+        showInfoModal("Information", "Il n'y a rien à télécharger pour cette période.");
         return;
     }
     
@@ -163,7 +163,6 @@ function generateHistoryPDF() {
     const totalText = document.getElementById("weekTotalsDisplay").textContent;
     const userName = targetUser.uid === currentUser.uid ? currentUser.displayName : targetUser.name;
 
-    // Titre du document
     doc.setFontSize(18);
     doc.text(`Historique des Pointages`, 14, 22);
     doc.setFontSize(11);
@@ -171,7 +170,6 @@ function generateHistoryPDF() {
     doc.text(`Employé : ${userName}`, 14, 30);
     doc.text(periodText, 14, 36);
 
-    // Préparation des données pour le tableau
     const tableData = historyDataCache.map(d => {
         const startDate = new Date(d.timestamp);
         const endDate = d.endTime ? new Date(d.endTime) : null;
@@ -191,22 +189,19 @@ function generateHistoryPDF() {
         ];
     });
 
-    // Création du tableau
     doc.autoTable({
         startY: 50,
         head: [['Date', 'Chantier', 'Début', 'Fin', 'Durée']],
         body: tableData,
         theme: 'grid',
-        headStyles: { fillColor: [79, 70, 229] } // Couleur violette (indigo-600)
+        headStyles: { fillColor: [79, 70, 229] }
     });
     
-    // Ajout du total
     const finalY = doc.lastAutoTable.finalY;
     doc.setFontSize(12);
     doc.setFont(undefined, 'bold');
     doc.text(totalText, 14, finalY + 10);
 
-    // Sauvegarde du fichier
     const fileName = `historique_${userName}_${periodText.replace(/ /g, '_')}.pdf`;
     doc.save(fileName);
 }

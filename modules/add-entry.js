@@ -1,7 +1,5 @@
-// modules/add-entry.js
-
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, currentUser, pageContent } from "../app.js";
+import { db, currentUser, pageContent, showInfoModal } from "../app.js";
 
 let selectedColleagues = [];
 let allColleaguesCache = [];
@@ -48,7 +46,7 @@ export async function render() {
         const notes = document.getElementById("manualNotes").value.trim();
 
         if (!chantier || !date || !startTimeValue || !endTimeValue) {
-            alert("Veuillez remplir tous les champs obligatoires.");
+            showInfoModal("Attention", "Veuillez remplir tous les champs obligatoires.");
             submitButton.disabled = false;
             submitButton.textContent = "Enregistrer le pointage";
             return;
@@ -58,7 +56,7 @@ export async function render() {
         const endDateTime = new Date(`${date}T${endTimeValue}`);
 
         if (endDateTime <= startDateTime) {
-            alert("L'heure de fin doit être après l'heure de début.");
+            showInfoModal("Attention", "L'heure de fin doit être après l'heure de début.");
             submitButton.disabled = false;
             submitButton.textContent = "Enregistrer le pointage";
             return;
@@ -75,14 +73,14 @@ export async function render() {
 
         try {
             await addDoc(pointagesCollectionRef, docData);
-            alert("Pointage manuel enregistré !");
+            showInfoModal("Succès", "Pointage manuel enregistré !");
             manualForm.reset();
             document.getElementById('manualChantier').selectedIndex = 0;
             selectedColleagues = [];
             renderColleaguesSelection();
         } catch (error) {
             console.error("Erreur d'enregistrement manuel:", error);
-            alert("Une erreur est survenue.");
+            showInfoModal("Erreur", "Une erreur est survenue lors de l'enregistrement.");
         } finally {
             submitButton.disabled = false;
             submitButton.textContent = "Enregistrer le pointage";
@@ -97,10 +95,9 @@ async function loadChantiersIntoSelect() {
         const querySnapshot = await getDocs(q);
         chantierSelect.innerHTML = '<option value="" disabled selected>-- Choisissez un chantier --</option>';
         querySnapshot.forEach((doc) => {
-            const chantier = doc.data();
             const option = document.createElement('option');
-            option.value = chantier.name;
-            option.textContent = chantier.name;
+            option.value = doc.data().name;
+            option.textContent = doc.data().name;
             chantierSelect.appendChild(option);
         });
     } catch (error) {
@@ -134,11 +131,8 @@ function renderColleaguesSelection() {
         
         button.onclick = () => {
             const listIndex = selectedColleagues.indexOf(name);
-            if (listIndex > -1) {
-                selectedColleagues.splice(listIndex, 1);
-            } else {
-                selectedColleagues.push(name);
-            }
+            if (listIndex > -1) selectedColleagues.splice(listIndex, 1);
+            else selectedColleagues.push(name);
             updateColleagueButtonStyle(button, !isSelected);
         };
         container.appendChild(button);

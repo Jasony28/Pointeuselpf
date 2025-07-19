@@ -1,14 +1,14 @@
 // modules/chantiers.js
 
-import { collection, query, where, orderBy, getDocs, doc, updateDoc, documentId } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, pageContent, isAdmin } from "../app.js";
+import { collection, query, where, orderBy, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { db, pageContent, isAdmin, currentUser, showInfoModal } from "../app.js";
 
 let chantiersCache = [];
 
 export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto">
-            <h2 class="text-2xl font-bold mb-4">📄 Informations sur les Chantiers</h2>
+            <h2 class="text-2xl font-bold mb-4">📄 Informations sur mes Chantiers de la Semaine</h2>
             <div id="chantiers-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
         </div>
         
@@ -40,15 +40,56 @@ export async function render() {
     setupEventListeners();
 }
 
+/**
+ * --- MODIFIÉ ---
+ * Charge uniquement les chantiers sur lesquels l'utilisateur est planifié cette semaine.
+ */
 async function loadChantiersList() {
     const listContainer = document.getElementById('chantiers-list');
     listContainer.innerHTML = '<p class="col-span-full text-center">Chargement...</p>';
     
-    const q = query(collection(db, "chantiers"), where("status", "==", "active"), orderBy("name"));
-    const querySnapshot = await getDocs(q);
-    chantiersCache = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // 1. Déterminer la semaine actuelle
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+    const startOfWeek = new Date(now.setDate(diff));
+    startOfWeek.setHours(0, 0, 0, 0);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
 
-    displayChantierCards();
+    try {
+        // 2. Récupérer le planning de la semaine pour l'utilisateur connecté
+        const planningQuery = query(
+            collection(db, "planning"),
+            where("date", ">=", startOfWeek.toISOString().split('T')[0]),
+            where("date", "<=", endOfWeek.toISOString().split('T')[0])
+        );
+        const planningSnapshot = await getDocs(planningQuery);
+        
+        const userPlanningTasks = planningSnapshot.docs
+            .map(doc => doc.data())
+            .filter(task => task.teamNames && task.teamNames.includes(currentUser.displayName));
+
+        if (userPlanningTasks.length === 0) {
+            listContainer.innerHTML = '<p class="col-span-full text-center text-gray-500">Vous n\'êtes planifié sur aucun chantier cette semaine.</p>';
+            return;
+        }
+
+        // 3. Extraire les noms uniques des chantiers
+        const chantierNames = [...new Set(userPlanningTasks.map(task => task.chantierName))];
+
+        // 4. Récupérer les informations complètes de ces chantiers
+        const chantiersQuery = query(collection(db, "chantiers"), where("name", "in", chantierNames));
+        const chantiersSnapshot = await getDocs(chantiersQuery);
+        chantiersCache = chantiersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        displayChantierCards();
+
+    } catch (error) {
+        console.error("Erreur de chargement des chantiers planifiés:", error);
+        listContainer.innerHTML = '<p class="col-span-full text-center text-red-500">Erreur de chargement des chantiers.</p>';
+    }
 }
 
 function displayChantierCards() {
@@ -77,7 +118,6 @@ function showDetailsModal(chantierId) {
     const addressLink = document.getElementById('modalChantierAddress');
     if (chantier.address) {
         addressLink.textContent = chantier.address;
-        // --- LIEN CORRIGÉ ICI ---
         addressLink.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(chantier.address)}`;
         addressLink.parentElement.style.display = 'block';
     } else {
@@ -174,7 +214,7 @@ function setupEventListeners() {
                 showDetailsModal(chantierId);
             } catch(error) {
                 console.error("Erreur de mise à jour: ", error);
-                alert("La mise à jour a échoué.");
+                showInfoModal("Erreur", "La mise à jour a échoué.");
             }
         };
     }

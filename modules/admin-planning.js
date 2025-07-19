@@ -1,11 +1,12 @@
 // modules/admin-planning.js
 
 import { collection, query, where, getDocs, addDoc, deleteDoc, doc, orderBy, serverTimestamp, updateDoc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, pageContent, currentUser } from "../app.js";
+import { db, pageContent, currentUser, showConfirmationModal, showInfoModal } from "../app.js";
 
 let currentWeekOffset = 0;
 let chantiersCache = [];
-let colleaguesCache = [];
+let teamMembersCache = []; 
+let planningDataCache = []; // Cache pour les données du planning de la semaine
 let currentEditingId = null;
 let currentEditingDate = null;
 
@@ -21,22 +22,27 @@ export async function render() {
                         <button id="nextWeekBtn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg">&gt;</button>
                     </div>
                     <div class="flex items-center gap-2">
-                        <button id="refreshPlanningBtn" title="Actualiser la vue" class="bg-gray-200 hover:bg-gray-300 p-2 rounded-lg">
+                        <button id="downloadPdfBtn" title="Télécharger le planning en PDF" class="bg-green-600 hover:bg-green-700 text-white p-2 rounded-lg">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
-                                <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
-                                <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+                                <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                                <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
                             </svg>
                         </button>
-                        <button id="publishBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded-lg disabled:bg-gray-400">
-                            {/* Le texte sera dynamique */}
-                        </button>
+                        <button id="publishBtn" class="font-bold px-4 py-2 rounded-lg disabled:bg-gray-400"></button>
                     </div>
                 </div>
             </div>
             <div class="flex flex-col md:flex-row gap-4">
-                <div class="md:w-1/4 lg:w-1/5 bg-white p-4 rounded-lg shadow-sm">
-                    <h3 class="font-bold text-lg border-b pb-2 mb-2">Collègues</h3>
-                    <div id="colleagues-pool" class="space-y-2 min-h-[100px]"></div>
+                <div class="md:w-1/4 lg:w-1/5 bg-white p-4 rounded-lg shadow-sm flex flex-col">
+                    <h3 class="font-bold text-lg border-b pb-2 mb-2">Équipe</h3>
+                    <div id="team-pool" class="space-y-2 min-h-[100px] flex-grow"></div>
+                    <div id="team-trash-can" class="mt-4 p-4 border-2 border-dashed rounded-lg text-center text-gray-400 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="mx-auto" viewBox="0 0 16 16">
+                            <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/>
+                            <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/>
+                        </svg>
+                        <p class="mt-2 text-sm">Glisser ici pour retirer</p>
+                    </div>
                 </div>
                 <div class="flex-grow grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3" id="planning-grid"></div>
             </div>
@@ -47,7 +53,7 @@ export async function render() {
                 <h3 id="modalTitle" class="text-xl font-bold mb-4"></h3>
                 <form id="planningItemForm" class="space-y-4">
                     <div><label class="text-sm font-medium">Chantier</label><select id="chantierSelect" class="w-full border p-2 rounded" required></select></div>
-                    <div><label class="text-sm font-medium">Heures prévues</label><input id="planningDuration" type="number" step="0.5" placeholder="Ex: 8" class="w-full border p-2 rounded" required /></div>
+                    <div><label class="text-sm font-medium">Heures prévues</label><input id="planningDuration" type="number" step="0.5" placeholder="Ex: 8" class="w-full border p-2 rounded" /></div>
                     <div><label class="text-sm font-medium">Notes (facultatif)</label><textarea id="planningNotes" placeholder="Instructions spécifiques..." class="w-full border p-2 rounded"></textarea></div>
                     <div class="flex justify-end gap-4 pt-2"><button type="button" id="cancelPlanningItem" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">Annuler</button><button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Enregistrer</button></div>
                 </form>
@@ -58,7 +64,49 @@ export async function render() {
     setupEventListeners();
     await cacheData();
     displayWeek();
-    populateColleaguesPool();
+    populateTeamPool();
+}
+
+async function cacheData() {
+    const chantiersQuery = query(collection(db, "chantiers"), where("status", "==", "active"), orderBy("name"));
+    const chantiersSnapshot = await getDocs(chantiersQuery);
+    chantiersCache = chantiersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    const colleaguesQuery = query(collection(db, "colleagues"), orderBy("name"));
+    const colleaguesSnapshot = await getDocs(colleaguesQuery);
+    const colleagueNames = colleaguesSnapshot.docs.map(doc => doc.data().name);
+
+    const usersQuery = query(collection(db, "users"), where("status", "==", "approved"), orderBy("displayName"));
+    const usersSnapshot = await getDocs(usersQuery);
+    const userNames = usersSnapshot.docs.map(doc => doc.data().displayName);
+
+    const combinedNames = [...colleagueNames, ...userNames];
+    const uniqueNames = [...new Set(combinedNames)];
+    teamMembersCache = uniqueNames.sort((a, b) => a.localeCompare(b));
+}
+
+function populateTeamPool() {
+    const pool = document.getElementById('team-pool');
+    pool.innerHTML = '';
+    teamMembersCache.forEach(name => {
+        const item = document.createElement('div');
+        item.className = 'p-2 bg-gray-200 rounded cursor-move text-sm';
+        item.textContent = name;
+        item.dataset.teamMemberName = name;
+        pool.appendChild(item);
+    });
+    new Sortable(pool, {
+        group: { name: 'shared-team', pull: 'clone', put: false },
+        sort: false
+    });
+
+    const trash = document.getElementById('team-trash-can');
+    new Sortable(trash, {
+        group: 'shared-team',
+        onAdd: function (evt) {
+            evt.item.remove();
+        }
+    });
 }
 
 function setupEventListeners() {
@@ -66,7 +114,7 @@ function setupEventListeners() {
     document.getElementById("nextWeekBtn").onclick = () => { currentWeekOffset++; displayWeek(); };
     document.getElementById("planningItemForm").onsubmit = savePlanningItem;
     document.getElementById("cancelPlanningItem").onclick = closePlanningItemModal;
-    document.getElementById("refreshPlanningBtn").onclick = displayWeek;
+    document.getElementById("downloadPdfBtn").onclick = generatePlanningPDF;
 }
 
 async function publishWeek() {
@@ -74,7 +122,8 @@ async function publishWeek() {
     const weekId = startOfWeek.toISOString().split('T')[0];
     const weekString = startOfWeek.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
     
-    if (confirm(`Voulez-vous PUBLIER le planning pour la semaine du ${weekString} ?`)) {
+    const confirmed = await showConfirmationModal("Publication", `Voulez-vous PUBLIER le planning pour la semaine du ${weekString} ?`);
+    if (confirmed) {
         const publishDocRef = doc(db, "publishedSchedules", weekId);
         const notificationRef = collection(db, "notifications");
         try {
@@ -85,9 +134,12 @@ async function publishWeek() {
                 createdAt: serverTimestamp(),
                 author: currentUser.displayName
             });
-            alert("Planning publié et notification envoyée !");
+            showInfoModal("Succès", "Planning publié et notification envoyée !");
             updatePublishButton(true);
-        } catch (error) { console.error("Erreur de publication:", error); alert("La publication a échoué."); }
+        } catch (error) { 
+            console.error("Erreur de publication:", error); 
+            showInfoModal("Erreur", "La publication a échoué."); 
+        }
     }
 }
 
@@ -95,7 +147,8 @@ async function sendUpdateNotification() {
     const { startOfWeek } = getWeekDateRange(currentWeekOffset);
     const weekString = startOfWeek.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
 
-    if (confirm(`Voulez-vous envoyer une notification de MISE À JOUR pour le planning de la semaine du ${weekString} ?`)) {
+    const confirmed = await showConfirmationModal("Notification", `Voulez-vous envoyer une notification de MISE À JOUR pour le planning de la semaine du ${weekString} ?`);
+    if (confirmed) {
         const notificationRef = collection(db, "notifications");
         try {
             await addDoc(notificationRef, {
@@ -104,8 +157,11 @@ async function sendUpdateNotification() {
                 createdAt: serverTimestamp(),
                 author: currentUser.displayName
             });
-            alert("Notification de mise à jour envoyée !");
-        } catch (error) { console.error("Erreur de notification:", error); alert("L'envoi a échoué."); }
+            showInfoModal("Succès", "Notification de mise à jour envoyée !");
+        } catch (error) { 
+            console.error("Erreur de notification:", error); 
+            showInfoModal("Erreur", "L'envoi a échoué."); 
+        }
     }
 }
 
@@ -124,9 +180,7 @@ async function updatePublishButton(isPublished) {
 }
 
 async function displayWeek() {
-    const { startOfWeek } = getWeekDateRange(currentWeekOffset);
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    const { startOfWeek, endOfWeek } = getWeekDateRange(currentWeekOffset);
     document.getElementById("currentPeriodDisplay").textContent = `Semaine du ${startOfWeek.toLocaleDateString('fr-FR', {day: 'numeric', month: 'long'})} au ${endOfWeek.toLocaleDateString('fr-FR', {day: 'numeric', month: 'long'})}`;
     
     const weekId = startOfWeek.toISOString().split('T')[0];
@@ -144,15 +198,37 @@ async function displayWeek() {
         dayCol.className = 'bg-gray-100 rounded-lg p-2 min-h-[200px]';
         dayCol.innerHTML = `<div class="flex justify-between items-center mb-2"><h4 class="font-bold text-center">${days[i]} <span class="text-sm font-normal text-gray-500">${dayDate.toLocaleDateString('fr-FR', {day: '2-digit'})}</span></h4><button data-date="${dateString}" class="add-chantier-btn text-lg font-bold text-purple-600 hover:text-purple-800">+</button></div><div class="day-tasks-container space-y-2" id="day-col-${dateString}"></div>`;
         planningGrid.appendChild(dayCol);
+
+        const tasksContainer = dayCol.querySelector('.day-tasks-container');
+        new Sortable(tasksContainer, {
+            group: 'planning-blocks',
+            animation: 150,
+            onAdd: async function (evt) {
+                const planningId = evt.item.dataset.planningId;
+                const newDate = evt.to.id.replace('day-col-', '');
+                await updatePlanningDate(planningId, newDate);
+            }
+        });
     }
     planningGrid.querySelectorAll('.add-chantier-btn').forEach(btn => btn.onclick = () => openPlanningItemModal(null, btn.dataset.date));
     loadPlanningForWeek(startOfWeek, endOfWeek);
 }
 
+async function updatePlanningDate(planningId, newDate) {
+    const planningDocRef = doc(db, "planning", planningId);
+    try {
+        await updateDoc(planningDocRef, { date: newDate });
+    } catch (error) {
+        console.error("Erreur de mise à jour de la date:", error);
+        showInfoModal("Erreur", "Le déplacement du bloc a échoué.");
+        displayWeek();
+    }
+}
+
 function createChantierBlock(planningDoc) {
     const { id, chantierName, teamNames, duration, notes } = planningDoc;
     const block = document.createElement('div');
-    block.className = 'p-2 bg-white rounded shadow cursor-pointer hover:bg-gray-50';
+    block.className = 'p-2 bg-white rounded shadow cursor-grab hover:bg-gray-50';
     block.dataset.planningId = id;
     
     const noteIndicator = notes ? `📝` : '';
@@ -162,7 +238,7 @@ function createChantierBlock(planningDoc) {
             <button class="delete-planning-btn text-red-500 hover:text-red-700 font-bold text-xs">✖</button>
         </div>
         <div class="text-xs text-gray-600">${duration || 'N/A'}h prévues <span class="text-blue-500">${noteIndicator}</span></div>
-        <div class="colleague-drop-zone min-h-[30px] mt-2 space-y-1 bg-gray-50 p-1 rounded"></div>
+        <div class="team-drop-zone min-h-[30px] mt-2 space-y-1 bg-gray-50 p-1 rounded"></div>
     `;
     
     block.onclick = (e) => {
@@ -170,28 +246,28 @@ function createChantierBlock(planningDoc) {
         openPlanningItemModal(planningDoc);
     };
 
-    const dropZone = block.querySelector('.colleague-drop-zone');
+    const dropZone = block.querySelector('.team-drop-zone');
     if (teamNames) {
         teamNames.forEach(name => {
             const item = document.createElement('div');
             item.className = 'p-1 bg-blue-100 text-blue-800 rounded text-xs';
             item.textContent = name;
-            item.dataset.colleagueName = name;
+            item.dataset.teamMemberName = name;
             dropZone.appendChild(item);
         });
     }
     
     new Sortable(dropZone, {
-        group: 'shared',
+        group: 'shared-team',
         onAdd: async function (evt) {
-            const droppedName = evt.item.dataset.colleagueName;
+            const droppedName = evt.item.dataset.teamMemberName;
             let isDuplicate = false;
             evt.to.querySelectorAll('div').forEach(el => {
-                if (el !== evt.item && el.dataset.colleagueName === droppedName) { isDuplicate = true; }
+                if (el !== evt.item && el.dataset.teamMemberName === droppedName) { isDuplicate = true; }
             });
             if (isDuplicate) {
                 evt.item.remove();
-                alert(`"${droppedName}" est déjà sur ce chantier.`);
+                showInfoModal("Attention", `"${droppedName}" est déjà sur ce chantier.`);
                 return;
             }
             evt.item.className = 'p-1 bg-blue-100 text-blue-800 rounded text-xs';
@@ -201,8 +277,9 @@ function createChantierBlock(planningDoc) {
     });
     
     block.querySelector('.delete-planning-btn').onclick = async (e) => {
-        e.stopPropagation(); 
-        if(confirm(`Supprimer le chantier "${chantierName}" de ce jour ?`)) {
+        e.stopPropagation();
+        const confirmed = await showConfirmationModal("Confirmation", `Supprimer le chantier "${chantierName}" de ce jour ?`);
+        if(confirmed) {
             await deleteDoc(doc(db, "planning", id));
             block.remove();
         }
@@ -248,7 +325,7 @@ async function savePlanningItem(e) {
             await updateDoc(docRef, { 
                 chantierId, 
                 chantierName, 
-                duration: duration || planningDoc.duration, // Conserve l'ancienne valeur si le champ est vide
+                duration: duration || planningDoc.duration,
                 notes: notes || planningDoc.notes,
             });
         } else {
@@ -266,38 +343,12 @@ async function savePlanningItem(e) {
         displayWeek();
     } catch (error) {
         console.error("Erreur de sauvegarde:", error);
-        alert("Une erreur est survenue.");
+        showInfoModal("Erreur", "Une erreur est survenue.");
     }
 }
 
-async function cacheData() {
-    const chantiersQuery = query(collection(db, "chantiers"), where("status", "==", "active"), orderBy("name"));
-    const chantiersSnapshot = await getDocs(chantiersQuery);
-    chantiersCache = chantiersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-    const colleaguesQuery = query(collection(db, "colleagues"), orderBy("name"));
-    const colleaguesSnapshot = await getDocs(colleaguesQuery);
-    colleaguesCache = colleaguesSnapshot.docs.map(doc => doc.data().name);
-}
-
-function populateColleaguesPool() {
-    const pool = document.getElementById('colleagues-pool');
-    pool.innerHTML = '';
-    colleaguesCache.forEach(name => {
-        const item = document.createElement('div');
-        item.className = 'p-2 bg-gray-200 rounded cursor-move text-sm';
-        item.textContent = name;
-        item.dataset.colleagueName = name;
-        pool.appendChild(item);
-    });
-    new Sortable(pool, {
-        group: { name: 'shared', pull: 'clone', put: false },
-        sort: false
-    });
-}
-
 async function updatePlanningTeam(planningId, dropZone) {
-    const teamNames = Array.from(dropZone.querySelectorAll('div')).map(el => el.dataset.colleagueName);
+    const teamNames = Array.from(dropZone.querySelectorAll('div')).map(el => el.dataset.teamMemberName);
     const planningDocRef = doc(db, "planning", planningId);
     await updateDoc(planningDocRef, { teamNames: teamNames });
 }
@@ -305,6 +356,9 @@ async function updatePlanningTeam(planningId, dropZone) {
 async function loadPlanningForWeek(start, end) {
     const q = query(collection(db, "planning"), where("date", ">=", start.toISOString().split('T')[0]), where("date", "<=", end.toISOString().split('T')[0]));
     const querySnapshot = await getDocs(q);
+    
+    planningDataCache = querySnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+
     querySnapshot.forEach(docSnap => {
         const data = docSnap.data();
         const container = document.getElementById(`day-col-${data.date}`);
@@ -321,5 +375,71 @@ function getWeekDateRange(offset = 0) {
     const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1) + (offset * 7);
     const startOfWeek = new Date(now.setDate(diff));
     startOfWeek.setHours(0, 0, 0, 0);
-    return { startOfWeek };
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
+    return { startOfWeek, endOfWeek };
+}
+
+/**
+ * --- CORRIGÉ : Fonction pour générer le PDF du planning ---
+ */
+async function generatePlanningPDF() {
+    const { startOfWeek, endOfWeek } = getWeekDateRange(currentWeekOffset);
+    
+    // On refait une requête pour être sûr d'avoir les bonnes données
+    const q = query(collection(db, "planning"), where("date", ">=", startOfWeek.toISOString().split('T')[0]), where("date", "<=", endOfWeek.toISOString().split('T')[0]));
+    const querySnapshot = await getDocs(q);
+    const freshPlanningData = querySnapshot.docs.map(docSnap => docSnap.data());
+
+    if (freshPlanningData.length === 0) {
+        showInfoModal("Information", "Le planning de cette semaine est vide.");
+        return;
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const periodText = document.getElementById("currentPeriodDisplay").textContent;
+    const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+
+    doc.setFontSize(18);
+    doc.text(`Planning de la Semaine`, 14, 22);
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+    doc.text(periodText, 14, 30);
+
+    const tableData = [];
+    const sortedPlanning = freshPlanningData.sort((a, b) => a.date.localeCompare(b.date));
+
+    sortedPlanning.forEach(task => {
+        const [year, month, day] = task.date.split('-').map(Number);
+        const taskDate = new Date(Date.UTC(year, month - 1, day));
+        const dayIndex = (taskDate.getUTCDay() + 6) % 7;
+        
+        tableData.push([
+            `${days[dayIndex]} ${day}/${month}`,
+            task.chantierName,
+            task.teamNames.join(', ') || 'Personne',
+            `${task.duration || 'N/A'}h`,
+            task.notes || ''
+        ]);
+    });
+
+    doc.autoTable({
+        startY: 40,
+        head: [['Jour', 'Chantier', 'Équipe', 'Heures', 'Notes']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: { fillColor: [79, 70, 229] },
+        columnStyles: {
+            0: { cellWidth: 25 },
+            1: { cellWidth: 40 },
+            2: { cellWidth: 40 },
+            3: { cellWidth: 15 },
+            4: { cellWidth: 'auto' }
+        }
+    });
+
+    const fileName = `planning_${periodText.replace(/ /g, '_')}.pdf`;
+    doc.save(fileName);
 }
