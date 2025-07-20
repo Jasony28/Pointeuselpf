@@ -1,9 +1,24 @@
-// modules/chantiers.js
-
 import { collection, query, where, orderBy, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, isAdmin, currentUser, showInfoModal } from "../app.js";
 
 let chantiersCache = [];
+
+// --- NOUVEAU : Fonction de date universelle (UTC) pour la cohérence ---
+function getWeekDateRange(offset = 0) {
+    const today = new Date();
+    const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+    const dayOfWeekUTC = todayUTC.getUTCDay(); // Dimanche=0, Lundi=1...
+    const diffToMonday = dayOfWeekUTC === 0 ? -6 : 1 - dayOfWeekUTC;
+    
+    const startOfWeek = new Date(todayUTC);
+    startOfWeek.setUTCDate(todayUTC.getUTCDate() + diffToMonday + (offset * 7));
+    
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setUTCDate(startOfWeek.getUTCDate() + 6);
+    endOfWeek.setUTCHours(23, 59, 59, 999);
+    
+    return { startOfWeek, endOfWeek };
+}
 
 export async function render() {
     pageContent.innerHTML = `
@@ -48,15 +63,8 @@ async function loadChantiersList() {
     const listContainer = document.getElementById('chantiers-list');
     listContainer.innerHTML = '<p class="col-span-full text-center">Chargement...</p>';
     
-    // 1. Déterminer la semaine actuelle
-    const now = new Date();
-    const dayOfWeek = now.getDay();
-    const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-    const startOfWeek = new Date(now.setDate(diff));
-    startOfWeek.setHours(0, 0, 0, 0);
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-    endOfWeek.setHours(23, 59, 59, 999);
+    // 1. Déterminer la semaine actuelle en utilisant la fonction UTC
+    const { startOfWeek, endOfWeek } = getWeekDateRange(0);
 
     try {
         // 2. Récupérer le planning de la semaine pour l'utilisateur connecté
@@ -76,13 +84,17 @@ async function loadChantiersList() {
             return;
         }
 
-        // 3. Extraire les noms uniques des chantiers
+        // 3. Extraire les noms uniques des chantiers pour éviter les doublons
         const chantierNames = [...new Set(userPlanningTasks.map(task => task.chantierName))];
 
         // 4. Récupérer les informations complètes de ces chantiers
-        const chantiersQuery = query(collection(db, "chantiers"), where("name", "in", chantierNames));
-        const chantiersSnapshot = await getDocs(chantiersQuery);
-        chantiersCache = chantiersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        if (chantierNames.length > 0) {
+            const chantiersQuery = query(collection(db, "chantiers"), where("name", "in", chantierNames));
+            const chantiersSnapshot = await getDocs(chantiersQuery);
+            chantiersCache = chantiersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        } else {
+            chantiersCache = [];
+        }
 
         displayChantierCards();
 

@@ -113,17 +113,10 @@ async function loadDetailedWeekStats() {
         }
     });
 
-    // Affiche les stats par employé (non cliquable)
     displayStats(userStats, document.getElementById('user-stats-list'), "Aucun pointage cette semaine.");
-    
-    // Affiche les stats par chantier (cliquable)
     displayStats(chantierStats, document.getElementById('chantier-stats-list'), "Aucun chantier pointé cette semaine.", true);
 }
 
-/**
- * --- MODIFIÉ ---
- * Affiche une liste de statistiques et rend les noms cliquables si spécifié.
- */
 function displayStats(statsObject, container, emptyMessage, isClickable = false) {
     container.innerHTML = "";
     const sortedEntries = Object.entries(statsObject).sort(([, a], [, b]) => b - a);
@@ -138,14 +131,12 @@ function displayStats(statsObject, container, emptyMessage, isClickable = false)
         div.className = 'flex justify-between items-center text-sm p-2 border-b';
 
         if (isClickable) {
-            // Si c'est cliquable, on crée un bouton qui navigue vers la page de détails
             div.innerHTML = `
                 <button class="font-medium text-blue-600 hover:underline text-left">${name}</button>
                 <span class="font-bold text-purple-700">${formatMilliseconds(totalMs)}</span>
             `;
             div.querySelector('button').onclick = () => navigateTo('admin-chantier-details', { chantierName: name });
         } else {
-            // Sinon, on affiche juste le texte
             div.innerHTML = `
                 <span class="font-medium">${name}</span>
                 <span class="font-bold text-purple-700">${formatMilliseconds(totalMs)}</span>
