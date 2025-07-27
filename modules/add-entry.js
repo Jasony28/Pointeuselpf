@@ -31,7 +31,7 @@ export async function render() {
     const manualForm = document.getElementById("manualForm");
     
     loadChantiersIntoSelect();
-    loadColleaguesForSelection();
+    loadColleaguesForSelection(); // This now loads users AND colleagues
 
     manualForm.onsubmit = async (e) => {
         e.preventDefault();
@@ -107,34 +107,54 @@ async function loadChantiersIntoSelect() {
 }
 
 async function loadColleaguesForSelection() {
+    const container = document.getElementById("manualColleaguesContainer");
     try {
-        const q = query(collection(db, "colleagues"), orderBy("name"));
-        const querySnapshot = await getDocs(q);
-        allColleaguesCache = querySnapshot.docs.map(doc => doc.data().name);
+        // Charger les collègues manuels
+        const colleaguesQuery = query(collection(db, "colleagues"), orderBy("name"));
+        const colleaguesSnapshot = await getDocs(colleaguesQuery);
+        const colleagueNames = colleaguesSnapshot.docs.map(doc => doc.data().name);
+
+        // Charger les utilisateurs approuvés de l'application
+        const usersQuery = query(collection(db, "users"), where("status", "==", "approved"), orderBy("displayName"));
+        const usersSnapshot = await getDocs(usersQuery);
+        const userNames = usersSnapshot.docs.map(doc => doc.data().displayName);
+
+        // Fusionner, dédoublonner et trier les listes
+        const combinedNames = [...colleagueNames, ...userNames];
+        const uniqueNames = [...new Set(combinedNames)];
+        
+        allColleaguesCache = uniqueNames.sort((a, b) => a.localeCompare(b));
+        
         selectedColleagues = [];
         renderColleaguesSelection();
     } catch (error) {
-        console.error("Erreur de chargement des collègues:", error);
-        document.getElementById("manualColleaguesContainer").innerHTML = "<p class='text-red-500'>Erreur</p>";
+        console.error("Erreur de chargement des collègues et utilisateurs:", error);
+        container.innerHTML = "<p class='text-red-500'>Erreur de chargement de la liste.</p>";
     }
 }
 
 function renderColleaguesSelection() {
     const container = document.getElementById("manualColleaguesContainer");
-    container.innerHTML = "";
+    container.innerHTML = ""; 
+
     allColleaguesCache.forEach(name => {
         const button = document.createElement("button");
         button.textContent = name;
         button.type = "button";
-        const isSelected = selectedColleagues.includes(name);
-        updateColleagueButtonStyle(button, isSelected);
-        
+
         button.onclick = () => {
             const listIndex = selectedColleagues.indexOf(name);
-            if (listIndex > -1) selectedColleagues.splice(listIndex, 1);
-            else selectedColleagues.push(name);
-            updateColleagueButtonStyle(button, !isSelected);
+            if (listIndex > -1) {
+                selectedColleagues.splice(listIndex, 1);
+            } else {
+                selectedColleagues.push(name);
+            }
+            renderColleaguesSelection();
         };
+
+        const isSelected = selectedColleagues.includes(name);
+        updateColleagueButtonStyle(button, isSelected);
+
         container.appendChild(button);
     });
 }

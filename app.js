@@ -33,9 +33,12 @@ const userTabs = [
     { id: 'user-history', name: 'Mon Historique' },
 ];
 
+
 const adminTabs = [
     { id: 'admin-dashboard', name: 'Tableau de Bord' },
     { id: 'admin-planning', name: 'Planification' },
+    { id: 'admin-data', name: 'Données' },
+    { id: 'admin-tarifs', name: 'Tarifs' }, // <-- AJOUTEZ CETTE LIGNE
     { id: 'admin-chantiers', name: 'Gestion Chantiers' },
     { id: 'admin-colleagues', name: 'Collègues' },
     { id: 'admin-users', name: 'Utilisateurs' },
