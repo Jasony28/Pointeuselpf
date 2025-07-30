@@ -40,68 +40,68 @@
     </div>
 
     <div id="auth-container" class="hidden-by-default min-h-screen flex items-center justify-center p-4">
-    <div class="bg-white shadow-lg rounded-xl p-8 w-full max-w-sm space-y-6">
-        
-        <form id="login-form">
-            <h1 class="text-3xl font-bold text-center flex items-center justify-center gap-2 mb-4"><span>🕒</span>Connexion</h1>
-            <div class="space-y-4">
-                <div>
-                    <label for="login-email" class="text-sm font-medium">Email</label>
-                    <input id="login-email" type="email" class="w-full border p-2 rounded mt-1" required />
+        <div class="bg-white shadow-lg rounded-xl p-8 w-full max-w-sm space-y-6">
+            
+            <form id="login-form">
+                <h1 class="text-3xl font-bold text-center flex items-center justify-center gap-2 mb-4"><span>🕒</span>Connexion</h1>
+                <div class="space-y-4">
+                    <div>
+                        <label for="login-email" class="text-sm font-medium">Email</label>
+                        <input id="login-email" type="email" class="w-full border p-2 rounded mt-1" required />
+                    </div>
+                    <div>
+                        <label for="login-password" class="text-sm font-medium">Mot de passe</label>
+                        <input id="login-password" type="password" class="w-full border p-2 rounded mt-1" required />
+                    </div>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-3 rounded-lg w-full">Se connecter</button>
                 </div>
-                <div>
-                    <label for="login-password" class="text-sm font-medium">Mot de passe</label>
-                    <input id="login-password" type="password" class="w-full border p-2 rounded mt-1" required />
+                <div class="text-sm text-center mt-4">
+                    <a href="#" id="show-reset-link" class="text-blue-600 hover:underline">Mot de passe oublié ?</a>
                 </div>
-                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-3 rounded-lg w-full">Se connecter</button>
-            </div>
-            <div class="text-sm text-center mt-4">
-                <a href="#" id="show-reset-link" class="text-blue-600 hover:underline">Mot de passe oublié ?</a>
-            </div>
-            <div class="text-sm text-center mt-2">
-                Pas de compte ? <a href="#" id="show-register-link" class="text-blue-600 hover:underline">Créez-en un</a>
-            </div>
-        </form>
+                <div class="text-sm text-center mt-2">
+                    Pas de compte ? <a href="#" id="show-register-link" class="text-blue-600 hover:underline">Créez-en un</a>
+                </div>
+            </form>
 
-        <form id="register-form" class="hidden">
-            <h1 class="text-3xl font-bold text-center flex items-center justify-center gap-2 mb-4"><span>📝</span>Inscription</h1>
-            <div class="space-y-4">
-                <div>
-                    <label for="register-name" class="text-sm font-medium">Nom complet</label>
-                    <input id="register-name" type="text" class="w-full border p-2 rounded mt-1" required />
+            <form id="register-form" class="hidden">
+                <h1 class="text-3xl font-bold text-center flex items-center justify-center gap-2 mb-4"><span>📝</span>Inscription</h1>
+                <div class="space-y-4">
+                    <div>
+                        <label for="register-name" class="text-sm font-medium">Nom complet</label>
+                        <input id="register-name" type="text" class="w-full border p-2 rounded mt-1" required />
+                    </div>
+                    <div>
+                        <label for="register-email" class="text-sm font-medium">Email</label>
+                        <input id="register-email" type="email" class="w-full border p-2 rounded mt-1" required />
+                    </div>
+                    <div>
+                        <label for="register-password" class="text-sm font-medium">Mot de passe</label>
+                        <input id="register-password" type="password" class="w-full border p-2 rounded mt-1" required />
+                    </div>
+                    <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-4 py-3 rounded-lg w-full">Créer le compte</button>
                 </div>
-                <div>
-                    <label for="register-email" class="text-sm font-medium">Email</label>
-                    <input id="register-email" type="email" class="w-full border p-2 rounded mt-1" required />
+                <div class="text-sm text-center mt-4">
+                    Déjà un compte ? <a href="#" id="show-login-link-from-register" class="text-blue-600 hover:underline">Se connecter</a>
                 </div>
-                <div>
-                    <label for="register-password" class="text-sm font-medium">Mot de passe</label>
-                    <input id="register-password" type="password" class="w-full border p-2 rounded mt-1" required />
-                </div>
-                <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-4 py-3 rounded-lg w-full">Créer le compte</button>
-            </div>
-            <div class="text-sm text-center mt-4">
-                Déjà un compte ? <a href="#" id="show-login-link-from-register" class="text-blue-600 hover:underline">Se connecter</a>
-            </div>
-        </form>
+            </form>
 
-        <form id="reset-form" class="hidden">
-            <h1 class="text-2xl font-bold text-center mb-4">Mot de passe oublié</h1>
-            <p class="text-sm text-gray-600 text-center mb-4">Entrez votre email pour recevoir un lien de réinitialisation.</p>
-            <div class="space-y-4">
-                <div>
-                    <label for="reset-email" class="text-sm font-medium">Email</label>
-                    <input id="reset-email" type="email" class="w-full border p-2 rounded mt-1" required />
+            <form id="reset-form" class="hidden">
+                <h1 class="text-2xl font-bold text-center mb-4">Mot de passe oublié</h1>
+                <p class="text-sm text-gray-600 text-center mb-4">Entrez votre email pour recevoir un lien de réinitialisation.</p>
+                <div class="space-y-4">
+                    <div>
+                        <label for="reset-email" class="text-sm font-medium">Email</label>
+                        <input id="reset-email" type="email" class="w-full border p-2 rounded mt-1" required />
+                    </div>
+                    <button type="submit" class="bg-gray-600 hover:bg-gray-700 text-white font-bold px-4 py-3 rounded-lg w-full">Envoyer le lien</button>
                 </div>
-                <button type="submit" class="bg-gray-600 hover:bg-gray-700 text-white font-bold px-4 py-3 rounded-lg w-full">Envoyer le lien</button>
-            </div>
-            <div class="text-sm text-center mt-4">
-                <a href="#" id="show-login-link-from-reset" class="text-blue-600 hover:underline">Retour à la connexion</a>
-            </div>
-        </form>
+                <div class="text-sm text-center mt-4">
+                    <a href="#" id="show-login-link-from-reset" class="text-blue-600 hover:underline">Retour à la connexion</a>
+                </div>
+            </form>
 
+        </div>
     </div>
-</div>
 
     <div id="pending-approval-container" class="hidden-by-default min-h-screen flex items-center justify-center p-4">
         <div class="bg-white shadow-lg rounded-xl p-8 w-full max-w-sm space-y-4 text-center">
@@ -118,6 +118,7 @@
             <h1 class="text-xl font-bold">Pointeuse Lpf</h1>
             <nav id="main-nav" class="hidden md:flex items-center gap-2"></nav>
             <div class="flex items-center">
+                <button id="switchViewBtn" class="hidden text-sm bg-purple-100 text-purple-700 hover:bg-purple-200 px-3 py-1.5 rounded-md mr-4"></button>
                 <span id="currentUserDisplay" class="text-sm mr-4 hidden sm:inline"></span>
                 
                 <div class="relative">
@@ -157,11 +158,11 @@
         </div>
     </div>
 
-    <script src="https://unpkg.com/jspdf@latest/dist/jspdf.umd.min.js"></script>
-    <script src="https://unpkg.com/jspdf-autotable@latest/dist/jspdf.plugin.autotable.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://unpkg.com/jspdf@latest/dist/jspdf.umd.min.js"></script>
+    <script src="https://unpkg.com/jspdf@latest/dist/jspdf.umd.min.js"></script>
+    <script src="https://unpkg.com/jspdf-autotable@latest/dist/jspdf.plugin.autotable.js"></script>
+
     <script type="module" src="./app.js"></script>
 </body>
 </html>

@@ -1,5 +1,7 @@
 import { collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, showInfoModal } from "../app.js";
+// CORRECTION: Import de la fonction utilitaire pour la gestion des dates.
+import { getWeekDateRange } from "./utils.js";
 
 // Variables pour les graphiques et les données
 let chantierChart = null;
@@ -13,7 +15,6 @@ let currentStats = {}; // Pour stocker les dernières statistiques calculées
 export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-7xl mx-auto space-y-6">
-            <!-- En-tête et Filtres -->
             <div class="bg-white p-4 rounded-lg shadow-sm">
                 <div class="flex flex-wrap justify-between items-center gap-4 mb-4">
                     <h2 class="text-3xl font-bold text-gray-800">📊 Tableau de Bord Analytique</h2>
@@ -42,46 +43,47 @@ export async function render() {
                 </div>
             </div>
 
-            <!-- Indicateurs Clés (KPIs) -->
             <div id="kpi-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"></div>
 
-            <!-- Section des Graphiques -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div class="bg-white p-6 rounded-lg shadow-sm"><h3 class="text-xl font-semibold mb-4">Évolution des Heures</h3><canvas id="evolutionLineChart"></canvas></div>
                 <div class="bg-white p-6 rounded-lg shadow-sm"><h3 class="text-xl font-semibold mb-4">Répartition par Chantier</h3><canvas id="chantierPieChart"></canvas></div>
             </div>
             <div class="bg-white p-6 rounded-lg shadow-sm"><h3 class="text-xl font-semibold mb-4">Heures par Employé</h3><canvas id="userBarChart"></canvas></div>
 
-            <!-- Analyse de Rentabilité -->
             <div class="bg-white p-6 rounded-lg shadow-sm">
                 <h3 class="text-xl font-semibold mb-4">💰 Analyse de Rentabilité par Chantier</h3>
                 <div id="profitability-list" class="space-y-3"></div>
             </div>
             
-            <!-- Exportation -->
             <div class="bg-white p-4 rounded-lg shadow-sm text-right">
                 <button id="exportPdfBtn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Exporter en PDF</button>
             </div>
         </div>
     `;
-
+setTimeout(async () => {
     await cacheInitialData();
     setupEventListeners();
-    loadDataForPeriod('week');
+    await loadDataForPeriod('week');
+    }, 0);
 }
 
 async function cacheInitialData() {
-    const usersSnapshot = await getDocs(query(collection(db, "users"), orderBy("displayName")));
-    usersCache = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    const userFilter = document.getElementById('user-filter');
-    userFilter.innerHTML = '<option value="all">Tous les employés</option>';
-    usersCache.forEach(user => userFilter.innerHTML += `<option value="${user.uid}">${user.displayName}</option>`);
+    try {
+        const usersSnapshot = await getDocs(query(collection(db, "users"), orderBy("displayName")));
+        usersCache = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const userFilter = document.getElementById('user-filter');
+        userFilter.innerHTML = '<option value="all">Tous les employés</option>';
+        usersCache.forEach(user => userFilter.innerHTML += `<option value="${user.uid}">${user.displayName}</option>`);
 
-    const chantiersSnapshot = await getDocs(query(collection(db, "chantiers"), orderBy("name")));
-    chantiersCache = chantiersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    const chantierFilter = document.getElementById('chantier-filter');
-    chantierFilter.innerHTML = '<option value="all">Tous les chantiers</option>';
-    chantiersCache.forEach(c => chantierFilter.innerHTML += `<option value="${c.name}">${c.name}</option>`);
+        const chantiersSnapshot = await getDocs(query(collection(db, "chantiers"), orderBy("name")));
+        chantiersCache = chantiersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const chantierFilter = document.getElementById('chantier-filter');
+        chantierFilter.innerHTML = '<option value="all">Tous les chantiers</option>';
+        chantiersCache.forEach(c => chantierFilter.innerHTML += `<option value="${c.name}">${c.name}</option>`);
+    } catch (error) {
+        console.error("Erreur de chargement des données initiales:", error);
+    }
 }
 
 function setupEventListeners() {
@@ -108,7 +110,7 @@ function setupEventListeners() {
 }
 
 async function loadDataForPeriod(period) {
-    document.getElementById('kpi-container').innerHTML = `<p class="col-span-full text-center">Chargement...</p>`;
+    document.getElementById('kpi-container').innerHTML = `<div class="col-span-full text-center p-4">Chargement des données...</div>`;
     
     let startDate, endDate;
     const customStart = document.getElementById('start-date-filter').value;
@@ -117,81 +119,85 @@ async function loadDataForPeriod(period) {
     if (customStart && customEnd) {
         startDate = new Date(customStart);
         endDate = new Date(customEnd);
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(23, 59, 59, 999);
         document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('bg-white', 'shadow'));
     } else {
         const now = new Date();
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         switch (period) {
             case 'year':
-                startDate = new Date(now.getFullYear(), 0, 1);
-                endDate = new Date(now.getFullYear(), 11, 31);
+                startDate = new Date(Date.UTC(now.getFullYear(), 0, 1));
+                endDate = new Date(Date.UTC(now.getFullYear(), 11, 31, 23, 59, 59, 999));
                 break;
             case 'month':
-                startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-                endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+                startDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
+                endDate = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999));
                 break;
             case 'week':
             default:
-                const dayOfWeek = now.getDay();
-                const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-                startDate = new Date(now.getFullYear(), now.getMonth(), diff);
-                endDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + 6);
+                // CORRECTION: Utilise la fonction centralisée pour obtenir une plage de semaine UTC cohérente.
+                const weekRange = getWeekDateRange(0);
+                startDate = weekRange.startOfWeek;
+                endDate = weekRange.endOfWeek;
                 break;
         }
     }
-    startDate.setHours(0, 0, 0, 0);
-    endDate.setHours(23, 59, 59, 999);
 
     const selectedUserId = document.getElementById('user-filter').value;
     const selectedChantier = document.getElementById('chantier-filter').value;
     
-    let q = query(collection(db, "pointages"), 
-        where("timestamp", ">=", startDate.toISOString()), 
+    const queryConstraints = [
+        where("timestamp", ">=", startDate.toISOString()),
         where("timestamp", "<=", endDate.toISOString())
-    );
-    if (selectedUserId !== 'all') q = query(q, where("uid", "==", selectedUserId));
-    if (selectedChantier !== 'all') q = query(q, where("chantier", "==", selectedChantier));
+    ];
+    if (selectedUserId !== 'all') queryConstraints.push(where("uid", "==", selectedUserId));
+    if (selectedChantier !== 'all') queryConstraints.push(where("chantier", "==", selectedChantier));
 
-    const pointagesSnapshot = await getDocs(q);
-    
-    pointagesCache = [];
-    const stats = {
-        hoursByChantier: {}, hoursByUser: {}, totalHours: 0, totalCost: 0,
-        hoursByDay: {}, costByChantier: {}
-    };
+    const q = query(collection(db, "pointages"), ...queryConstraints);
 
-    pointagesSnapshot.forEach(doc => {
-        const data = doc.data();
-        if (data.endTime) {
-            const durationMs = new Date(data.endTime) - new Date(data.timestamp);
-            const durationHours = durationMs / 3600000;
-            const user = usersCache.find(u => u.uid === data.uid);
-            const cost = durationHours * (user?.tauxHoraire || 0);
+    try {
+        const pointagesSnapshot = await getDocs(q);
+        pointagesCache = [];
+        const stats = {
+            hoursByChantier: {}, hoursByUser: {}, totalHours: 0, totalCost: 0,
+            hoursByDay: {}, costByChantier: {}
+        };
 
-            stats.totalHours += durationHours;
-            stats.totalCost += cost;
-            stats.hoursByChantier[data.chantier] = (stats.hoursByChantier[data.chantier] || 0) + durationHours;
-            stats.hoursByUser[data.userName] = (stats.hoursByUser[data.userName] || 0) + durationHours;
-            stats.costByChantier[data.chantier] = (stats.costByChantier[data.chantier] || 0) + cost;
+        pointagesSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.endTime) {
+                const durationMs = new Date(data.endTime) - new Date(data.timestamp);
+                const durationHours = durationMs / 3600000;
+                const user = usersCache.find(u => u.uid === data.uid);
+                const cost = durationHours * (user?.tauxHoraire || 0);
 
-            const day = new Date(data.timestamp).toISOString().split('T')[0];
-            stats.hoursByDay[day] = (stats.hoursByDay[day] || 0) + durationHours;
-            
-            pointagesCache.push({
-                user: data.userName,
-                chantier: data.chantier,
-                date: new Date(data.timestamp).toLocaleDateString('fr-FR'),
-                heures: durationHours.toFixed(2),
-                cout: cost.toFixed(2)
-            });
-        }
-    });
+                stats.totalHours += durationHours;
+                stats.totalCost += cost;
+                stats.hoursByChantier[data.chantier] = (stats.hoursByChantier[data.chantier] || 0) + durationHours;
+                stats.hoursByUser[data.userName] = (stats.hoursByUser[data.userName] || 0) + durationHours;
+                stats.costByChantier[data.chantier] = (stats.costByChantier[data.chantier] || 0) + cost;
 
-    currentStats = stats; // Stocker les stats pour l'export
-    updateKPIs(stats);
-    updateCharts(stats);
-    displayProfitabilityList(stats);
+                const day = new Date(data.timestamp).toISOString().split('T')[0];
+                stats.hoursByDay[day] = (stats.hoursByDay[day] || 0) + durationHours;
+                
+                pointagesCache.push({
+                    user: data.userName,
+                    chantier: data.chantier,
+                    date: new Date(data.timestamp).toLocaleDateString('fr-FR'),
+                    heures: durationHours.toFixed(2),
+                    cout: cost.toFixed(2)
+                });
+            }
+        });
+
+        currentStats = stats;
+        updateKPIs(stats);
+        updateCharts(stats);
+        displayProfitabilityList(stats);
+    } catch (error) {
+        console.error("Erreur de chargement des données de la période:", error);
+        document.getElementById('kpi-container').innerHTML = `<div class="col-span-full text-center p-4 text-red-500">Erreur de chargement des données.</div>`;
+    }
 }
 
 function updateKPIs(stats) {
@@ -226,7 +232,7 @@ function updateCharts(stats) {
     });
 
     const chantierCtx = document.getElementById('chantierPieChart').getContext('2d');
-    const chantierData = Object.entries(stats.hoursByChantier).sort((a,b) => b[1] - a[1]);
+    const chantierData = Object.entries(stats.hoursByChantier).sort((a,b) => b[1] - a[1]).slice(0, 7); // Limite aux 7 plus gros
     chantierChart = new Chart(chantierCtx, {
         type: 'doughnut',
         data: {
@@ -307,7 +313,6 @@ function exportToPDF() {
         periodText = `Du ${new Date(startValue).toLocaleDateString('fr-FR')} au ${new Date(endValue).toLocaleDateString('fr-FR')}`;
     }
     
-    // CORRECTION: Utiliser la variable globale 'currentStats' pour être sûr d'avoir les bonnes données
     const totalHours = currentStats.totalHours.toFixed(1) + 'h';
     const totalCost = currentStats.totalCost.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
     

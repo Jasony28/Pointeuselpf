@@ -1,6 +1,6 @@
 // sw.js - Service Worker
 
-const CACHE_NAME = 'pointeuse-pro-cache-v7.2';
+const CACHE_NAME = 'pointeuse-pro-cache-v7.2'; // Vous pouvez incrémenter la version si vous le souhaitez, ex: v8.0
 const urlsToCache = [
   './',
   './index.html',
@@ -8,12 +8,17 @@ const urlsToCache = [
   './manifest.json',
   
   // Modules locaux
+  // CORRECTION: Ajout des nouveaux modules à la liste du cache
+  './modules/utils.js',
   './modules/add-entry.js',
   './modules/user-history.js',
   './modules/user-dashboard.js',
   './modules/admin-dashboard.js',
   './modules/admin-planning.js',
   './modules/admin-chantiers.js',
+  './modules/admin-chantier-details.js', // Ajouté
+  './modules/admin-data.js',             // Ajouté
+  './modules/admin-tarifs.js',           // Ajouté
   './modules/admin-users.js',
   './modules/admin-colleagues.js',
   './modules/chantiers.js',
@@ -26,19 +31,18 @@ const urlsToCache = [
   'https://unpkg.com/jspdf@latest/dist/jspdf.umd.min.js',
   'https://unpkg.com/jspdf-autotable@latest/dist/jspdf.plugin.autotable.js',
   'https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js',
+  'https://cdn.jsdelivr.net/npm/chart.js' // Ajouté car utilisé
 ];
 
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
       console.log('Cache ouvert et mise à jour des fichiers.');
-      // Utiliser addAll est plus simple et fait la même chose
       return cache.addAll(urlsToCache).catch(err => {
         console.warn("Certains fichiers externes n'ont pas pu être mis en cache. Le mode hors ligne peut être limité.", err);
       });
     })
   );
-  // On ne met plus self.skipWaiting() ici pour la nouvelle logique de mise à jour
 });
 
 self.addEventListener('message', (event) => {
@@ -56,15 +60,13 @@ self.addEventListener('activate', event => {
           return caches.delete(cacheName);
         }
       })
-    ))
+    )).then(() => self.clients.claim())
   );
-  return self.clients.claim();
 });
 
 self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request).then(response => {
-      // Si la ressource est dans le cache, on la sert, sinon on va la chercher sur le réseau
       return response || fetch(event.request);
     })
   );

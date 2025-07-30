@@ -1,5 +1,7 @@
 import { collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, navigateTo } from "../app.js";
+// CORRECTION: Import des fonctions utilitaires centralisées.
+import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 
 let currentChantierName = null;
 let currentFilter = 'month'; // Filtre par défaut au chargement
@@ -35,7 +37,7 @@ export async function render(params = {}) {
             </div>
         </div>
     `;
-
+setTimeout(() => {
     document.getElementById('back-to-dashboard').onclick = () => navigateTo('admin-dashboard');
     document.getElementById('filter-buttons').addEventListener('click', (e) => {
         if (e.target.tagName === 'BUTTON') {
@@ -45,6 +47,7 @@ export async function render(params = {}) {
     });
 
     loadChantierDetails();
+     }, 0);
 }
 
 /**
@@ -68,68 +71,66 @@ async function loadChantierDetails() {
     let startDate;
     let periodText = "";
 
+    // CORRECTION: Utilisation de méthodes UTC fiables pour définir la plage de dates.
     switch (currentFilter) {
         case 'week':
-            const dayOfWeek = now.getDay();
-            const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-            startDate = new Date(now.setDate(diff));
-            startDate.setHours(0, 0, 0, 0);
+            startDate = getWeekDateRange(0).startOfWeek;
             periodText = "cette semaine";
             break;
         case 'year':
-            startDate = new Date(now.getFullYear(), 0, 1);
+            startDate = new Date(Date.UTC(now.getFullYear(), 0, 1));
             periodText = "cette année";
             break;
         case 'month':
         default:
-            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            startDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
             periodText = "ce mois-ci";
             break;
     }
 
-    const q = query(
-        collection(db, "pointages"),
-        where("chantier", "==", currentChantierName),
-        where("timestamp", ">=", startDate.toISOString())
-    );
+    try {
+        const q = query(
+            collection(db, "pointages"),
+            where("chantier", "==", currentChantierName),
+            where("timestamp", ">=", startDate.toISOString())
+        );
 
-    const querySnapshot = await getDocs(q);
-    const userHours = {};
-    let totalMs = 0;
+        const querySnapshot = await getDocs(q);
+        const userHours = {};
+        let totalMs = 0;
 
-    querySnapshot.forEach(doc => {
-        const data = doc.data();
-        if (data.endTime) {
-            const durationMs = new Date(data.endTime) - new Date(data.timestamp);
-            userHours[data.userName] = (userHours[data.userName] || 0) + durationMs;
-            totalMs += durationMs;
+        querySnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.endTime) {
+                const durationMs = new Date(data.endTime) - new Date(data.timestamp);
+                userHours[data.userName] = (userHours[data.userName] || 0) + durationMs;
+                totalMs += durationMs;
+            }
+        });
+
+        totalContainer.innerHTML = `<h3 class="text-xl font-bold">Total ${periodText} : <span class="text-purple-700">${formatMilliseconds(totalMs)}</span></h3>`;
+
+        listContainer.innerHTML = "";
+        const sortedUsers = Object.entries(userHours).sort(([, a], [, b]) => b - a);
+
+        if (sortedUsers.length === 0) {
+            listContainer.innerHTML = `<p class="text-center text-gray-500">Aucun pointage pour ce chantier sur la période sélectionnée.</p>`;
+            return;
         }
-    });
 
-    totalContainer.innerHTML = `<h3 class="text-xl font-bold">Total ${periodText} : <span class="text-purple-700">${formatMilliseconds(totalMs)}</span></h3>`;
-
-    listContainer.innerHTML = "";
-    const sortedUsers = Object.entries(userHours).sort(([, a], [, b]) => b - a);
-
-    if (sortedUsers.length === 0) {
-        listContainer.innerHTML = `<p class="text-center text-gray-500">Aucun pointage pour ce chantier sur la période sélectionnée.</p>`;
-        return;
+        sortedUsers.forEach(([name, ms]) => {
+            const div = document.createElement('div');
+            div.className = 'flex justify-between items-center text-sm p-2 border-b';
+            div.innerHTML = `
+                <span class="font-medium">${name}</span>
+                <span class="font-bold">${formatMilliseconds(ms)}</span>
+            `;
+            listContainer.appendChild(div);
+        });
+    } catch (error) {
+        console.error("Erreur de chargement des détails du chantier:", error);
+        listContainer.innerHTML = `<p class="text-center text-red-500">Erreur de chargement.</p>`;
     }
-
-    sortedUsers.forEach(([name, ms]) => {
-        const div = document.createElement('div');
-        div.className = 'flex justify-between items-center text-sm p-2 border-b';
-        div.innerHTML = `
-            <span class="font-medium">${name}</span>
-            <span class="font-bold">${formatMilliseconds(ms)}</span>
-        `;
-        listContainer.appendChild(div);
-    });
 }
 
-function formatMilliseconds(ms) {
-    if (!ms || ms < 0) return "0h 0min";
-    const totalHours = Math.floor(ms / 3600000);
-    const totalMinutes = Math.round((ms % 3600000) / 60000);
-    return `${totalHours}h ${totalMinutes}min`;
-}
+// CORRECTION: La fonction locale a été supprimée car elle est maintenant importée depuis utils.js

@@ -27,11 +27,11 @@ export async function render() {
             <button type="submit" class="bg-purple-700 hover:bg-purple-800 text-white font-bold px-4 py-3 rounded w-full">Enregistrer le pointage</button>
         </form>
     `;
-
+ setTimeout(() => {
     const manualForm = document.getElementById("manualForm");
     
     loadChantiersIntoSelect();
-    loadColleaguesForSelection(); // This now loads users AND colleagues
+    loadColleaguesForSelection();
 
     manualForm.onsubmit = async (e) => {
         e.preventDefault();
@@ -86,6 +86,7 @@ export async function render() {
             submitButton.textContent = "Enregistrer le pointage";
         }
     };
+    }, 0);
 }
 
 async function loadChantiersIntoSelect() {
@@ -102,27 +103,22 @@ async function loadChantiersIntoSelect() {
         });
     } catch (error) {
         console.error("Erreur de chargement des chantiers :", error);
-        chantierSelect.innerHTML = '<option value="" disabled>Erreur</option>';
+        chantierSelect.innerHTML = '<option value="" disabled>Erreur de chargement</option>';
     }
 }
 
 async function loadColleaguesForSelection() {
     const container = document.getElementById("manualColleaguesContainer");
     try {
-        // Charger les collègues manuels
         const colleaguesQuery = query(collection(db, "colleagues"), orderBy("name"));
         const colleaguesSnapshot = await getDocs(colleaguesQuery);
         const colleagueNames = colleaguesSnapshot.docs.map(doc => doc.data().name);
 
-        // Charger les utilisateurs approuvés de l'application
         const usersQuery = query(collection(db, "users"), where("status", "==", "approved"), orderBy("displayName"));
         const usersSnapshot = await getDocs(usersQuery);
         const userNames = usersSnapshot.docs.map(doc => doc.data().displayName);
-
-        // Fusionner, dédoublonner et trier les listes
-        const combinedNames = [...colleagueNames, ...userNames];
-        const uniqueNames = [...new Set(combinedNames)];
         
+        const uniqueNames = [...new Set([...colleagueNames, ...userNames])];
         allColleaguesCache = uniqueNames.sort((a, b) => a.localeCompare(b));
         
         selectedColleagues = [];
@@ -141,6 +137,10 @@ function renderColleaguesSelection() {
         const button = document.createElement("button");
         button.textContent = name;
         button.type = "button";
+        const isSelected = selectedColleagues.includes(name);
+        button.className = isSelected
+            ? "px-4 py-2 rounded-full border bg-blue-600 text-white"
+            : "px-4 py-2 rounded-full border bg-gray-200 hover:bg-gray-300";
 
         button.onclick = () => {
             const listIndex = selectedColleagues.indexOf(name);
@@ -152,15 +152,6 @@ function renderColleaguesSelection() {
             renderColleaguesSelection();
         };
 
-        const isSelected = selectedColleagues.includes(name);
-        updateColleagueButtonStyle(button, isSelected);
-
         container.appendChild(button);
     });
-}
-
-function updateColleagueButtonStyle(button, isSelected) {
-    button.className = isSelected
-        ? "px-4 py-2 rounded-full border bg-blue-600 text-white"
-        : "px-4 py-2 rounded-full border bg-gray-200 hover:bg-gray-300";
 }

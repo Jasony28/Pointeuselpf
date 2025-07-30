@@ -12,7 +12,6 @@ export async function render() {
                 <p class="text-gray-600">Définissez ici le coût horaire de chaque employé et le tarif de facturation pour chaque chantier.</p>
             </div>
 
-            <!-- Section des Taux Employés -->
             <div class="bg-white p-6 rounded-lg shadow-sm">
                 <h3 class="text-xl font-semibold mb-4">Salaires des Employés (Coût/heure)</h3>
                 <div id="user-rates-list" class="space-y-3">
@@ -20,7 +19,6 @@ export async function render() {
                 </div>
             </div>
 
-            <!-- Section des Tarifs Chantiers -->
             <div class="bg-white p-6 rounded-lg shadow-sm">
                 <h3 class="text-xl font-semibold mb-4">Facturation des Chantiers (Tarif/heure)</h3>
                 <div id="chantier-rates-list" class="space-y-3">
@@ -29,22 +27,22 @@ export async function render() {
             </div>
         </div>
     `;
-    await loadData();
-    displayUsers();
-    displayChantiers();
+    setTimeout(async () => {
+        await loadData();
+        displayUsers();
+        displayChantiers();
+    }, 0);
 }
 
 /**
  * Charge uniquement les utilisateurs et les chantiers actifs depuis Firestore.
  */
 async function loadData() {
-    // CORRECTION : Ne charge que les utilisateurs qui ne sont PAS bannis.
     const usersQuery = query(collection(db, "users"), where("status", "!=", "banned"));
     const usersSnapshot = await getDocs(usersQuery);
     usersCache = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-        .sort((a, b) => a.displayName.localeCompare(b.displayName)); // Tri manuel après récupération
+        .sort((a, b) => a.displayName.localeCompare(b.displayName));
 
-    // CORRECTION : Ne charge que les chantiers qui sont actifs.
     const chantiersQuery = query(collection(db, "chantiers"), where("status", "==", "active"), orderBy("name"));
     const chantiersSnapshot = await getDocs(chantiersQuery);
     chantiersCache = chantiersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -77,9 +75,15 @@ function displayUsers() {
         btn.onclick = async () => {
             const userId = btn.dataset.id;
             const newRate = document.getElementById(`user-rate-${userId}`).valueAsNumber;
-            await updateDoc(doc(db, "users", userId), { tauxHoraire: newRate });
-            btn.textContent = '✔️';
-            setTimeout(() => { btn.textContent = 'OK'; }, 1500);
+            if (isNaN(newRate)) return;
+            try {
+                await updateDoc(doc(db, "users", userId), { tauxHoraire: newRate });
+                btn.textContent = '✔️';
+                setTimeout(() => { btn.textContent = 'OK'; }, 1500);
+            } catch (error) {
+                console.error("Erreur de mise à jour du taux horaire:", error);
+                showInfoModal("Erreur", "La mise à jour a échoué.");
+            }
         };
     });
 }
@@ -111,9 +115,15 @@ function displayChantiers() {
         btn.onclick = async () => {
             const chantierId = btn.dataset.id;
             const newRate = document.getElementById(`chantier-rate-${chantierId}`).valueAsNumber;
-            await updateDoc(doc(db, "chantiers", chantierId), { tauxFacturation: newRate });
-            btn.textContent = '✔️';
-            setTimeout(() => { btn.textContent = 'OK'; }, 1500);
+            if (isNaN(newRate)) return;
+            try {
+                await updateDoc(doc(db, "chantiers", chantierId), { tauxFacturation: newRate });
+                btn.textContent = '✔️';
+                setTimeout(() => { btn.textContent = 'OK'; }, 1500);
+            } catch (error) {
+                console.error("Erreur de mise à jour du taux de facturation:", error);
+                showInfoModal("Erreur", "La mise à jour a échoué.");
+            }
         };
     });
 }

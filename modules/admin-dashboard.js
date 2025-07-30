@@ -1,7 +1,7 @@
-// modules/admin-dashboard.js
-
 import { collection, query, where, orderBy, getDocs, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, showConfirmationModal, navigateTo } from "../app.js";
+// CORRECTION: Import des fonctions utilitaires centralisées.
+import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 
 export async function render() {
     pageContent.innerHTML = `
@@ -47,74 +47,78 @@ export async function render() {
             </div>
         </div>
     `;
-
+setTimeout(() => {
     loadGlobalStats();
     loadDetailedWeekStats();
     loadRecentActivity();
+     }, 0);
 }
 
 async function loadGlobalStats() {
+    // CORRECTION: Utilisation de la fonction centralisée pour le début de semaine et d'une méthode UTC fiable pour le début du mois.
     const now = new Date();
-    const dayOfWeek = now.getDay();
-    const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-    const startOfWeek = new Date(now.setDate(diff));
-    startOfWeek.setHours(0, 0, 0, 0);
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const { startOfWeek } = getWeekDateRange(0);
+    const startOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
 
     const weekQuery = query(collection(db, "pointages"), where("timestamp", ">=", startOfWeek.toISOString()));
     const monthQuery = query(collection(db, "pointages"), where("timestamp", ">=", startOfMonth.toISOString()));
     const chantiersQuery = query(collection(db, "chantiers"), where("status", "==", "active"));
 
-    const [weekSnapshot, monthSnapshot, chantiersSnapshot] = await Promise.all([
-        getDocs(weekQuery),
-        getDocs(monthQuery),
-        getDocs(chantiersQuery)
-    ]);
+    try {
+        const [weekSnapshot, monthSnapshot, chantiersSnapshot] = await Promise.all([
+            getDocs(weekQuery),
+            getDocs(monthQuery),
+            getDocs(chantiersQuery)
+        ]);
 
-    let weekMs = 0;
-    weekSnapshot.forEach(doc => {
-        const data = doc.data();
-        if (data.endTime) weekMs += new Date(data.endTime) - new Date(data.timestamp);
-    });
-    document.querySelector('#week-total-card p').textContent = formatMilliseconds(weekMs);
-    document.querySelector('#week-total-card p').classList.remove('animate-pulse');
+        let weekMs = 0;
+        weekSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.endTime) weekMs += new Date(data.endTime) - new Date(data.timestamp);
+        });
+        document.querySelector('#week-total-card p').textContent = formatMilliseconds(weekMs);
+        document.querySelector('#week-total-card p').classList.remove('animate-pulse');
 
-    let monthMs = 0;
-    monthSnapshot.forEach(doc => {
-        const data = doc.data();
-        if (data.endTime) monthMs += new Date(data.endTime) - new Date(data.timestamp);
-    });
-    document.querySelector('#month-total-card p').textContent = formatMilliseconds(monthMs);
-    document.querySelector('#month-total-card p').classList.remove('animate-pulse');
+        let monthMs = 0;
+        monthSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.endTime) monthMs += new Date(data.endTime) - new Date(data.timestamp);
+        });
+        document.querySelector('#month-total-card p').textContent = formatMilliseconds(monthMs);
+        document.querySelector('#month-total-card p').classList.remove('animate-pulse');
 
-    document.querySelector('#active-projects-card p').textContent = chantiersSnapshot.size;
-    document.querySelector('#active-projects-card p').classList.remove('animate-pulse');
+        document.querySelector('#active-projects-card p').textContent = chantiersSnapshot.size;
+        document.querySelector('#active-projects-card p').classList.remove('animate-pulse');
+    } catch (error) {
+        console.error("Erreur de chargement des statistiques globales:", error);
+    }
 }
 
 async function loadDetailedWeekStats() {
-    const now = new Date();
-    const dayOfWeek = now.getDay();
-    const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-    const startOfWeek = new Date(now.setDate(diff));
-    startOfWeek.setHours(0, 0, 0, 0);
+    // CORRECTION: Utilise la fonction centralisée pour une définition cohérente de "cette semaine".
+    const { startOfWeek } = getWeekDateRange(0);
 
-    const q = query(collection(db, "pointages"), where("timestamp", ">=", startOfWeek.toISOString()));
-    const querySnapshot = await getDocs(q);
+    try {
+        const q = query(collection(db, "pointages"), where("timestamp", ">=", startOfWeek.toISOString()));
+        const querySnapshot = await getDocs(q);
 
-    const userStats = {};
-    const chantierStats = {};
+        const userStats = {};
+        const chantierStats = {};
 
-    querySnapshot.forEach(doc => {
-        const data = doc.data();
-        if (data.endTime) {
-            const durationMs = new Date(data.endTime) - new Date(data.timestamp);
-            userStats[data.userName] = (userStats[data.userName] || 0) + durationMs;
-            chantierStats[data.chantier] = (chantierStats[data.chantier] || 0) + durationMs;
-        }
-    });
+        querySnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.endTime) {
+                const durationMs = new Date(data.endTime) - new Date(data.timestamp);
+                userStats[data.userName] = (userStats[data.userName] || 0) + durationMs;
+                chantierStats[data.chantier] = (chantierStats[data.chantier] || 0) + durationMs;
+            }
+        });
 
-    displayStats(userStats, document.getElementById('user-stats-list'), "Aucun pointage cette semaine.");
-    displayStats(chantierStats, document.getElementById('chantier-stats-list'), "Aucun chantier pointé cette semaine.", true);
+        displayStats(userStats, document.getElementById('user-stats-list'), "Aucun pointage cette semaine.");
+        displayStats(chantierStats, document.getElementById('chantier-stats-list'), "Aucun chantier pointé cette semaine.", true);
+    } catch (error) {
+        console.error("Erreur de chargement des statistiques de la semaine:", error);
+    }
 }
 
 function displayStats(statsObject, container, emptyMessage, isClickable = false) {
@@ -148,19 +152,24 @@ function displayStats(statsObject, container, emptyMessage, isClickable = false)
 
 async function loadRecentActivity() {
     const container = document.getElementById('recent-activity-list');
-    const q = query(collection(db, "pointages"), orderBy("createdAt", "desc"));
-    const querySnapshot = await getDocs(q);
-    
-    container.innerHTML = "";
-    if (querySnapshot.empty) {
-        container.innerHTML = "<p class='text-center text-gray-500'>Aucune activité récente.</p>";
-        return;
-    }
+    try {
+        const q = query(collection(db, "pointages"), orderBy("createdAt", "desc"), where("createdAt", "!=", null));
+        const querySnapshot = await getDocs(q);
+        
+        container.innerHTML = "";
+        if (querySnapshot.empty) {
+            container.innerHTML = "<p class='text-center text-gray-500'>Aucune activité récente.</p>";
+            return;
+        }
 
-    const recentDocs = querySnapshot.docs.slice(0, 5);
-    recentDocs.forEach(doc => {
-        container.appendChild(createDetailedActivityElement(doc.id, doc.data()));
-    });
+        const recentDocs = querySnapshot.docs.slice(0, 5);
+        recentDocs.forEach(doc => {
+            container.appendChild(createDetailedActivityElement(doc.id, doc.data()));
+        });
+    } catch (error) {
+        console.error("Erreur de chargement de l'activité récente:", error);
+        container.innerHTML = "<p class='text-red-500 text-center'>Erreur de chargement.</p>";
+    }
 }
 
 function createDetailedActivityElement(docId, d) {
@@ -198,16 +207,11 @@ function createDetailedActivityElement(docId, d) {
         const confirmed = await showConfirmationModal("Confirmation", "Supprimer ce pointage ?");
         if (confirmed) {
             await deleteDoc(doc(db, "pointages", docId));
-            render();
+            render(); // Re-render the entire dashboard to reflect the change
         }
     };
     wrapper.appendChild(deleteBtn);
     return wrapper;
 }
 
-function formatMilliseconds(ms) {
-    if (!ms || ms < 0) return "0h 0min";
-    const totalHours = Math.floor(ms / 3600000);
-    const totalMinutes = Math.round((ms % 3600000) / 60000);
-    return `${totalHours}h ${totalMinutes}min`;
-}
+// CORRECTION: La fonction locale a été supprimée car elle est maintenant importée depuis utils.js

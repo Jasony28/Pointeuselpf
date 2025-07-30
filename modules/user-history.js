@@ -1,5 +1,7 @@
 import { collection, query, where, orderBy, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, isAdmin, pageContent, showConfirmationModal, showInfoModal } from "../app.js";
+// CORRECTION: Import des fonctions utilitaires pour la date et le formatage.
+import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 
 let currentWeekOffset = 0;
 let targetUser = null; 
@@ -36,25 +38,17 @@ export function render(params = {}) {
         </div>
     `;
 
-    document.getElementById("prevWeekBtn").onclick = () => { currentWeekOffset--; loadHistoryForWeek(); };
-    document.getElementById("nextWeekBtn").onclick = () => { currentWeekOffset++; loadHistoryForWeek(); };
-    document.getElementById("downloadPdfBtn").onclick = generateHistoryPDF;
+    setTimeout(() => {
+        document.getElementById("prevWeekBtn").onclick = () => { currentWeekOffset--; loadHistoryForWeek(); };
+        document.getElementById("nextWeekBtn").onclick = () => { currentWeekOffset++; loadHistoryForWeek(); };
+        document.getElementById("downloadPdfBtn").onclick = generateHistoryPDF;
 
-    currentWeekOffset = 0;
-    loadHistoryForWeek();
+        currentWeekOffset = 0;
+        loadHistoryForWeek();
+    }, 0);
 }
 
-function getWeekDateRange(offset = 0) {
-    const now = new Date();
-    const dayOfWeek = now.getDay();
-    const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1) + (offset * 7);
-    const startOfWeek = new Date(now.setDate(diff));
-    startOfWeek.setHours(0, 0, 0, 0);
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-    endOfWeek.setHours(23, 59, 59, 999);
-    return { startOfWeek, endOfWeek };
-}
+// CORRECTION: La fonction locale getWeekDateRange a été supprimée pour utiliser celle de utils.js
 
 async function loadHistoryForWeek() {
     if (!targetUser) return;
@@ -64,9 +58,10 @@ async function loadHistoryForWeek() {
     const weekTotalsDisplay = document.getElementById("weekTotalsDisplay");
     const currentPeriodDisplay = document.getElementById("currentPeriodDisplay");
     
+    // CORRECTION: Utilise la fonction UTC centralisée.
     const { startOfWeek, endOfWeek } = getWeekDateRange(currentWeekOffset);
     
-    const options = { day: 'numeric', month: 'long' };
+    const options = { day: 'numeric', month: 'long', timeZone: 'UTC' };
     currentPeriodDisplay.textContent = `Semaine du ${startOfWeek.toLocaleDateString('fr-FR', options)} au ${endOfWeek.toLocaleDateString('fr-FR', options)}`;
     historyList.innerHTML = "<p class='text-center p-4'>Chargement...</p>";
     weekTotalsDisplay.innerHTML = "";
@@ -91,13 +86,14 @@ async function loadHistoryForWeek() {
             
             historyDataCache.forEach(d => {
                 historyList.appendChild(createHistoryEntryElement(d.id, d));
-                if (d.endTime) totalMs += new Date(d.endTime) - new Date(d.timestamp);
+                if (d.endTime) {
+                    totalMs += new Date(d.endTime) - new Date(d.timestamp);
+                }
             });
         }
-
-        const totalHours = Math.floor(totalMs / 3600000);
-        const totalMinutes = Math.round((totalMs % 3600000) / 60000);
-        weekTotalsDisplay.textContent = `Total semaine : ${totalHours}h ${totalMinutes}min`;
+        
+        // CORRECTION: Utilise la fonction de formatage centralisée.
+        weekTotalsDisplay.textContent = `Total semaine : ${formatMilliseconds(totalMs)}`;
 
     } catch (error) {
         console.error("Erreur de chargement de l'historique:", error);
@@ -118,9 +114,8 @@ function createHistoryEntryElement(docId, d) {
         const timeFormat = { hour: '2-digit', minute: '2-digit' };
         timeDisplay = `<div>De ${startDate.toLocaleTimeString('fr-FR', timeFormat)} à ${endDate.toLocaleTimeString('fr-FR', timeFormat)}</div>`;
         const durationMs = endDate - startDate;
-        const durationHours = Math.floor(durationMs / 3600000);
-        const durationMinutes = Math.round((durationMs % 3600000) / 60000);
-        durationDisplay = `<div class="text-sm text-gray-600">Durée : ${durationHours}h ${durationMinutes}min</div>`;
+        // CORRECTION: Utilise la fonction de formatage centralisée.
+        durationDisplay = `<div class="text-sm text-gray-600">Durée : ${formatMilliseconds(durationMs)}</div>`;
     }
 
     wrapper.innerHTML = `
@@ -129,12 +124,10 @@ function createHistoryEntryElement(docId, d) {
       <div>${startDate.toLocaleDateString('fr-FR', {weekday: 'long', day: 'numeric', month: 'long'})}</div>
       ${timeDisplay}
       ${durationDisplay}
-      <div class="mt-2"><strong>Collègues :</strong> ${d.colleagues.join(", ")}</div>
+      <div class="mt-2"><strong>Collègues :</strong> ${Array.isArray(d.colleagues) ? d.colleagues.join(", ") : 'N/A'}</div>
       ${d.notes ? `<div class="mt-1 pt-2 border-t text-sm"><strong>Notes :</strong> ${d.notes}</div>` : ""}
     `;
 
-    // --- CORRECTION ---
-    // Affiche le bouton si l'utilisateur est admin OU s'il regarde son propre historique.
     if (isAdmin || currentUser.uid === targetUser.uid) {
         const deleteBtn = document.createElement("button");
         deleteBtn.textContent = "✖";
@@ -175,10 +168,7 @@ function generateHistoryPDF() {
         const endDate = d.endTime ? new Date(d.endTime) : null;
         let durationStr = 'N/A';
         if (endDate) {
-            const durationMs = endDate - startDate;
-            const durationHours = Math.floor(durationMs / 3600000);
-            const durationMinutes = Math.round((durationMs % 3600000) / 60000);
-            durationStr = `${durationHours}h ${durationMinutes}min`;
+            durationStr = formatMilliseconds(endDate - startDate);
         }
         return [
             startDate.toLocaleDateString('fr-FR', {weekday: 'short', day:'2-digit', month:'2-digit'}),
@@ -202,6 +192,6 @@ function generateHistoryPDF() {
     doc.setFont(undefined, 'bold');
     doc.text(totalText, 14, finalY + 10);
 
-    const fileName = `historique_${userName}_${periodText.replace(/ /g, '_')}.pdf`;
+    const fileName = `historique_${userName.replace(/ /g, '_')}_${startOfWeek.toISOString().split('T')[0]}.pdf`;
     doc.save(fileName);
 }

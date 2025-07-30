@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 
 // --- CONFIGURATION ---
 const firebaseConfig = {
@@ -16,18 +16,23 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 export const db = getFirestore(app);
-
+enableIndexedDbPersistence(db) // <-- MODIFIÉ
+    .catch((err) => {
+        console.error("Erreur d'activation de la persistance hors ligne: ", err.code);
+    });
+// --- VARIABLES GLOBALES DE L'APPLICATION ---
 export const pageContent = document.getElementById('page-content');
 export let currentUser = null;
 export let isAdmin = false;
+let isMasqueradingAsUser = false; // Permet à un admin de voir l'interface utilisateur
 
-// --- DÉCLARATION DES VARIABLES DE LA MODALE (sans initialisation) ---
+// --- VARIABLES DE LA MODALE ---
 let genericModal, modalTitle, modalMessage, modalConfirmBtn, modalCancelBtn;
 
-// --- FONCTIONS DE L'APPLICATION ---
-
+// --- DÉFINITION DES MENUS ---
 const userTabs = [
     { id: 'user-dashboard', name: 'Planning' },
+    { id: 'user-updates', name: 'Détails chantier' }, // <-- AJOUTEZ CETTE LIGNE
     { id: 'chantiers', name: 'Infos Chantiers' },
     { id: 'add-entry', name: 'Nouveau Pointage' },
     { id: 'user-history', name: 'Mon Historique' },
@@ -37,15 +42,27 @@ const userTabs = [
 const adminTabs = [
     { id: 'admin-dashboard', name: 'Tableau de Bord' },
     { id: 'admin-planning', name: 'Planification' },
+    { id: 'admin-updates', name: 'Détails Chantiers' }, // <-- AJOUTEZ CETTE LIGNE
     { id: 'admin-data', name: 'Données' },
-    { id: 'admin-tarifs', name: 'Tarifs' }, // <-- AJOUTEZ CETTE LIGNE
+    { id: 'admin-tarifs', name: 'Tarifs' },
     { id: 'admin-chantiers', name: 'Gestion Chantiers' },
     { id: 'admin-colleagues', name: 'Collègues' },
     { id: 'admin-users', name: 'Utilisateurs' },
 ];
 
+// --- FONCTIONS DE L'APPLICATION ---
+
+function toggleView() {
+    isMasqueradingAsUser = !isMasqueradingAsUser;
+    setupNavigation();
+    const destination = isMasqueradingAsUser ? 'user-dashboard' : 'admin-dashboard';
+    navigateTo(destination);
+}
+
 function setupNavigation() {
-    const tabs = isAdmin ? adminTabs : userTabs;
+    const isEffectiveAdmin = isAdmin && !isMasqueradingAsUser;
+    const tabs = isEffectiveAdmin ? adminTabs : userTabs;
+
     const mainNav = document.getElementById('main-nav');
     const mobileNav = document.getElementById('mobile-nav');
     [mainNav, mobileNav].forEach(nav => {
@@ -59,6 +76,15 @@ function setupNavigation() {
             nav.appendChild(tabButton);
         });
     });
+
+    const switchBtn = document.getElementById('switchViewBtn');
+    if (isAdmin) {
+        switchBtn.classList.remove('hidden');
+        switchBtn.textContent = isMasqueradingAsUser ? 'Retour vue Admin' : 'Passer en vue Employé';
+        switchBtn.onclick = toggleView;
+    } else {
+        switchBtn.classList.add('hidden');
+    }
 }
 
 export async function navigateTo(pageId, params = {}) {
@@ -136,35 +162,29 @@ function markNotificationsAsRead() {
 // --- LOGIQUE DE DÉMARRAGE DE L'APPLICATION ---
 
 document.addEventListener('DOMContentLoaded', () => {
-    // --- INITIALISATION DES VARIABLES DE LA MODALE ---
     genericModal = document.getElementById('genericModal');
     modalTitle = document.getElementById('modalTitle');
     modalMessage = document.getElementById('modalMessage');
     modalConfirmBtn = document.getElementById('modalConfirmBtn');
     modalCancelBtn = document.getElementById('modalCancelBtn');
 
-    // --- GESTION DES CONTENEURS PRINCIPAUX ---
     const loader = document.getElementById('app-loader');
     const authContainer = document.getElementById('auth-container');
     const pendingContainer = document.getElementById('pending-approval-container');
     const appContainer = document.getElementById('app-container');
 
-    // --- GESTION DES FORMULAIRES D'AUTHENTIFICATION ---
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');
     const resetForm = document.getElementById('reset-form');
 
-    // Liens pour basculer entre les formulaires
     document.getElementById('show-register-link').onclick = (e) => { e.preventDefault(); loginForm.classList.add('hidden'); registerForm.classList.remove('hidden'); };
     document.getElementById('show-reset-link').onclick = (e) => { e.preventDefault(); loginForm.classList.add('hidden'); resetForm.classList.remove('hidden'); };
     document.getElementById('show-login-link-from-register').onclick = (e) => { e.preventDefault(); registerForm.classList.add('hidden'); loginForm.classList.remove('hidden'); };
     document.getElementById('show-login-link-from-reset').onclick = (e) => { e.preventDefault(); resetForm.classList.add('hidden'); loginForm.classList.remove('hidden'); };
 
-    // Événement pour la déconnexion
     document.getElementById('logoutBtn').onclick = () => signOut(auth);
     document.getElementById('logoutPendingBtn').onclick = () => signOut(auth);
 
-    // --- Logique d'inscription ---
     registerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const name = document.getElementById('register-name').value;
@@ -173,38 +193,28 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
             const user = userCredential.user;
-
-            // Crée le document utilisateur dans Firestore avec le statut "pending"
             await setDoc(doc(db, "users", user.uid), {
-                displayName: name,
-                email: user.email,
-                uid: user.uid,
-                status: 'pending', // Le compte est en attente d'approbation
-                role: 'user',
-                createdAt: serverTimestamp()
+                displayName: name, email: user.email, uid: user.uid,
+                status: 'pending', role: 'user', createdAt: serverTimestamp()
             });
-            // onAuthStateChanged va maintenant détecter ce nouvel utilisateur et afficher l'écran d'attente
         } catch (error) {
             console.error("Erreur d'inscription:", error);
             showInfoModal("Erreur", "Impossible de créer le compte. L'email est peut-être déjà utilisé ou le mot de passe est trop faible.");
         }
     });
 
-    // --- Logique de connexion ---
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const email = document.getElementById('login-email').value;
         const password = document.getElementById('login-password').value;
         try {
             await signInWithEmailAndPassword(auth, email, password);
-            // onAuthStateChanged va gérer l'affichage de l'application
         } catch (error) {
             console.error("Erreur de connexion:", error);
             showInfoModal("Erreur", "Email ou mot de passe incorrect.");
         }
     });
 
-    // --- Logique de mot de passe oublié ---
     resetForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const email = document.getElementById('reset-email').value;
@@ -219,8 +229,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- ÉCOUTEUR PRINCIPAL (INCHANGÉ) ---
-    // Il gère l'affichage des écrans après une connexion/inscription réussie
     onAuthStateChanged(auth, async (user) => {
         try {
             authContainer.style.display = 'none';
@@ -231,16 +239,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (user) {
                 const userRef = doc(db, "users", user.uid);
                 const userDoc = await getDoc(userRef);
-
-                // Si le document existe, on vérifie son statut
                 if (userDoc.exists()) {
                     const userData = userDoc.data();
                     currentUser = { ...user, ...userData };
                     isAdmin = userData.role === 'admin';
-
                     switch (userData.status) {
                         case 'pending':
-                            loader.style.display = 'none';
                             pendingContainer.style.display = 'flex';
                             break;
                         case 'banned':
@@ -252,7 +256,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             setupNavigation();
                             setupNotifications();
                             navigateTo(isAdmin ? 'admin-dashboard' : 'user-dashboard');
-                            loader.style.display = 'none';
                             appContainer.style.display = 'block';
                             break;
                         default:
@@ -260,14 +263,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             signOut(auth);
                     }
                 } else {
-                    // Ce cas peut arriver si un utilisateur existe dans Firebase Auth mais pas dans Firestore
-                    // On le déconnecte pour forcer une inscription propre.
                     signOut(auth);
                 }
             } else {
                 currentUser = null;
                 isAdmin = false;
-                loader.style.display = 'none';
+                isMasqueradingAsUser = false; // Réinitialise la vue à la déconnexion
                 authContainer.style.display = 'flex';
             }
         } catch (error) {
@@ -280,9 +281,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- GESTION DU SERVICE WORKER (INCHANGÉ) ---
     if ('serviceWorker' in navigator) {
-        // ... (votre code existant pour le service worker reste ici)
+        // ... votre code service worker ...
     }
 });
 

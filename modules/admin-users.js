@@ -13,7 +13,9 @@ export async function render() {
             </div>
         </div>
     `;
+    setTimeout(() => {
     loadUsers();
+    }, 0);
 }
 
 /**

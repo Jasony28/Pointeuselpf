@@ -1,5 +1,7 @@
 import { collection, query, where, getDocs, addDoc, deleteDoc, doc, orderBy, serverTimestamp, updateDoc, setDoc, getDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, currentUser, showConfirmationModal, showInfoModal } from "../app.js";
+// CORRECTION: L'import est maintenant actif et la fonction locale a été supprimée.
+import { getWeekDateRange } from "./utils.js";
 
 // Variables globales du module
 let currentWeekOffset = 0;
@@ -12,21 +14,6 @@ let selectedDayIndex = 0; // 0 pour Lundi, 1 pour Mardi, etc.
 let selectionMode = false;
 let selectedItems = new Set();
 
-/**
- * Calcule les dates de début et de fin de la semaine en UTC.
- */
-function getWeekDateRange(offset = 0) {
-    const today = new Date();
-    const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
-    const dayOfWeekUTC = todayUTC.getUTCDay();
-    const diffToMonday = dayOfWeekUTC === 0 ? -6 : 1 - dayOfWeekUTC;
-    const startOfWeek = new Date(todayUTC);
-    startOfWeek.setUTCDate(todayUTC.getUTCDate() + diffToMonday + (offset * 7));
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setUTCDate(startOfWeek.getUTCDate() + 6);
-    endOfWeek.setUTCHours(23, 59, 59, 999);
-    return { startOfWeek, endOfWeek };
-}
 
 /**
  * Fonction principale pour afficher la page de planification.
@@ -84,11 +71,12 @@ export async function render() {
             </div>
         </div>
     `;
-    
+    setTimeout(async () => {
     setupEventListeners();
     await cacheData();
     display();
     populateTeamPool();
+    }, 0);
 }
 
 async function cacheData() {
@@ -341,7 +329,7 @@ function createChantierBlock(planningDoc) {
                 showInfoModal("Attention", `"${droppedName}" est déjà sur ce chantier.`);
             } else {
                 evt.item.className = 'p-0.5 bg-blue-100 text-blue-800 rounded text-[10px] leading-tight';
-                updatePlanningTeam(id, dropZone);
+                await updatePlanningTeam(id, dropZone);
             }
         }, 
         onRemove: () => updatePlanningTeam(id, dropZone)
@@ -376,7 +364,11 @@ async function updateTasksOrder(container) {
         const docRef = doc(db, "planning", planningId);
         batch.update(docRef, { order: index });
     });
-    await batch.commit();
+    try {
+        await batch.commit();
+    } catch(error) {
+        console.error("Erreur de mise à jour de l'ordre:", error)
+    }
 }
 
 async function updatePlanningTeam(planningId, dropZone) {
@@ -395,7 +387,7 @@ function openPlanningItemModal(planningDoc = null, date = null) {
         currentEditingId = planningDoc.id;
         currentEditingDate = planningDoc.date;
         document.getElementById('modalTitle').textContent = 'Modifier le travail';
-        select.innerHTML = chantiersCache.map(c => `<option value="${c.id}|${c.name}" ${c.id === planningDoc.chantierId ? 'selected' : ''}>${c.name}</option>`).join('');
+        select.innerHTML = chantiersCache.map(c => `<option value="${c.id}|${c.name}" ${c.name === planningDoc.chantierName ? 'selected' : ''}>${c.name}</option>`).join('');
         document.getElementById('planningStartTime').value = planningDoc.startTime || '';
         document.getElementById('planningDuration').value = planningDoc.duration || '';
         document.getElementById('planningNotes').value = planningDoc.notes || '';
@@ -425,22 +417,35 @@ async function savePlanningItem(closeAfterSave) {
     const duration = document.getElementById('planningDuration').value;
     const notes = document.getElementById('planningNotes').value.trim();
     const startTime = document.getElementById('planningStartTime').value;
+    
+    const dataToSave = { 
+        chantierId, 
+        chantierName, 
+        duration, 
+        notes, 
+        startTime 
+    };
+
     try {
         if (currentEditingId) {
-            await updateDoc(doc(db, "planning", currentEditingId), { chantierId, chantierName, duration, notes, startTime });
+            await updateDoc(doc(db, "planning", currentEditingId), dataToSave);
         } else {
-            const q = query(collection(db, "planning"), where("date", "==", currentEditingDate));
-            const snapshot = await getDocs(q);
+            // CORRECTION: Utilisation de Date.now() pour le champ 'order' afin d'éviter les conflits (race condition).
             await addDoc(collection(db, "planning"), { 
-                date: currentEditingDate, chantierId, chantierName, duration, notes, startTime, 
-                teamNames: [], order: snapshot.size, createdAt: serverTimestamp() 
+                ...dataToSave,
+                date: currentEditingDate, 
+                teamNames: [], 
+                order: Date.now(),
+                createdAt: serverTimestamp() 
             });
         }
+
         if (closeAfterSave) {
             closePlanningItemModal();
         } else {
+            document.getElementById('planningItemForm').reset();
+            document.getElementById('planningStartTime').value = '08:00';
             select.selectedIndex = 0;
-            document.getElementById('planningNotes').value = '';
             select.focus();
         }
         await display();
@@ -469,9 +474,11 @@ function toggleSelectionMode() {
     
     document.querySelectorAll('.planning-block').forEach(block => {
         const checkbox = block.querySelector('.selection-checkbox');
+        checkbox.checked = false; // Reset checkbox state on toggle
         if (selectionMode) {
             checkbox.classList.remove('hidden');
             block.classList.replace('cursor-grab', 'cursor-pointer');
+            // Re-assign onclick to handle selection
             block.onclick = (e) => {
                 if (e.target.type !== 'checkbox') {
                     checkbox.checked = !checkbox.checked;
@@ -484,13 +491,12 @@ function toggleSelectionMode() {
             };
         } else {
             checkbox.classList.add('hidden');
-            checkbox.checked = false;
             block.classList.replace('cursor-pointer', 'cursor-grab');
+            // Restore original onclick functionality
             block.onclick = (e) => {
                 if (!e.target.classList.contains('delete-planning-btn') && !e.target.classList.contains('selection-checkbox')) {
-                    const planningId = block.dataset.planningId;
-                    // Recharger les données du planningDoc serait complexe ici, on rafraîchit simplement.
-                    display(); 
+                    // This is tricky without fetching the doc again. A full display refresh is safer.
+                    display();
                 }
             };
         }
@@ -521,27 +527,45 @@ async function deleteSelectedItems() {
         });
         await batch.commit();
         showInfoModal("Succès", `${selectedItems.size} chantiers ont été supprimés.`);
-        selectionMode = false; // Forcer la sortie du mode sélection
-        toggleSelectionMode(); 
-        display();
+        
+        // Reset selection mode properly
+        selectionMode = false;
+        selectedItems.clear();
+        document.getElementById('selectionModeBtn').textContent = "Sélectionner";
+        document.getElementById('selectionModeBtn').classList.replace('bg-gray-500', 'bg-yellow-500');
+        document.getElementById('deleteSelectionBtn').classList.add('hidden');
+
+        await display(); // Refresh the view
     }
 }
 
 async function generatePrintableView() {
-    const { startOfWeek } = getWeekDateRange(currentWeekOffset);
-    const q = query(collection(db, "planning"), where("date", ">=", startOfWeek.toISOString().split('T')[0]), where("date", "<=", getWeekDateRange(currentWeekOffset).endOfWeek.toISOString().split('T')[0]));
+    const { startOfWeek, endOfWeek } = getWeekDateRange(currentWeekOffset);
+    const q = query(
+        collection(db, "planning"), 
+        where("date", ">=", startOfWeek.toISOString().split('T')[0]), 
+        where("date", "<=", endOfWeek.toISOString().split('T')[0])
+    );
     const querySnapshot = await getDocs(q);
     const planningData = querySnapshot.docs.map(docSnap => docSnap.data());
+    
     if (planningData.length === 0) {
         showInfoModal("Information", "Le planning de cette semaine est vide.");
         return;
     }
+
     const planningByPerson = {};
-    const allTeamMembers = new Set();
+    const allTeamMembers = new Set(teamMembersCache); // Use the cache for a complete list of members
+
+    // Initialize all team members
+    allTeamMembers.forEach(name => {
+        planningByPerson[name] = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], totalHours: 0 };
+    });
+
     planningData.forEach(task => {
         (task.teamNames || []).forEach(name => {
-            allTeamMembers.add(name);
             if (!planningByPerson[name]) {
+                 // Should not happen if cache is up to date, but as a fallback
                 planningByPerson[name] = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], totalHours: 0 };
             }
             const taskDate = new Date(task.date + 'T12:00:00Z');
@@ -551,30 +575,35 @@ async function generatePrintableView() {
             planningByPerson[name].totalHours += hours;
         });
     });
+
     const sortedNames = [...allTeamMembers].sort((a, b) => a.localeCompare(b));
     const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
     const dailyTotals = Array(7).fill(0);
     const periodText = document.getElementById("currentPeriodDisplay").textContent;
+    
     let tableBodyHTML = sortedNames.map(name => {
         let rowHTML = `<tr><td class="border p-1 align-top font-bold bg-gray-100">${name}</td>`;
         for (let i = 0; i < 7; i++) {
-            const tasks = planningByPerson[name][i];
+            const tasks = planningByPerson[name]?.[i] || [];
             let cellContent = tasks.length > 0
                 ? tasks.map(t => `${t.chantier} (${t.hours}h)`).join('<br>')
                 : '<span class="text-gray-400">OFF</span>';
             tasks.forEach(t => { dailyTotals[i] += t.hours; });
             rowHTML += `<td class="border p-1 align-top text-xs">${cellContent}</td>`;
         }
-        rowHTML += `<td class="border p-1 align-top font-bold bg-gray-100">${planningByPerson[name].totalHours.toFixed(1)}h</td></tr>`;
+        rowHTML += `<td class="border p-1 align-top font-bold bg-gray-100">${(planningByPerson[name]?.totalHours || 0).toFixed(1)}h</td></tr>`;
         return rowHTML;
     }).join('');
+    
     let totalsRowHTML = '<tr><td class="border p-1 font-bold bg-gray-200">TOTAL</td>';
     totalsRowHTML += dailyTotals.map(total => `<td class="border p-1 font-bold bg-gray-200">${total.toFixed(1)}h</td>`).join('');
     totalsRowHTML += `<td class="border p-1 font-bold bg-gray-200">${dailyTotals.reduce((a, b) => a + b, 0).toFixed(1)}h</td></tr>`;
     tableBodyHTML += totalsRowHTML;
+
     const headerHTML = '<tr><th class="border p-1 bg-gray-800 text-white w-24">Nom</th>' +
         days.map(d => `<th class="border p-1 bg-gray-800 text-white">${d}</th>`).join('') +
         '<th class="border p-1 bg-gray-800 text-white w-20">Total</th></tr>';
+    
     const printWindow = window.open('', '_blank');
     printWindow.document.write(`
         <html>

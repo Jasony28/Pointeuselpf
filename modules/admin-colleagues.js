@@ -26,24 +26,26 @@ export async function render() {
         </div>
     `;
 
-    const addColleagueForm = document.getElementById("addColleagueForm");
-    addColleagueForm.onsubmit = async (e) => {
-        e.preventDefault();
-        const input = document.getElementById("colleagueNameInput");
-        const colleagueName = input.value.trim();
-        if (colleagueName) {
-            try {
-                await addDoc(colleaguesCollection, { name: colleagueName });
-                input.value = '';
-                loadColleagues();
-            } catch (error) {
-                console.error("Erreur ajout collègue:", error);
-                showInfoModal("Erreur", "Une erreur est survenue lors de l'ajout.");
+   setTimeout(() => {
+        const addColleagueForm = document.getElementById("addColleagueForm");
+        addColleagueForm.onsubmit = async (e) => {
+            e.preventDefault();
+            const input = document.getElementById("colleagueNameInput");
+            const colleagueName = input.value.trim();
+            if (colleagueName) {
+                try {
+                    await addDoc(colleaguesCollection, { name: colleagueName });
+                    input.value = '';
+                    loadColleagues();
+                } catch (error) {
+                    console.error("Erreur ajout collègue:", error);
+                    showInfoModal("Erreur", "Une erreur est survenue lors de l'ajout.");
+                }
             }
-        }
-    };
+        };
 
-    loadColleagues();
+        loadColleagues();
+    }, 0);
 }
 
 async function loadColleagues() {

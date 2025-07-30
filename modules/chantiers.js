@@ -1,24 +1,11 @@
 import { collection, query, where, orderBy, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, isAdmin, currentUser, showInfoModal } from "../app.js";
+// CORRECTION: Import des fonctions utilitaires depuis le fichier centralisé.
+import { getWeekDateRange, getGoogleMapsUrl } from "./utils.js";
 
 let chantiersCache = [];
 
-// --- NOUVEAU : Fonction de date universelle (UTC) pour la cohérence ---
-function getWeekDateRange(offset = 0) {
-    const today = new Date();
-    const todayUTC = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
-    const dayOfWeekUTC = todayUTC.getUTCDay(); // Dimanche=0, Lundi=1...
-    const diffToMonday = dayOfWeekUTC === 0 ? -6 : 1 - dayOfWeekUTC;
-    
-    const startOfWeek = new Date(todayUTC);
-    startOfWeek.setUTCDate(todayUTC.getUTCDate() + diffToMonday + (offset * 7));
-    
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setUTCDate(startOfWeek.getUTCDate() + 6);
-    endOfWeek.setUTCHours(23, 59, 59, 999);
-    
-    return { startOfWeek, endOfWeek };
-}
+// CORRECTION: La fonction locale getWeekDateRange a été supprimée pour utiliser celle de utils.js
 
 export async function render() {
     pageContent.innerHTML = `
@@ -31,9 +18,9 @@ export async function render() {
             <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-lg space-y-4 relative">
                 <button id="closeDetailsBtn" class="absolute top-2 right-3 text-2xl font-bold text-gray-500 hover:text-gray-800">×</button>
                 <h3 id="modalChantierName" class="text-2xl font-bold border-b pb-2"></h3>
-                <div><h4 class="font-semibold text-sm text-gray-500">ADRESSE</h4><a id="modalChantierAddress" href="#" target="_blank" class="text-blue-600 hover:underline text-lg"></a></div>
+                <div><h4 class="font-semibold text-sm text-gray-500">ADRESSE</h4><a id="modalChantierAddress" href="#" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline text-lg"></a></div>
                 <div><h4 class="font-semibold text-sm text-gray-500">CODES & ACCÈS</h4><div id="modalChantierKeybox" class="text-lg"></div></div>
-                <div><h4 class="font-semibold text-sm text-gray-500">INFOS SUPPLÉMENTAIRES</h4><p id="modalChantierInfo" class="text-lg whitespace-pre-wrap"></p></div>
+                <div><h4 class="font-semibold text-sm text-gray-500">INFOS SUPPLÉMENTAIRES</h4><p id="modalChantierInfo" class="text-lg" style="white-space: pre-wrap; overflow-wrap: break-word;"></p></div>
                 ${isAdmin ? `<div class="text-right pt-4 border-t"><button id="editChantierBtn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-5 py-2 rounded">Modifier</button></div>` : ''}
             </div>
         </div>
@@ -51,23 +38,23 @@ export async function render() {
         </div>
     `;
 
-    loadChantiersList();
-    setupEventListeners();
+  setTimeout(() => {
+        loadChantiersList();
+        setupEventListeners();
+    }, 0);
 }
 
 /**
- * --- MODIFIÉ ---
  * Charge uniquement les chantiers sur lesquels l'utilisateur est planifié cette semaine.
  */
 async function loadChantiersList() {
     const listContainer = document.getElementById('chantiers-list');
     listContainer.innerHTML = '<p class="col-span-full text-center">Chargement...</p>';
     
-    // 1. Déterminer la semaine actuelle en utilisant la fonction UTC
+    // CORRECTION: Utilise la fonction UTC centralisée.
     const { startOfWeek, endOfWeek } = getWeekDateRange(0);
 
     try {
-        // 2. Récupérer le planning de la semaine pour l'utilisateur connecté
         const planningQuery = query(
             collection(db, "planning"),
             where("date", ">=", startOfWeek.toISOString().split('T')[0]),
@@ -84,10 +71,8 @@ async function loadChantiersList() {
             return;
         }
 
-        // 3. Extraire les noms uniques des chantiers pour éviter les doublons
         const chantierNames = [...new Set(userPlanningTasks.map(task => task.chantierName))];
 
-        // 4. Récupérer les informations complètes de ces chantiers
         if (chantierNames.length > 0) {
             const chantiersQuery = query(collection(db, "chantiers"), where("name", "in", chantierNames));
             const chantiersSnapshot = await getDocs(chantiersQuery);
@@ -130,7 +115,8 @@ function showDetailsModal(chantierId) {
     const addressLink = document.getElementById('modalChantierAddress');
     if (chantier.address) {
         addressLink.textContent = chantier.address;
-        addressLink.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(chantier.address)}`;
+        // CORRECTION: Utilisation de la fonction pour générer une URL Google Maps valide et robuste.
+        addressLink.href = getGoogleMapsUrl(chantier.address);
         addressLink.parentElement.style.display = 'block';
     } else {
         addressLink.parentElement.style.display = 'none';
@@ -222,8 +208,12 @@ function setupEventListeners() {
             try {
                 await updateDoc(docRef, updatedData);
                 document.getElementById('editModal').classList.add('hidden');
-                await loadChantiersList();
-                showDetailsModal(chantierId);
+                // On met à jour le cache local pour refléter les changements sans recharger de la DB
+                const cacheIndex = chantiersCache.findIndex(c => c.id === chantierId);
+                if(cacheIndex > -1) {
+                    chantiersCache[cacheIndex] = { ...chantiersCache[cacheIndex], ...updatedData };
+                }
+                showDetailsModal(chantierId); // Ré-ouvre la modale avec les infos à jour
             } catch(error) {
                 console.error("Erreur de mise à jour: ", error);
                 showInfoModal("Erreur", "La mise à jour a échoué.");

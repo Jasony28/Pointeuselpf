@@ -1,5 +1,6 @@
 import { collection, query, orderBy, getDocs, addDoc, updateDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, showInfoModal, showConfirmationModal } from "../app.js";
+import { getGoogleMapsUrl } from "./utils.js";
 
 let chantiersCache = [];
 
@@ -53,9 +54,9 @@ export async function render() {
             <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-lg space-y-4 relative">
                 <button id="closeDetailsBtn" class="absolute top-2 right-3 text-2xl font-bold text-gray-500 hover:text-gray-800">×</button>
                 <h3 id="modalChantierName" class="text-2xl font-bold border-b pb-2"></h3>
-                <div><h4 class="font-semibold text-sm text-gray-500">ADRESSE</h4><a id="modalChantierAddress" href="#" target="_blank" class="text-blue-600 hover:underline text-lg"></a></div>
+                <div><h4 class="font-semibold text-sm text-gray-500">ADRESSE</h4><a id="modalChantierAddress" href="#" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline text-lg"></a></div>
                 <div><h4 class="font-semibold text-sm text-gray-500">CODES & ACCÈS</h4><div id="modalChantierKeybox" class="text-lg"></div></div>
-                <div><h4 class="font-semibold text-sm text-gray-500">INFOS SUPPLÉMENTAIRES</h4><p id="modalChantierInfo" class="text-lg whitespace-pre-wrap"></p></div>
+                <div><h4 class="font-semibold text-sm text-gray-500">INFOS SUPPLÉMENTAIRES</h4><p id="modalChantierInfo" class="text-lg" style="white-space: pre-wrap; overflow-wrap: break-word;"></p></div>
                 <div class="text-right pt-4 border-t"><button id="editChantierBtn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-5 py-2 rounded">Modifier</button></div>
             </div>
         </div>
@@ -83,8 +84,10 @@ export async function render() {
         </div>
     `;
 
-    setupEventListeners();
-    await loadChantiers();
+    setTimeout(async () => {
+        setupEventListeners();
+        await loadChantiers();
+    }, 0);
 }
 
 async function loadChantiers() {
@@ -93,27 +96,33 @@ async function loadChantiers() {
     activeList.innerHTML = "<p>Chargement...</p>";
     archivedList.innerHTML = "<p>Chargement...</p>";
 
-    const q = query(collection(db, "chantiers"), orderBy("name"));
-    const querySnapshot = await getDocs(q);
-    chantiersCache = querySnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    try {
+        const q = query(collection(db, "chantiers"), orderBy("name"));
+        const querySnapshot = await getDocs(q);
+        chantiersCache = querySnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
-    activeList.innerHTML = "";
-    archivedList.innerHTML = "";
-    let activeCount = 0, archivedCount = 0;
+        activeList.innerHTML = "";
+        archivedList.innerHTML = "";
+        let activeCount = 0, archivedCount = 0;
 
-    chantiersCache.forEach(chantier => {
-        const chantierElement = createChantierElement(chantier);
-        if (chantier.status === 'active') {
-            activeList.appendChild(chantierElement);
-            activeCount++;
-        } else {
-            archivedList.appendChild(chantierElement);
-            archivedCount++;
-        }
-    });
+        chantiersCache.forEach(chantier => {
+            const chantierElement = createChantierElement(chantier);
+            if (chantier.status === 'active') {
+                activeList.appendChild(chantierElement);
+                activeCount++;
+            } else {
+                archivedList.appendChild(chantierElement);
+                archivedCount++;
+            }
+        });
 
-    if (activeCount === 0) activeList.innerHTML = "<p class='text-gray-500'>Aucun chantier actif.</p>";
-    if (archivedCount === 0) archivedList.innerHTML = "<p class='text-gray-500'>Aucun chantier archivé.</p>";
+        if (activeCount === 0) activeList.innerHTML = "<p class='text-gray-500'>Aucun chantier actif.</p>";
+        if (archivedCount === 0) archivedList.innerHTML = "<p class='text-gray-500'>Aucun chantier archivé.</p>";
+    } catch(error) {
+        console.error("Erreur de chargement des chantiers:", error);
+        activeList.innerHTML = "<p class='text-red-500'>Erreur de chargement.</p>";
+        archivedList.innerHTML = "<p class='text-red-500'>Erreur de chargement.</p>";
+    }
 }
 
 function createChantierElement(chantier) {
@@ -152,7 +161,8 @@ function createChantierElement(chantier) {
 }
 
 async function updateChantierStatus(id, newStatus) {
-    const confirmed = await showConfirmationModal("Confirmation", `Voulez-vous vraiment ${newStatus === 'active' ? 'réactiver' : 'archiver'} ce chantier ?`);
+    const actionText = newStatus === 'active' ? 'réactiver' : 'archiver';
+    const confirmed = await showConfirmationModal("Confirmation", `Voulez-vous vraiment ${actionText} ce chantier ?`);
     if (!confirmed) return;
 
     const chantierDocRef = doc(db, "chantiers", id);
@@ -256,7 +266,7 @@ function showDetailsModal(chantierId) {
     const addressLink = document.getElementById('modalChantierAddress');
     if (chantier.address) {
         addressLink.textContent = chantier.address;
-        addressLink.href = `https://www.google.com/maps/search/?api=1&query=$${encodeURIComponent(chantier.address)}`;
+        addressLink.href = getGoogleMapsUrl(chantier.address);
         addressLink.parentElement.style.display = 'block';
     } else {
         addressLink.parentElement.style.display = 'none';
