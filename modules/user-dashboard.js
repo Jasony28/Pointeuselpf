@@ -1,5 +1,5 @@
-import { collection, query, where, getDocs, orderBy, doc, getDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, currentUser, pageContent, showInfoModal, showConfirmationModal } from "../app.js";
+import { collection, query, where, getDocs, orderBy, doc, getDoc, addDoc, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { db, currentUser, pageContent, showInfoModal } from "../app.js";
 import { getWeekDateRange } from "./utils.js";
 
 let timerInterval = null;
@@ -62,9 +62,9 @@ export async function render() {
             </div>
         </div>
     `;
-setTimeout(async () => {
+
+    setTimeout(async () => {
         try {
-            // On met les bonnes fonctions de ce fichier à l'intérieur du setTimeout
             await cacheDataForModals();
             initLiveTracker();
             displayWeekView();
@@ -99,10 +99,30 @@ function initLiveTracker() {
     const activePointage = JSON.parse(localStorage.getItem('activePointage'));
 
     if (activePointage && activePointage.uid === currentUser.uid) {
-        const startTime = new Date(activePointage.startTime);
-        container.innerHTML = `<div class="text-center"><p class="text-gray-500">Pointage en cours sur :</p><p class="text-2xl font-bold text-purple-700 my-2">${activePointage.chantier}</p><div id="timer" class="text-5xl font-mono my-4 tracking-wider">00:00:00</div><button id="stopBtn" class="w-full md:w-auto bg-red-600 hover:bg-red-700 text-white font-bold px-8 py-4 rounded-lg text-lg shadow-lg">Arrêter le pointage</button></div>`;
-        updateTimerUI(startTime);
-        timerInterval = setInterval(() => updateTimerUI(startTime), 1000);
+        const isPaused = activePointage.status === 'paused';
+        
+        container.innerHTML = `
+            <div class="text-center">
+                <p class="text-gray-500">Pointage en cours sur :</p>
+                <p class="text-2xl font-bold text-purple-700 my-2">${activePointage.chantier}</p>
+                <div id="timer" class="text-5xl font-mono my-4 tracking-wider ${isPaused ? 'text-yellow-500' : ''}">00:00:00</div>
+                ${isPaused ? '<p class="text-yellow-600 font-semibold mb-4">PAUSE</p>' : ''}
+                <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                    <button id="pauseResumeBtn" class="w-full sm:w-auto font-bold px-8 py-4 rounded-lg text-lg shadow-lg ${isPaused ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-yellow-500 hover:bg-yellow-600 text-white'}">
+                        ${isPaused ? 'Reprendre' : 'Pause'}
+                    </button>
+                    <button id="stopBtn" class="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold px-8 py-4 rounded-lg text-lg shadow-lg">
+                        Arrêter
+                    </button>
+                </div>
+            </div>`;
+        
+        updateTimerUI();
+        if (!isPaused) {
+            timerInterval = setInterval(updateTimerUI, 1000);
+        }
+        
+        document.getElementById('pauseResumeBtn').onclick = isPaused ? resumePointage : pausePointage;
         document.getElementById('stopBtn').onclick = openStopModal;
     } else {
         container.innerHTML = `<div class="text-center"><h3 class="text-xl font-bold mb-2">Prêt à commencer votre journée ?</h3><button id="startBtn" class="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white font-bold px-8 py-4 rounded-lg text-lg shadow-lg">Démarrer un nouveau pointage</button></div>`;
@@ -110,21 +130,61 @@ function initLiveTracker() {
     }
 }
 
-function updateTimerUI(startTime) {
+function updateTimerUI() {
     const timerElement = document.getElementById('timer');
-    if (!timerElement) {
+    const activePointage = JSON.parse(localStorage.getItem('activePointage'));
+    if (!timerElement || !activePointage) {
         clearInterval(timerInterval);
         return;
     }
-    const now = new Date();
-    const diff = now - startTime;
-    const hours = String(Math.floor(diff / 3600000)).padStart(2, '0');
-    const minutes = String(Math.floor((diff % 3600000) / 60000)).padStart(2, '0');
-    const seconds = String(Math.floor((diff % 60000) / 1000)).padStart(2, '0');
+
+    const startTime = new Date(activePointage.startTime);
+    let totalPauseMs = 0;
+    (activePointage.pauses || []).forEach(pause => {
+        if (pause.end) {
+            totalPauseMs += new Date(pause.end) - new Date(pause.start);
+        }
+    });
+
+    let effectiveElapsedTime;
+    if (activePointage.status === 'paused') {
+        const lastPause = activePointage.pauses[activePointage.pauses.length - 1];
+        const lastPauseStart = new Date(lastPause.start);
+        const elapsedTimeBeforePause = lastPauseStart - startTime - totalPauseMs;
+        effectiveElapsedTime = elapsedTimeBeforePause;
+    } else {
+        const now = new Date();
+        effectiveElapsedTime = now - startTime - totalPauseMs;
+    }
+    
+    const hours = String(Math.floor(effectiveElapsedTime / 3600000)).padStart(2, '0');
+    const minutes = String(Math.floor((effectiveElapsedTime % 3600000) / 60000)).padStart(2, '0');
+    const seconds = String(Math.floor((effectiveElapsedTime % 60000) / 1000)).padStart(2, '0');
     timerElement.textContent = `${hours}:${minutes}:${seconds}`;
 }
 
-// REMPLACEZ votre fonction openStartModal par celle-ci
+function pausePointage() {
+    clearInterval(timerInterval);
+    let activePointage = JSON.parse(localStorage.getItem('activePointage'));
+    activePointage.status = 'paused';
+    if (!activePointage.pauses) {
+        activePointage.pauses = [];
+    }
+    activePointage.pauses.push({ start: new Date().toISOString(), end: null });
+    localStorage.setItem('activePointage', JSON.stringify(activePointage));
+    initLiveTracker(); // Re-render the UI
+}
+
+function resumePointage() {
+    let activePointage = JSON.parse(localStorage.getItem('activePointage'));
+    activePointage.status = 'running';
+    const lastPause = activePointage.pauses[activePointage.pauses.length - 1];
+    if (lastPause && !lastPause.end) {
+        lastPause.end = new Date().toISOString();
+    }
+    localStorage.setItem('activePointage', JSON.stringify(activePointage));
+    initLiveTracker(); // Re-render the UI
+}
 
 async function openStartModal() {
     const modal = document.getElementById('startPointageModal');
@@ -136,63 +196,40 @@ async function openStartModal() {
     colleaguesContainer.innerHTML = '<p class="text-gray-500 text-sm">Chargement...</p>';
     modal.classList.remove('hidden');
 
-    // On récupère maintenant les 3 listes
     const { weeklyChantiers, todaysColleagues, todaysChantiers } = await getContextualLists();
 
-    // --- Génération de la liste des chantiers avec 3 groupes ---
     const weeklyChantiersOnly = new Set([...weeklyChantiers].filter(chantier => !todaysChantiers.has(chantier)));
     const otherChantiers = chantiersCache.filter(name => !weeklyChantiers.has(name));
     
     let chantierOptionsHTML = '';
-
     if (todaysChantiers.size > 0) {
         chantierOptionsHTML += '<optgroup label="Chantiers du jour">';
-        todaysChantiers.forEach(name => {
-            chantierOptionsHTML += `<option value="${name}">${name}</option>`;
-        });
+        todaysChantiers.forEach(name => { chantierOptionsHTML += `<option value="${name}">${name}</option>`; });
         chantierOptionsHTML += '</optgroup>';
     }
-
     if (weeklyChantiersOnly.size > 0) {
         chantierOptionsHTML += '<optgroup label="Autres chantiers de la semaine">';
-        weeklyChantiersOnly.forEach(name => {
-            chantierOptionsHTML += `<option value="${name}">${name}</option>`;
-        });
+        weeklyChantiersOnly.forEach(name => { chantierOptionsHTML += `<option value="${name}">${name}</option>`; });
         chantierOptionsHTML += '</optgroup>';
     }
-
     if (otherChantiers.length > 0) {
         chantierOptionsHTML += '<optgroup label="Tous les autres chantiers">';
-        otherChantiers.forEach(name => {
-            chantierOptionsHTML += `<option value="${name}">${name}</option>`;
-        });
+        otherChantiers.forEach(name => { chantierOptionsHTML += `<option value="${name}">${name}</option>`; });
         chantierOptionsHTML += '</optgroup>';
     }
 
     chantierSelect.innerHTML = chantierOptionsHTML;
-    
-    // Gérer le cas où il n'y a aucun chantier planifié
     if (!chantierSelect.innerHTML) {
          chantierSelect.innerHTML = '<option value="" disabled selected>-- Choisissez un chantier --</option>';
-         chantiersCache.forEach(name => {
-            chantierOptionsHTML += `<option value="${name}">${name}</option>`;
-         });
-         chantierSelect.innerHTML += chantierOptionsHTML;
+         chantiersCache.forEach(name => { chantierSelect.innerHTML += `<option value="${name}">${name}</option>`; });
     }
 
-    // --- Génération de la liste des collègues (inchangée) ---
     const otherColleagues = colleaguesCache.filter(name => !todaysColleagues.has(name) && name !== currentUser.displayName);
-    const createColleagueElement = (name) => `
-        <label class="flex items-center gap-2 p-1 hover:bg-gray-100 rounded w-full">
-            <input type="checkbox" value="${name}" name="colleagues" />
-            <span>${name}</span>
-        </label>`;
+    const createColleagueElement = (name) => `<label class="flex items-center gap-2 p-1 hover:bg-gray-100 rounded w-full"><input type="checkbox" value="${name}" name="colleagues" /><span>${name}</span></label>`;
     
     let colleaguesHTML = '';
     if (todaysColleagues.size > 0) {
-        todaysColleagues.forEach(name => {
-            colleaguesHTML += createColleagueElement(name);
-        });
+        todaysColleagues.forEach(name => { colleaguesHTML += createColleagueElement(name); });
         colleaguesHTML += '<div class="w-full border-t my-2"></div>';
     }
     colleaguesContainer.innerHTML = colleaguesHTML;
@@ -204,19 +241,24 @@ async function openStartModal() {
         showAllButton.className = 'text-sm text-blue-600 hover:underline w-full text-center p-1';
         showAllButton.onclick = () => {
             showAllButton.remove();
-            const otherColleaguesHTML = otherColleagues.map(createColleagueElement).join('');
-            colleaguesContainer.insertAdjacentHTML('beforeend', otherColleaguesHTML);
+            colleaguesContainer.insertAdjacentHTML('beforeend', otherColleagues.map(createColleagueElement).join(''));
         };
         colleaguesContainer.appendChild(showAllButton);
     }
     
-    // Logique du formulaire (inchangée)
     form.onsubmit = (e) => {
         e.preventDefault();
         const chantier = chantierSelect.value;
         if (!chantier) { showInfoModal("Attention", "Veuillez choisir un chantier."); return; }
         const selectedColleagues = Array.from(document.querySelectorAll('input[name="colleagues"]:checked')).map(el => el.value);
-        const pointageData = { chantier, colleagues: selectedColleagues, startTime: new Date().toISOString(), uid: currentUser.uid };
+        const pointageData = { 
+            chantier, 
+            colleagues: selectedColleagues, 
+            startTime: new Date().toISOString(), 
+            uid: currentUser.uid,
+            status: 'running', // Initial status
+            pauses: [] // Initial empty pauses array
+        };
         localStorage.setItem('activePointage', JSON.stringify(pointageData));
         closeStartModal();
         initLiveTracker();
@@ -224,56 +266,39 @@ async function openStartModal() {
     document.getElementById('cancelStartPointage').onclick = closeStartModal;
 }
 
-// CORRECTION: Cette fonction est maintenant indépendante et non plus imbriquée dans openStartModal.
 async function getContextualLists() {
     const { startOfWeek, endOfWeek } = getWeekDateRange(0);
     const todayStr = new Date().toISOString().split('T')[0];
-
-    const weeklyChantiers = new Set();
-    const todaysColleagues = new Set();
-    const todaysChantiers = new Set(); // On ajoute cet ensemble
+    const weeklyChantiers = new Set(), todaysColleagues = new Set(), todaysChantiers = new Set();
 
     try {
-        const q = query(collection(db, "planning"),
-            where("date", ">=", startOfWeek.toISOString().split('T')[0]),
-            where("date", "<=", endOfWeek.toISOString().split('T')[0])
-        );
+        const q = query(collection(db, "planning"), where("date", ">=", startOfWeek.toISOString().split('T')[0]), where("date", "<=", endOfWeek.toISOString().split('T')[0]));
         const querySnapshot = await getDocs(q);
-
         querySnapshot.docs.forEach(doc => {
             const task = doc.data();
             if (task.teamNames && task.teamNames.includes(currentUser.displayName)) {
                 weeklyChantiers.add(task.chantierName);
-                
                 if (task.date === todayStr) {
-                    todaysChantiers.add(task.chantierName); // On remplit la liste du jour
+                    todaysChantiers.add(task.chantierName);
                     task.teamNames.forEach(name => {
-                        if (name !== currentUser.displayName) {
-                            todaysColleagues.add(name);
-                        }
+                        if (name !== currentUser.displayName) { todaysColleagues.add(name); }
                     });
                 }
             }
         });
-    } catch (error) {
-        console.error("Impossible de charger le planning contextuel:", error);
-    }
-
-    return { weeklyChantiers, todaysColleagues, todaysChantiers }; // On retourne la nouvelle liste
+    } catch (error) { console.error("Impossible de charger le planning contextuel:", error); }
+    return { weeklyChantiers, todaysColleagues, todaysChantiers };
 }
+
 function closeStartModal() {
     document.getElementById('startPointageModal').classList.add('hidden');
 }
 
 function openStopModal() {
     const modal = document.getElementById('stopPointageModal');
-    const form = document.getElementById('stopPointageForm');
-    form.reset();
     modal.classList.remove('hidden');
-    
     document.getElementById('cancelStopPointage').onclick = () => modal.classList.add('hidden');
-
-    form.onsubmit = (e) => {
+    document.getElementById('stopPointageForm').onsubmit = (e) => {
         e.preventDefault();
         const notes = document.getElementById('pointageNotes').value.trim();
         stopPointage(notes);
@@ -282,8 +307,23 @@ function openStopModal() {
 }
 
 async function stopPointage(notes = "") {
-    const activePointage = JSON.parse(localStorage.getItem('activePointage'));
+    let activePointage = JSON.parse(localStorage.getItem('activePointage'));
     if (!activePointage) return;
+
+    // If pointage is paused when stopped, end the current pause
+    if (activePointage.status === 'paused') {
+        const lastPause = activePointage.pauses[activePointage.pauses.length - 1];
+        if (lastPause && !lastPause.end) {
+            lastPause.end = new Date().toISOString();
+        }
+    }
+
+    let totalPauseMs = 0;
+    (activePointage.pauses || []).forEach(pause => {
+        if (pause.start && pause.end) {
+            totalPauseMs += new Date(pause.end) - new Date(pause.start);
+        }
+    });
 
     const endTime = new Date();
     const docData = { 
@@ -295,6 +335,7 @@ async function stopPointage(notes = "") {
         chantier: activePointage.chantier, 
         colleagues: activePointage.colleagues.length ? activePointage.colleagues : ["Seul"], 
         notes: notes,
+        pauseDurationMs: totalPauseMs, // Save total pause duration
         createdAt: serverTimestamp() 
     };
     
@@ -323,19 +364,12 @@ function displayWeekView() {
     scheduleGrid.innerHTML = ""; 
 
     const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
-    
     for (let i = 0; i < 7; i++) {
         const dayDate = new Date(startOfWeek);
         dayDate.setUTCDate(startOfWeek.getUTCDate() + i);
-        
         const dayColumn = document.createElement('div');
         dayColumn.className = 'bg-gray-50 rounded-lg p-2 min-h-[100px]';
-        dayColumn.innerHTML = `
-            <h4 class="font-bold text-center border-b pb-1 mb-2">
-                ${days[i]} <span class="text-sm font-normal text-gray-500">${dayDate.getUTCDate()}</span>
-            </h4>
-            <div id="day-col-${i}" class="space-y-2"></div>
-        `;
+        dayColumn.innerHTML = `<h4 class="font-bold text-center border-b pb-1 mb-2">${days[i]} <span class="text-sm font-normal text-gray-500">${dayDate.getUTCDate()}</span></h4><div id="day-col-${i}" class="space-y-2"></div>`;
         scheduleGrid.appendChild(dayColumn);
     }
     
@@ -355,7 +389,8 @@ async function loadUserScheduleForWeek(start, end) {
     const q = query(collection(db, "planning"), 
         where("date", ">=", start.toISOString().split('T')[0]), 
         where("date", "<=", end.toISOString().split('T')[0]), 
-        orderBy("date")
+        orderBy("date"),
+        orderBy("order")
     );
     const querySnapshot = await getDocs(q);
     const scheduleData = querySnapshot.docs.map(doc => doc.data());

@@ -144,6 +144,9 @@ function createHistoryEntryElement(docId, d) {
     return wrapper;
 }
 
+// Dans modules/user-history.js
+// REMPLACEZ la fonction existante par celle-ci
+
 function generateHistoryPDF() {
     if (historyDataCache.length === 0) {
         showInfoModal("Information", "Il n'y a rien à télécharger pour cette période.");
@@ -192,6 +195,7 @@ function generateHistoryPDF() {
     doc.setFont(undefined, 'bold');
     doc.text(totalText, 14, finalY + 10);
 
-    const fileName = `historique_${userName.replace(/ /g, '_')}_${startOfWeek.toISOString().split('T')[0]}.pdf`;
+    // CORRECTION: Utilise periodText pour un nom de fichier fiable
+    const fileName = `historique_${userName.replace(/ /g, '_')}_${periodText.replace(/ /g, '_')}.pdf`;
     doc.save(fileName);
 }

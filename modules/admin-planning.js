@@ -407,6 +407,8 @@ function closePlanningItemModal() {
     document.getElementById('planningItemModal').classList.add('hidden');
 }
 
+
+
 async function savePlanningItem(closeAfterSave) {
     const select = document.getElementById('chantierSelect');
     if (!select.value) {
@@ -428,14 +430,32 @@ async function savePlanningItem(closeAfterSave) {
 
     try {
         if (currentEditingId) {
+            // Si on modifie une tâche, on met simplement à jour.
+            // Une vérification plus complexe pourrait être ajoutée ici si nécessaire.
             await updateDoc(doc(db, "planning", currentEditingId), dataToSave);
         } else {
-            // CORRECTION: Utilisation de Date.now() pour le champ 'order' afin d'éviter les conflits (race condition).
+            // --- VÉRIFICATION DES DOUBLONS ---
+            // 1. On récupère toutes les tâches du jour concerné.
+            const q = query(collection(db, "planning"), where("date", "==", currentEditingDate));
+            const snapshot = await getDocs(q);
+            const existingTasks = snapshot.docs.map(doc => doc.data());
+
+            // 2. On vérifie si un chantier avec le même nom existe déjà.
+            const isDuplicate = existingTasks.some(task => task.chantierName === chantierName);
+
+            // 3. Si c'est un doublon, on affiche une erreur et on arrête.
+            if (isDuplicate) {
+                showInfoModal("Action Impossible", `Le chantier "${chantierName}" est déjà planifié pour ce jour.`);
+                return; // On arrête la fonction ici.
+            }
+            // --- FIN DE LA VÉRIFICATION ---
+
+            // Si ce n'est pas un doublon, on ajoute la nouvelle tâche.
             await addDoc(collection(db, "planning"), { 
                 ...dataToSave,
                 date: currentEditingDate, 
                 teamNames: [], 
-                order: Date.now(),
+                order: snapshot.size,
                 createdAt: serverTimestamp() 
             });
         }
@@ -454,6 +474,7 @@ async function savePlanningItem(closeAfterSave) {
         showInfoModal("Erreur", "Une erreur est survenue.");
     }
 }
+
 
 function updateViewButtons() {
     const weekBtn = document.getElementById('viewWeekBtn');

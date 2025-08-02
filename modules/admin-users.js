@@ -1,9 +1,6 @@
 import { collection, query, getDocs, doc, updateDoc, deleteDoc, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, navigateTo, currentUser, showConfirmationModal, showInfoModal } from "../app.js";
 
-/**
- * Fonction principale pour afficher la page de gestion des utilisateurs.
- */
 export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto">
@@ -13,14 +10,10 @@ export async function render() {
             </div>
         </div>
     `;
-    setTimeout(() => {
-    loadUsers();
-    }, 0);
+    
+    setTimeout(loadUsers, 0);
 }
 
-/**
- * Charge la liste de tous les utilisateurs depuis Firestore et les affiche.
- */
 async function loadUsers() {
     const container = document.getElementById('user-list-container');
     container.innerHTML = '';
@@ -50,16 +43,10 @@ async function loadUsers() {
     }
 }
 
-/**
- * Crée un élément HTML pour un utilisateur avec ses informations et les contrôles admin.
- * @param {object} userData - Les données de l'utilisateur.
- * @returns {HTMLElement} - L'élément div créé.
- */
 function createUserElement(userData) {
     const userElement = document.createElement('div');
     userElement.className = 'p-3 border rounded flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3';
 
-    // Zone d'information cliquable pour voir l'historique
     const userInfoDiv = document.createElement('div');
     userInfoDiv.className = 'cursor-pointer hover:opacity-70 flex-grow';
     userInfoDiv.innerHTML = `
@@ -69,12 +56,10 @@ function createUserElement(userData) {
     userInfoDiv.onclick = () => navigateTo('user-history', { userId: userData.uid, userName: userData.displayName });
     userElement.appendChild(userInfoDiv);
     
-    // Conteneur pour tous les boutons et interrupteurs
     const controlsDiv = document.createElement('div');
     controlsDiv.className = 'flex items-center gap-2 flex-wrap justify-end w-full sm:w-auto';
 
-    // Interrupteur pour le rôle "Admin"
-    if (userData.uid !== currentUser.uid) { // Un admin ne peut pas modifier son propre rôle
+    if (userData.uid !== currentUser.uid) {
         const roleLabel = document.createElement('label');
         roleLabel.className = 'flex items-center cursor-pointer mr-4';
         const roleInput = document.createElement('input');
@@ -91,7 +76,6 @@ function createUserElement(userData) {
         controlsDiv.appendChild(roleLabel);
     }
     
-    // Affichage du statut (pending, approved, banned)
     let statusColor = 'bg-gray-200 text-gray-800';
     if (userData.status === 'approved') statusColor = 'bg-green-200 text-green-800';
     if (userData.status === 'pending') statusColor = 'bg-yellow-200 text-yellow-800';
@@ -101,7 +85,6 @@ function createUserElement(userData) {
     statusSpan.textContent = userData.status;
     controlsDiv.appendChild(statusSpan);
 
-    // Boutons d'action (sauf pour soi-même)
     if (userData.uid !== currentUser.uid) {
         if (userData.status === 'pending') {
             const approveBtn = document.createElement('button');
@@ -109,17 +92,11 @@ function createUserElement(userData) {
             approveBtn.textContent = 'Approuver';
             approveBtn.onclick = () => updateUserStatus(userData.uid, 'approved');
             controlsDiv.appendChild(approveBtn);
-
-            const denyBtn = document.createElement('button');
-            denyBtn.className = 'px-3 py-1 text-sm rounded text-white bg-red-500 hover:bg-red-600';
-            denyBtn.textContent = 'Refuser';
-            denyBtn.onclick = () => deleteUser(userData.uid);
-            controlsDiv.appendChild(denyBtn);
         }
 
         if (userData.status === 'approved') {
             const banBtn = document.createElement('button');
-            banBtn.className = 'px-3 py-1 text-sm rounded text-white bg-red-500 hover:bg-red-600';
+            banBtn.className = 'px-3 py-1 text-sm rounded text-white bg-yellow-600 hover:bg-yellow-700';
             banBtn.textContent = 'Bannir';
             banBtn.onclick = () => updateUserStatus(userData.uid, 'banned');
             controlsDiv.appendChild(banBtn);
@@ -132,21 +109,23 @@ function createUserElement(userData) {
             unbanBtn.onclick = () => updateUserStatus(userData.uid, 'approved');
             controlsDiv.appendChild(unbanBtn);
         }
+
+        // --- NOUVEAU BOUTON DE SUPPRESSION ---
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'px-3 py-1 text-sm rounded text-white bg-red-600 hover:bg-red-700';
+        deleteBtn.textContent = 'Supprimer';
+        deleteBtn.onclick = () => deleteUser(userData.uid, userData.displayName);
+        controlsDiv.appendChild(deleteBtn);
     }
     
     userElement.appendChild(controlsDiv);
     return userElement;
 }
 
-/**
- * Met à jour le rôle d'un utilisateur dans Firestore.
- * @param {string} uid - L'ID de l'utilisateur.
- * @param {string} role - Le nouveau rôle ('admin' or 'user').
- */
 async function updateUserRole(uid, role) {
     const confirmed = await showConfirmationModal("Changement de rôle", `Voulez-vous vraiment changer le rôle de cet utilisateur en "${role}" ?`);
     if (!confirmed) {
-        loadUsers(); // Recharge pour annuler le changement visuel de l'interrupteur
+        loadUsers();
         return;
     }
     const userRef = doc(db, "users", uid);
@@ -154,29 +133,30 @@ async function updateUserRole(uid, role) {
         await updateDoc(userRef, { role: role });
     } catch (error) {
         showInfoModal("Erreur", "La mise à jour du rôle a échoué.");
-        loadUsers(); // Recharge en cas d'erreur pour être sûr de l'état
+        loadUsers();
     }
 }
 
-/**
- * Met à jour le statut d'un utilisateur (approved, banned).
- * @param {string} uid - L'ID de l'utilisateur.
- * @param {string} status - Le nouveau statut.
- */
 async function updateUserStatus(uid, status) {
     const userRef = doc(db, "users", uid);
     await updateDoc(userRef, { status: status });
     loadUsers();
 }
 
-/**
- * Supprime un utilisateur après confirmation.
- * @param {string} uid - L'ID de l'utilisateur à supprimer.
- */
-async function deleteUser(uid) {
-    const confirmed = await showConfirmationModal("Confirmation", "Voulez-vous vraiment refuser et supprimer cet utilisateur ? Cette action est irréversible.");
+// --- FONCTION DE SUPPRESSION MISE À JOUR ---
+async function deleteUser(uid, name) {
+    const confirmed = await showConfirmationModal(
+        "Confirmation de Suppression", 
+        `Voulez-vous vraiment supprimer définitivement le compte de "${name}" ? Cette action est irréversible et supprimera l'utilisateur de l'application.`
+    );
     if (confirmed) {
-        await deleteDoc(doc(db, "users", uid));
-        loadUsers();
+        try {
+            await deleteDoc(doc(db, "users", uid));
+            showInfoModal("Succès", `L'utilisateur "${name}" a été supprimé.`);
+            loadUsers();
+        } catch (error) {
+            console.error("Erreur de suppression de l'utilisateur:", error);
+            showInfoModal("Erreur", "La suppression a échoué.");
+        }
     }
 }
