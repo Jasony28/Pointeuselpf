@@ -40,13 +40,15 @@ const userTabs = [
 
 
 const adminTabs = [
+   
     { id: 'admin-dashboard', name: 'Tableau de Bord' },
     { id: 'admin-planning', name: 'Planification' },
     { id: 'admin-updates', name: 'Détails Chantiers' }, // <-- AJOUTEZ CETTE LIGNE
-    { id: 'admin-data', name: 'Données' },
     { id: 'admin-tarifs', name: 'Tarifs' },
     { id: 'admin-chantiers', name: 'Gestion Chantiers' },
-    { id: 'admin-colleagues', name: 'Collègues' },
+    { id: 'admin-data', name: 'Données' },
+     { id: 'admin-travel-report', name: 'Rapport Trajets' },
+     { id: 'admin-colleagues', name: 'Collègues' },
     { id: 'admin-users', name: 'Utilisateurs' },
 ];
 

@@ -1,6 +1,10 @@
-import { collection, query, where, getDocs, orderBy, doc, getDoc, addDoc, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { collection, query, where, getDocs, orderBy, doc, getDoc, addDoc, serverTimestamp, updateDoc, limit } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, pageContent, showInfoModal } from "../app.js";
 import { getWeekDateRange } from "./utils.js";
+const HOME_BASE_ADDRESS = "Marche-en-Famenne, Belgium";
+// --- CONFIGURATION ---
+// REMPLACEZ "VOTRE_CLE_MAPBOX" par votre véritable clé d'accès Mapbox
+const MAPBOX_ACCESS_TOKEN = "pk.eyJ1IjoiamFzb255MjgiLCJhIjoiY21lMDcyYWhzMDIyODJsczl0cmM0aTVjciJ9.V14cJXdBNoq3yAQTDeUg-A"; 
 
 let timerInterval = null;
 let chantiersCache = [];
@@ -23,7 +27,6 @@ export async function render() {
                 <div id="schedule-grid" class="grid grid-cols-1 md:grid-cols-7 gap-2 mt-4"></div>
             </div>
         </div>
-
         <div id="startPointageModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-20 p-4">
             <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
                 <h3 class="text-xl font-bold mb-4">Démarrer un pointage</h3>
@@ -43,7 +46,6 @@ export async function render() {
                 </form>
             </div>
         </div>
-
         <div id="stopPointageModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-20 p-4">
             <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
                 <h3 class="text-xl font-bold mb-4">Finaliser le pointage</h3>
@@ -66,11 +68,10 @@ export async function render() {
     setTimeout(async () => {
         try {
             await cacheDataForModals();
-            initLiveTracker();
+            await checkForOpenPointage();
             displayWeekView();
         } catch (error) {
             console.error("Erreur critique dans le rendu du dashboard utilisateur:", error);
-            pageContent.innerHTML = `<div class="text-red-500 text-center p-4">Erreur de chargement du tableau de bord.</div>`;
         }
     }, 0);
 }
@@ -94,13 +95,27 @@ async function cacheDataForModals() {
     colleaguesCache = combinedNames.sort((a, b) => a.localeCompare(b));
 }
 
+async function checkForOpenPointage() {
+    const q = query(collection(db, "pointages"), where("uid", "==", currentUser.uid), where("endTime", "==", null), limit(1));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+        const openPointageDoc = snapshot.docs[0];
+        const pointageData = { docId: openPointageDoc.id, ...openPointageDoc.data() };
+        if (!pointageData.pauses) pointageData.pauses = [];
+        if (!pointageData.status) pointageData.status = 'running';
+        localStorage.setItem('activePointage', JSON.stringify(pointageData));
+    } else {
+        localStorage.removeItem('activePointage');
+    }
+    initLiveTracker();
+}
+
 function initLiveTracker() {
     const container = document.getElementById('live-tracker-container');
     const activePointage = JSON.parse(localStorage.getItem('activePointage'));
 
     if (activePointage && activePointage.uid === currentUser.uid) {
         const isPaused = activePointage.status === 'paused';
-        
         container.innerHTML = `
             <div class="text-center">
                 <p class="text-gray-500">Pointage en cours sur :</p>
@@ -108,20 +123,12 @@ function initLiveTracker() {
                 <div id="timer" class="text-5xl font-mono my-4 tracking-wider ${isPaused ? 'text-yellow-500' : ''}">00:00:00</div>
                 ${isPaused ? '<p class="text-yellow-600 font-semibold mb-4">PAUSE</p>' : ''}
                 <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                    <button id="pauseResumeBtn" class="w-full sm:w-auto font-bold px-8 py-4 rounded-lg text-lg shadow-lg ${isPaused ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-yellow-500 hover:bg-yellow-600 text-white'}">
-                        ${isPaused ? 'Reprendre' : 'Pause'}
-                    </button>
-                    <button id="stopBtn" class="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold px-8 py-4 rounded-lg text-lg shadow-lg">
-                        Arrêter
-                    </button>
+                    <button id="pauseResumeBtn" class="w-full sm:w-auto font-bold px-8 py-4 rounded-lg text-lg shadow-lg ${isPaused ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-yellow-500 hover:bg-yellow-600 text-white'}">${isPaused ? 'Reprendre' : 'Pause'}</button>
+                    <button id="stopBtn" class="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold px-8 py-4 rounded-lg text-lg shadow-lg">Arrêter</button>
                 </div>
             </div>`;
-        
         updateTimerUI();
-        if (!isPaused) {
-            timerInterval = setInterval(updateTimerUI, 1000);
-        }
-        
+        if (!isPaused) timerInterval = setInterval(updateTimerUI, 1000);
         document.getElementById('pauseResumeBtn').onclick = isPaused ? resumePointage : pausePointage;
         document.getElementById('stopBtn').onclick = openStopModal;
     } else {
@@ -133,30 +140,16 @@ function initLiveTracker() {
 function updateTimerUI() {
     const timerElement = document.getElementById('timer');
     const activePointage = JSON.parse(localStorage.getItem('activePointage'));
-    if (!timerElement || !activePointage) {
-        clearInterval(timerInterval);
-        return;
-    }
-
-    const startTime = new Date(activePointage.startTime);
-    let totalPauseMs = 0;
-    (activePointage.pauses || []).forEach(pause => {
-        if (pause.end) {
-            totalPauseMs += new Date(pause.end) - new Date(pause.start);
-        }
-    });
-
+    if (!timerElement || !activePointage) { clearInterval(timerInterval); return; }
+    const startTime = new Date(activePointage.timestamp);
+    let totalPauseMs = (activePointage.pauses || []).reduce((acc, p) => acc + (p.end ? new Date(p.end) - new Date(p.start) : 0), 0);
     let effectiveElapsedTime;
     if (activePointage.status === 'paused') {
-        const lastPause = activePointage.pauses[activePointage.pauses.length - 1];
-        const lastPauseStart = new Date(lastPause.start);
-        const elapsedTimeBeforePause = lastPauseStart - startTime - totalPauseMs;
-        effectiveElapsedTime = elapsedTimeBeforePause;
+        const lastPauseStart = new Date(activePointage.pauses.slice(-1)[0].start);
+        effectiveElapsedTime = (lastPauseStart - startTime) - totalPauseMs;
     } else {
-        const now = new Date();
-        effectiveElapsedTime = now - startTime - totalPauseMs;
+        effectiveElapsedTime = (new Date() - startTime) - totalPauseMs;
     }
-    
     const hours = String(Math.floor(effectiveElapsedTime / 3600000)).padStart(2, '0');
     const minutes = String(Math.floor((effectiveElapsedTime % 3600000) / 60000)).padStart(2, '0');
     const seconds = String(Math.floor((effectiveElapsedTime % 60000) / 1000)).padStart(2, '0');
@@ -167,23 +160,150 @@ function pausePointage() {
     clearInterval(timerInterval);
     let activePointage = JSON.parse(localStorage.getItem('activePointage'));
     activePointage.status = 'paused';
-    if (!activePointage.pauses) {
-        activePointage.pauses = [];
-    }
+    if (!activePointage.pauses) activePointage.pauses = [];
     activePointage.pauses.push({ start: new Date().toISOString(), end: null });
     localStorage.setItem('activePointage', JSON.stringify(activePointage));
-    initLiveTracker(); // Re-render the UI
+    const pointageRef = doc(db, "pointages", activePointage.docId);
+    updateDoc(pointageRef, { status: 'paused', pauses: activePointage.pauses });
+    initLiveTracker();
 }
 
 function resumePointage() {
     let activePointage = JSON.parse(localStorage.getItem('activePointage'));
     activePointage.status = 'running';
-    const lastPause = activePointage.pauses[activePointage.pauses.length - 1];
-    if (lastPause && !lastPause.end) {
-        lastPause.end = new Date().toISOString();
-    }
+    const lastPause = activePointage.pauses.slice(-1)[0];
+    if (lastPause && !lastPause.end) lastPause.end = new Date().toISOString();
     localStorage.setItem('activePointage', JSON.stringify(activePointage));
-    initLiveTracker(); // Re-render the UI
+    const pointageRef = doc(db, "pointages", activePointage.docId);
+    updateDoc(pointageRef, { status: 'running', pauses: activePointage.pauses });
+    initLiveTracker();
+}
+
+async function startPointage(chantierName, colleagues) {
+    const newPointageData = {
+        uid: currentUser.uid, userName: currentUser.displayName, chantier: chantierName, colleagues,
+        timestamp: new Date().toISOString(), endTime: null, status: 'running', pauses: [], createdAt: serverTimestamp()
+    };
+
+    try {
+        // Crée le nouveau pointage en premier
+        const newPointageRef = await addDoc(collection(db, "pointages"), newPointageData);
+        localStorage.setItem('activePointage', JSON.stringify({ docId: newPointageRef.id, ...newPointageData }));
+        
+        // Cherche le dernier pointage terminé pour cet utilisateur
+        const lastPointageQuery = query(collection(db, "pointages"), where("uid", "==", currentUser.uid), where("endTime", "!=", null), orderBy("endTime", "desc"), limit(1));
+        const lastPointageSnapshot = await getDocs(lastPointageQuery);
+
+        let startAddressForTravel = HOME_BASE_ADDRESS; // Par défaut, on part du dépôt
+
+        if (!lastPointageSnapshot.empty) {
+            const lastPointageDoc = lastPointageSnapshot.docs[0].data();
+            const lastEndTime = new Date(lastPointageDoc.endTime);
+            const now = new Date();
+
+            // Si le dernier pointage a eu lieu AUJOURD'HUI, on part de ce chantier
+            if (lastEndTime.toDateString() === now.toDateString()) {
+                // On doit récupérer l'adresse de ce dernier chantier
+                const lastChantierQuery = query(collection(db, "chantiers"), where("name", "==", lastPointageDoc.chantier), limit(1));
+                const lastChantierSnapshot = await getDocs(lastChantierQuery);
+                if (!lastChantierSnapshot.empty) {
+                    startAddressForTravel = lastChantierSnapshot.docs[0].data().address;
+                }
+            }
+        }
+
+        // On récupère l'adresse du nouveau chantier
+        const newChantierQuery = query(collection(db, "chantiers"), where("name", "==", chantierName), limit(1));
+        const newChantierSnapshot = await getDocs(newChantierQuery);
+        if (!newChantierSnapshot.empty) {
+            const newChantierAddress = newChantierSnapshot.docs[0].data().address;
+            
+            // On ne calcule le trajet que si l'adresse est différente de celle de départ
+            if (newChantierAddress !== startAddressForTravel) {
+                showInfoModal("Calcul du trajet", "Le calcul de la distance est en cours en arrière-plan...");
+                // On lance le calcul avec les bonnes adresses
+                calculateAndSaveTravel(startAddressForTravel, newChantierAddress, newPointageRef.id);
+            }
+        }
+        
+        initLiveTracker();
+
+    } catch (error) {
+        console.error("Erreur de démarrage du pointage:", error);
+        showInfoModal("Erreur", "Le démarrage du pointage a échoué.");
+    }
+}
+
+async function stopPointage(notes = "") {
+    let activePointage = JSON.parse(localStorage.getItem('activePointage'));
+    if (!activePointage || !activePointage.docId) return;
+    if (activePointage.status === 'paused') {
+        const lastPause = activePointage.pauses.slice(-1)[0];
+        if (lastPause && !lastPause.end) lastPause.end = new Date().toISOString();
+    }
+    const totalPauseMs = (activePointage.pauses || []).reduce((acc, p) => acc + (p.end ? new Date(p.end) - new Date(p.start) : 0), 0);
+    const pointageRef = doc(db, "pointages", activePointage.docId);
+    try {
+        await updateDoc(pointageRef, { endTime: new Date().toISOString(), notes, pauseDurationMs: totalPauseMs, status: 'completed' });
+        showInfoModal("Succès", "Pointage enregistré avec succès !");
+    } catch (error) { 
+        console.error("Erreur d'enregistrement:", error); 
+        showInfoModal("Erreur", "Une erreur est survenue lors de l'enregistrement."); 
+    } finally { 
+        clearInterval(timerInterval); 
+        localStorage.removeItem('activePointage'); 
+        initLiveTracker(); 
+    }
+}
+
+// Dans le fichier : modules/user-dashboard.js
+
+async function calculateAndSaveTravel(startAddress, endAddress, arrivalPointageId) {
+    if (!startAddress || !endAddress) {
+        console.log("Adresse de départ ou d'arrivée manquante pour le calcul du trajet.");
+        return;
+    }
+
+    try {
+        // Fonction d'aide pour convertir une adresse en coordonnées
+        const getCoordinates = async (address) => {
+            const geocodeUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${MAPBOX_ACCESS_TOKEN}&limit=1&country=BE`;
+            const response = await fetch(geocodeUrl);
+            const data = await response.json();
+            if (!data.features || data.features.length === 0) throw new Error(`Adresse non trouvée : ${address}`);
+            return data.features[0].center; // Renvoie [longitude, latitude]
+        };
+
+        // 1. Convertir les deux adresses en coordonnées
+        const startCoords = await getCoordinates(startAddress);
+        const endCoords = await getCoordinates(endAddress);
+
+        // 2. Calculer l'itinéraire avec les coordonnées
+        const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${startCoords.join(',')};${endCoords.join(',')}?access_token=${MAPBOX_ACCESS_TOKEN}&geometries=geojson`;
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
+            throw new Error(data.message || "Itinéraire non trouvé.");
+        }
+        
+        // Enregistrer le trajet dans Firestore
+        const route = data.routes[0];
+        const distanceKm = (route.distance / 1000).toFixed(2);
+        const durationMin = Math.round(route.duration / 60);
+        
+        await addDoc(collection(db, "trajets"), {
+            id_utilisateur: currentUser.uid,
+            // On ne lie plus au pointage de départ, seulement à celui d'arrivée
+            id_pointage_arrivee: arrivalPointageId, 
+            distance_km: parseFloat(distanceKm),
+            duree_min: durationMin,
+            date_creation: serverTimestamp()
+        });
+
+    } catch (error) {
+        console.error("Erreur lors du calcul du trajet:", error);
+    }
 }
 
 async function openStartModal() {
@@ -251,17 +371,8 @@ async function openStartModal() {
         const chantier = chantierSelect.value;
         if (!chantier) { showInfoModal("Attention", "Veuillez choisir un chantier."); return; }
         const selectedColleagues = Array.from(document.querySelectorAll('input[name="colleagues"]:checked')).map(el => el.value);
-        const pointageData = { 
-            chantier, 
-            colleagues: selectedColleagues, 
-            startTime: new Date().toISOString(), 
-            uid: currentUser.uid,
-            status: 'running', // Initial status
-            pauses: [] // Initial empty pauses array
-        };
-        localStorage.setItem('activePointage', JSON.stringify(pointageData));
+        startPointage(chantier, selectedColleagues);
         closeStartModal();
-        initLiveTracker();
     };
     document.getElementById('cancelStartPointage').onclick = closeStartModal;
 }
@@ -296,6 +407,8 @@ function closeStartModal() {
 
 function openStopModal() {
     const modal = document.getElementById('stopPointageModal');
+    const form = document.getElementById('stopPointageForm');
+    form.reset();
     modal.classList.remove('hidden');
     document.getElementById('cancelStopPointage').onclick = () => modal.classList.add('hidden');
     document.getElementById('stopPointageForm').onsubmit = (e) => {
@@ -304,52 +417,6 @@ function openStopModal() {
         stopPointage(notes);
         modal.classList.add('hidden');
     };
-}
-
-async function stopPointage(notes = "") {
-    let activePointage = JSON.parse(localStorage.getItem('activePointage'));
-    if (!activePointage) return;
-
-    // If pointage is paused when stopped, end the current pause
-    if (activePointage.status === 'paused') {
-        const lastPause = activePointage.pauses[activePointage.pauses.length - 1];
-        if (lastPause && !lastPause.end) {
-            lastPause.end = new Date().toISOString();
-        }
-    }
-
-    let totalPauseMs = 0;
-    (activePointage.pauses || []).forEach(pause => {
-        if (pause.start && pause.end) {
-            totalPauseMs += new Date(pause.end) - new Date(pause.start);
-        }
-    });
-
-    const endTime = new Date();
-    const docData = { 
-        uid: currentUser.uid, 
-        userEmail: currentUser.email, 
-        userName: currentUser.displayName, 
-        timestamp: activePointage.startTime, 
-        endTime: endTime.toISOString(), 
-        chantier: activePointage.chantier, 
-        colleagues: activePointage.colleagues.length ? activePointage.colleagues : ["Seul"], 
-        notes: notes,
-        pauseDurationMs: totalPauseMs, // Save total pause duration
-        createdAt: serverTimestamp() 
-    };
-    
-    try {
-        await addDoc(collection(db, "pointages"), docData);
-        showInfoModal("Succès", "Pointage enregistré avec succès !");
-    } catch (error) { 
-        console.error("Erreur d'enregistrement:", error); 
-        showInfoModal("Erreur", "Une erreur est survenue lors de l'enregistrement."); 
-    } finally { 
-        clearInterval(timerInterval); 
-        localStorage.removeItem('activePointage'); 
-        initLiveTracker(); 
-    }
 }
 
 function displayWeekView() {

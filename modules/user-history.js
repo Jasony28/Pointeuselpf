@@ -1,6 +1,5 @@
 import { collection, query, where, orderBy, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, isAdmin, pageContent, showConfirmationModal, showInfoModal } from "../app.js";
-// CORRECTION: Import des fonctions utilitaires pour la date et le formatage.
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 
 let currentWeekOffset = 0;
@@ -48,8 +47,6 @@ export function render(params = {}) {
     }, 0);
 }
 
-// CORRECTION: La fonction locale getWeekDateRange a été supprimée pour utiliser celle de utils.js
-
 async function loadHistoryForWeek() {
     if (!targetUser) return;
     historyDataCache = [];
@@ -58,7 +55,6 @@ async function loadHistoryForWeek() {
     const weekTotalsDisplay = document.getElementById("weekTotalsDisplay");
     const currentPeriodDisplay = document.getElementById("currentPeriodDisplay");
     
-    // CORRECTION: Utilise la fonction UTC centralisée.
     const { startOfWeek, endOfWeek } = getWeekDateRange(currentWeekOffset);
     
     const options = { day: 'numeric', month: 'long', timeZone: 'UTC' };
@@ -66,34 +62,56 @@ async function loadHistoryForWeek() {
     historyList.innerHTML = "<p class='text-center p-4'>Chargement...</p>";
     weekTotalsDisplay.innerHTML = "";
     
-    const q = query(
-        collection(db, "pointages"),
-        where("uid", "==", targetUser.uid),
-        where("timestamp", ">=", startOfWeek.toISOString()),
-        where("timestamp", "<=", endOfWeek.toISOString()),
-        orderBy("timestamp", "desc")
-    );
-    
     try {
-        const querySnapshot = await getDocs(q);
-        historyList.innerHTML = "";
-        let totalMs = 0;
-
-        if (querySnapshot.empty) {
+        const pointagesQuery = query(
+            collection(db, "pointages"),
+            where("uid", "==", targetUser.uid),
+            where("timestamp", ">=", startOfWeek.toISOString()),
+            where("timestamp", "<=", endOfWeek.toISOString()),
+            orderBy("timestamp", "desc")
+        );
+        const pointagesSnapshot = await getDocs(pointagesQuery);
+        
+        if (pointagesSnapshot.empty) {
             historyList.innerHTML = "<p class='text-center text-gray-500 p-4'>Aucun pointage trouvé pour cette période.</p>";
-        } else {
-            historyDataCache = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            
-            historyDataCache.forEach(d => {
-                historyList.appendChild(createHistoryEntryElement(d.id, d));
-                if (d.endTime) {
-                    totalMs += new Date(d.endTime) - new Date(d.timestamp);
-                }
-            });
+            weekTotalsDisplay.textContent = "Total travail effectif : 0h 0min";
+            return;
         }
         
-        // CORRECTION: Utilise la fonction de formatage centralisée.
-        weekTotalsDisplay.textContent = `Total semaine : ${formatMilliseconds(totalMs)}`;
+        const pointages = pointagesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        const pointageIds = pointages.map(p => p.id);
+        const trajetsMap = new Map();
+        if (pointageIds.length > 0) {
+            // CORRECTION : On ajoute un filtre sur l'ID de l'utilisateur pour respecter les règles de sécurité.
+            const trajetsQuery = query(collection(db, "trajets"), 
+                where("id_utilisateur", "==", targetUser.uid),
+                where("id_pointage_arrivee", "in", pointageIds)
+            );
+            const trajetsSnapshot = await getDocs(trajetsQuery);
+            trajetsSnapshot.forEach(doc => {
+                const trajet = doc.data();
+                trajetsMap.set(trajet.id_pointage_arrivee, trajet);
+            });
+        }
+
+        historyList.innerHTML = "";
+        let totalEffectiveMs = 0;
+        historyDataCache = pointages.map(p => {
+            const trajet = trajetsMap.get(p.id);
+            return { ...p, trajet };
+        });
+
+        historyDataCache.forEach(d => {
+            historyList.appendChild(createHistoryEntryElement(d));
+            if (d.endTime) {
+                const totalDurationMs = new Date(d.endTime) - new Date(d.timestamp);
+                const pauseMs = d.pauseDurationMs || 0;
+                totalEffectiveMs += (totalDurationMs - pauseMs);
+            }
+        });
+        
+        weekTotalsDisplay.textContent = `Total travail effectif : ${formatMilliseconds(totalEffectiveMs)}`;
 
     } catch (error) {
         console.error("Erreur de chargement de l'historique:", error);
@@ -101,29 +119,39 @@ async function loadHistoryForWeek() {
     }
 }
 
-function createHistoryEntryElement(docId, d) {
+function createHistoryEntryElement(d) {
     const wrapper = document.createElement("div");
     wrapper.className = "p-4 border rounded-lg bg-white relative shadow-sm space-y-1";
     
     const startDate = new Date(d.timestamp);
     const endDate = d.endTime ? new Date(d.endTime) : null;
-    const userDisplay = isAdmin && d.userName ? `<div class="text-xs text-blue-600 font-semibold">${d.userName}</div>` : "";
-    let timeDisplay = "", durationDisplay = "";
+    let timeDisplay = "", durationDisplay = "", pauseDisplay = "", travelDisplay = "";
 
     if (endDate) {
         const timeFormat = { hour: '2-digit', minute: '2-digit' };
         timeDisplay = `<div>De ${startDate.toLocaleTimeString('fr-FR', timeFormat)} à ${endDate.toLocaleTimeString('fr-FR', timeFormat)}</div>`;
-        const durationMs = endDate - startDate;
-        // CORRECTION: Utilise la fonction de formatage centralisée.
-        durationDisplay = `<div class="text-sm text-gray-600">Durée : ${formatMilliseconds(durationMs)}</div>`;
+        
+        const totalDurationMs = endDate - startDate;
+        const pauseMs = d.pauseDurationMs || 0;
+        const effectiveWorkMs = totalDurationMs - pauseMs;
+
+        durationDisplay = `<div class="text-sm text-gray-600"><strong>Durée effective :</strong> ${formatMilliseconds(effectiveWorkMs)}</div>`;
+        if (pauseMs > 0) {
+            pauseDisplay = `<div class="text-sm text-yellow-600">Pause : ${formatMilliseconds(pauseMs)}</div>`;
+        }
+    }
+
+    if (d.trajet) {
+        travelDisplay = `<div class="text-sm text-blue-600">🚗 Trajet : ${d.trajet.distance_km} km (${d.trajet.duree_min} min)</div>`;
     }
 
     wrapper.innerHTML = `
-      ${userDisplay}
       <div class="font-bold text-lg">${d.chantier}</div>
       <div>${startDate.toLocaleDateString('fr-FR', {weekday: 'long', day: 'numeric', month: 'long'})}</div>
       ${timeDisplay}
       ${durationDisplay}
+      ${pauseDisplay}
+      ${travelDisplay}
       <div class="mt-2"><strong>Collègues :</strong> ${Array.isArray(d.colleagues) ? d.colleagues.join(", ") : 'N/A'}</div>
       ${d.notes ? `<div class="mt-1 pt-2 border-t text-sm"><strong>Notes :</strong> ${d.notes}</div>` : ""}
     `;
@@ -135,7 +163,7 @@ function createHistoryEntryElement(docId, d) {
         deleteBtn.onclick = async () => {
             const confirmed = await showConfirmationModal("Confirmation", "Supprimer ce pointage ?");
             if (confirmed) {
-                await deleteDoc(doc(db, "pointages", docId));
+                await deleteDoc(doc(db, "pointages", d.id));
                 loadHistoryForWeek();
             }
         };
@@ -143,9 +171,6 @@ function createHistoryEntryElement(docId, d) {
     }
     return wrapper;
 }
-
-// Dans modules/user-history.js
-// REMPLACEZ la fonction existante par celle-ci
 
 function generateHistoryPDF() {
     if (historyDataCache.length === 0) {
@@ -171,20 +196,22 @@ function generateHistoryPDF() {
         const endDate = d.endTime ? new Date(d.endTime) : null;
         let durationStr = 'N/A';
         if (endDate) {
-            durationStr = formatMilliseconds(endDate - startDate);
+            const totalDurationMs = endDate - startDate;
+            const pauseMs = d.pauseDurationMs || 0;
+            durationStr = formatMilliseconds(totalDurationMs - pauseMs);
         }
+        const travelStr = d.trajet ? `${d.trajet.distance_km} km` : '-';
         return [
-            startDate.toLocaleDateString('fr-FR', {weekday: 'short', day:'2-digit', month:'2-digit'}),
+            startDate.toLocaleDateString('fr-FR', {day:'2-digit', month:'2-digit'}),
             d.chantier,
-            startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-            endDate ? endDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : 'En cours',
             durationStr,
+            travelStr
         ];
     });
 
     doc.autoTable({
         startY: 50,
-        head: [['Date', 'Chantier', 'Début', 'Fin', 'Durée']],
+        head: [['Date', 'Chantier', 'Durée Travail', 'Distance Trajet']],
         body: tableData,
         theme: 'grid',
         headStyles: { fillColor: [79, 70, 229] }
@@ -194,8 +221,7 @@ function generateHistoryPDF() {
     doc.setFontSize(12);
     doc.setFont(undefined, 'bold');
     doc.text(totalText, 14, finalY + 10);
-
-    // CORRECTION: Utilise periodText pour un nom de fichier fiable
+    
     const fileName = `historique_${userName.replace(/ /g, '_')}_${periodText.replace(/ /g, '_')}.pdf`;
     doc.save(fileName);
 }
