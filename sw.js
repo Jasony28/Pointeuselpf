@@ -1,6 +1,6 @@
 // sw.js - Service Worker
 
-const CACHE_NAME = 'pointeuse-pro-cache-v7.2'; // Vous pouvez incrémenter la version si vous le souhaitez, ex: v8.0
+const CACHE_NAME = 'pointeuse-pro-cache-v7.3'; // Vous pouvez incrémenter la version si vous le souhaitez, ex: v8.0
 const urlsToCache = [
   './',
   './index.html',
@@ -70,4 +70,5 @@ self.addEventListener('fetch', event => {
       return response || fetch(event.request);
     })
   );
+
 });
