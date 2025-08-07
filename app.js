@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+// CORRIGÉ : Ajout de writeBatch et de toutes les fonctions nécessaires pour le script
+import { getFirestore, doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit, enableIndexedDbPersistence, writeBatch, addDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 
 // --- CONFIGURATION ---
 const firebaseConfig = {
@@ -16,15 +17,23 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 export const db = getFirestore(app);
-enableIndexedDbPersistence(db) // <-- MODIFIÉ
+
+enableIndexedDbPersistence(db)
     .catch((err) => {
         console.error("Erreur d'activation de la persistance hors ligne: ", err.code);
     });
+
+// --- LIGNE TEMPORAIRE POUR LE SCRIPT DE NETTOYAGE ---
+// CORRIGÉ : Placée au bon endroit, après l'initialisation de `db` et des imports.
+// Pensez à la supprimer une fois le nettoyage terminé !
+window.firebaseTools = { db, collection, query, orderBy, getDocs, writeBatch, doc, addDoc, serverTimestamp, where };
+
+
 // --- VARIABLES GLOBALES DE L'APPLICATION ---
 export const pageContent = document.getElementById('page-content');
 export let currentUser = null;
 export let isAdmin = false;
-let isMasqueradingAsUser = false; // Permet à un admin de voir l'interface utilisateur
+let isMasqueradingAsUser = false;
 
 // --- VARIABLES DE LA MODALE ---
 let genericModal, modalTitle, modalMessage, modalConfirmBtn, modalCancelBtn;
@@ -32,23 +41,21 @@ let genericModal, modalTitle, modalMessage, modalConfirmBtn, modalCancelBtn;
 // --- DÉFINITION DES MENUS ---
 const userTabs = [
     { id: 'user-dashboard', name: 'Planning' },
-    { id: 'user-updates', name: 'Détails chantier' }, // <-- AJOUTEZ CETTE LIGNE
+    { id: 'user-updates', name: 'Détails chantier' },
     { id: 'chantiers', name: 'Infos Chantiers' },
     { id: 'add-entry', name: 'Nouveau Pointage' },
     { id: 'user-history', name: 'Mon Historique' },
 ];
 
-
 const adminTabs = [
-   
     { id: 'admin-dashboard', name: 'Tableau de Bord' },
     { id: 'admin-planning', name: 'Planification' },
-    { id: 'admin-updates', name: 'Détails Chantiers' }, // <-- AJOUTEZ CETTE LIGNE
+    { id: 'admin-updates', name: 'Détails Chantiers' },
     { id: 'admin-tarifs', name: 'Tarifs' },
     { id: 'admin-chantiers', name: 'Gestion Chantiers' },
     { id: 'admin-data', name: 'Données' },
-     { id: 'admin-travel-report', name: 'Rapport Trajets' },
-     { id: 'admin-colleagues', name: 'Collègues' },
+    { id: 'admin-travel-report', name: 'Rapport Trajets' },
+    { id: 'admin-colleagues', name: 'Collègues' },
     { id: 'admin-users', name: 'Utilisateurs' },
 ];
 
@@ -270,7 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 currentUser = null;
                 isAdmin = false;
-                isMasqueradingAsUser = false; // Réinitialise la vue à la déconnexion
+                isMasqueradingAsUser = false;
                 authContainer.style.display = 'flex';
             }
         } catch (error) {
@@ -284,7 +291,26 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     if ('serviceWorker' in navigator) {
-        // ... votre code service worker ...
+        navigator.serviceWorker.register('./sw.js').then(registration => {
+            registration.addEventListener('updatefound', () => {
+                const newWorker = registration.installing;
+                newWorker.addEventListener('statechange', () => {
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        const updateBanner = document.getElementById('update-banner');
+                        updateBanner.classList.remove('hidden');
+                        document.getElementById('update-btn').onclick = () => {
+                            newWorker.postMessage({ type: 'SKIP_WAITING' });
+                        };
+                    }
+                });
+            });
+        });
+        let refreshing;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (refreshing) return;
+            window.location.reload();
+            refreshing = true;
+        });
     }
 });
 
@@ -309,6 +335,5 @@ export function showInfoModal(title, message) {
     modalConfirmBtn.style.display = 'none';
     modalCancelBtn.textContent = 'OK';
     genericModal.classList.remove('hidden');
-
     modalCancelBtn.onclick = () => { genericModal.classList.add('hidden'); };
 }

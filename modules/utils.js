@@ -1,8 +1,8 @@
 // modules/utils.js
 
 /**
- * Calcule les dates de début et de fin de la semaine en UTC pour assurer la cohérence.
- * @param {number} offset - Le décalage en semaines par rapport à la semaine actuelle (0 pour cette semaine, -1 pour la précédente, etc.).
+ * Calcule les dates de début et de fin de la semaine en UTC.
+ * @param {number} offset - Le décalage en semaines.
  * @returns {{startOfWeek: Date, endOfWeek: Date}}
  */
 export function getWeekDateRange(offset = 0) {
@@ -22,9 +22,9 @@ export function getWeekDateRange(offset = 0) {
 }
 
 /**
- * Formate une durée en millisecondes en une chaîne de caractères "Xh Ymin".
+ * Formate une durée en millisecondes en "Xh Ymin".
  * @param {number} ms - La durée en millisecondes.
- * @returns {string} La durée formatée.
+ * @returns {string}
  */
 export function formatMilliseconds(ms) {
     if (!ms || ms < 0) return "0h 0min";
@@ -34,9 +34,21 @@ export function formatMilliseconds(ms) {
 }
 
 /**
+ * Formate une durée en minutes en "Xh Ymin".
+ * @param {number} totalMinutes - La durée totale en minutes.
+ * @returns {string}
+ */
+export function formatMinutes(totalMinutes) {
+    if (!totalMinutes || totalMinutes < 0) return "0h 0min";
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = Math.round(totalMinutes % 60);
+    return `${hours}h ${minutes}min`;
+}
+
+/**
  * Génère une URL de recherche Google Maps valide.
  * @param {string} address - L'adresse à rechercher.
- * @returns {string} L'URL complète.
+ * @returns {string}
  */
 export function getGoogleMapsUrl(address) {
     if (!address) return '#';

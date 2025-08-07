@@ -1,11 +1,12 @@
 import { collection, query, where, getDocs, orderBy, doc, getDoc, addDoc, serverTimestamp, updateDoc, limit } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, pageContent, showInfoModal } from "../app.js";
 import { getWeekDateRange } from "./utils.js";
-const HOME_BASE_ADDRESS = "Marche-en-Famenne, Belgium";
-// --- CONFIGURATION ---
-// REMPLACEZ "VOTRE_CLE_MAPBOX" par votre véritable clé d'accès Mapbox
-const MAPBOX_ACCESS_TOKEN = "pk.eyJ1IjoiamFzb255MjgiLCJhIjoiY21lMDcyYWhzMDIyODJsczl0cmM0aTVjciJ9.V14cJXdBNoq3yAQTDeUg-A"; 
 
+// --- CONFIGURATION ---
+const MAPBOX_ACCESS_TOKEN = "pk.eyJ1IjoiamFzb255MjgiLCJhIjoiY21lMDcyYWhzMDIyODJsczl0cmM0aTVjciJ9.V14cJXdBNoq3yAQTDeUg-A";
+const HOME_BASE_ADDRESS = "Marche-en-Famenne, Belgium";
+
+// --- Variables globales du module ---
 let timerInterval = null;
 let chantiersCache = [];
 let colleaguesCache = [];
@@ -38,6 +39,12 @@ export async function render() {
                     <div>
                         <label class="text-sm font-medium">Collègues présents</label>
                         <div id="startColleaguesContainer" class="mt-1 p-2 border rounded max-h-40 overflow-y-auto space-y-1"></div>
+                    </div>
+                    <div class="pt-2 border-t">
+                        <label class="flex items-center gap-3 cursor-pointer p-2 rounded hover:bg-gray-100">
+                            <input type="checkbox" id="isDriverCheckbox" class="h-5 w-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500" />
+                            <span class="text-sm font-medium">Je suis le conducteur (pour le calcul des km)</span>
+                        </label>
                     </div>
                     <div class="flex justify-end gap-4 pt-4">
                         <button type="button" id="cancelStartPointage" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">Annuler</button>
@@ -76,6 +83,9 @@ export async function render() {
     }, 0);
 }
 
+/**
+ * Met en cache les listes de chantiers et de collègues pour les modales.
+ */
 async function cacheDataForModals() {
     const chantiersQuery = query(collection(db, "chantiers"), where("status", "==", "active"), orderBy("name"));
     const colleaguesQuery = query(collection(db, "colleagues"), orderBy("name"));
@@ -95,6 +105,9 @@ async function cacheDataForModals() {
     colleaguesCache = combinedNames.sort((a, b) => a.localeCompare(b));
 }
 
+/**
+ * Vérifie s'il y a un pointage en cours et met à jour l'interface.
+ */
 async function checkForOpenPointage() {
     const q = query(collection(db, "pointages"), where("uid", "==", currentUser.uid), where("endTime", "==", null), limit(1));
     const snapshot = await getDocs(q);
@@ -110,6 +123,9 @@ async function checkForOpenPointage() {
     initLiveTracker();
 }
 
+/**
+ * Initialise ou met à jour le tracker de pointage en temps réel.
+ */
 function initLiveTracker() {
     const container = document.getElementById('live-tracker-container');
     const activePointage = JSON.parse(localStorage.getItem('activePointage'));
@@ -137,6 +153,9 @@ function initLiveTracker() {
     }
 }
 
+/**
+ * Met à jour le chronomètre affiché.
+ */
 function updateTimerUI() {
     const timerElement = document.getElementById('timer');
     const activePointage = JSON.parse(localStorage.getItem('activePointage'));
@@ -156,6 +175,9 @@ function updateTimerUI() {
     timerElement.textContent = `${hours}:${minutes}:${seconds}`;
 }
 
+/**
+ * Met en pause le pointage en cours.
+ */
 function pausePointage() {
     clearInterval(timerInterval);
     let activePointage = JSON.parse(localStorage.getItem('activePointage'));
@@ -168,6 +190,9 @@ function pausePointage() {
     initLiveTracker();
 }
 
+/**
+ * Reprend un pointage mis en pause.
+ */
 function resumePointage() {
     let activePointage = JSON.parse(localStorage.getItem('activePointage'));
     activePointage.status = 'running';
@@ -179,31 +204,33 @@ function resumePointage() {
     initLiveTracker();
 }
 
+/**
+ * Démarre un nouveau pointage et déclenche le calcul du trajet.
+ */
 async function startPointage(chantierName, colleagues) {
+    const isDriver = document.getElementById('isDriverCheckbox').checked;
+
     const newPointageData = {
         uid: currentUser.uid, userName: currentUser.displayName, chantier: chantierName, colleagues,
-        timestamp: new Date().toISOString(), endTime: null, status: 'running', pauses: [], createdAt: serverTimestamp()
+        timestamp: new Date().toISOString(), endTime: null, status: 'running', pauses: [], createdAt: serverTimestamp(),
+        isDriver: isDriver
     };
 
     try {
-        // Crée le nouveau pointage en premier
         const newPointageRef = await addDoc(collection(db, "pointages"), newPointageData);
         localStorage.setItem('activePointage', JSON.stringify({ docId: newPointageRef.id, ...newPointageData }));
         
-        // Cherche le dernier pointage terminé pour cet utilisateur
         const lastPointageQuery = query(collection(db, "pointages"), where("uid", "==", currentUser.uid), where("endTime", "!=", null), orderBy("endTime", "desc"), limit(1));
         const lastPointageSnapshot = await getDocs(lastPointageQuery);
 
-        let startAddressForTravel = HOME_BASE_ADDRESS; // Par défaut, on part du dépôt
+        let startAddressForTravel = HOME_BASE_ADDRESS;
 
         if (!lastPointageSnapshot.empty) {
             const lastPointageDoc = lastPointageSnapshot.docs[0].data();
             const lastEndTime = new Date(lastPointageDoc.endTime);
             const now = new Date();
 
-            // Si le dernier pointage a eu lieu AUJOURD'HUI, on part de ce chantier
             if (lastEndTime.toDateString() === now.toDateString()) {
-                // On doit récupérer l'adresse de ce dernier chantier
                 const lastChantierQuery = query(collection(db, "chantiers"), where("name", "==", lastPointageDoc.chantier), limit(1));
                 const lastChantierSnapshot = await getDocs(lastChantierQuery);
                 if (!lastChantierSnapshot.empty) {
@@ -212,17 +239,14 @@ async function startPointage(chantierName, colleagues) {
             }
         }
 
-        // On récupère l'adresse du nouveau chantier
         const newChantierQuery = query(collection(db, "chantiers"), where("name", "==", chantierName), limit(1));
         const newChantierSnapshot = await getDocs(newChantierQuery);
         if (!newChantierSnapshot.empty) {
             const newChantierAddress = newChantierSnapshot.docs[0].data().address;
             
-            // On ne calcule le trajet que si l'adresse est différente de celle de départ
             if (newChantierAddress !== startAddressForTravel) {
                 showInfoModal("Calcul du trajet", "Le calcul de la distance est en cours en arrière-plan...");
-                // On lance le calcul avec les bonnes adresses
-                calculateAndSaveTravel(startAddressForTravel, newChantierAddress, newPointageRef.id);
+                calculateAndSaveTravel(startAddressForTravel, newChantierAddress, newPointageRef.id, isDriver);
             }
         }
         
@@ -234,6 +258,9 @@ async function startPointage(chantierName, colleagues) {
     }
 }
 
+/**
+ * Arrête et enregistre le pointage en cours.
+ */
 async function stopPointage(notes = "") {
     let activePointage = JSON.parse(localStorage.getItem('activePointage'));
     if (!activePointage || !activePointage.docId) return;
@@ -256,29 +283,27 @@ async function stopPointage(notes = "") {
     }
 }
 
-// Dans le fichier : modules/user-dashboard.js
-
-async function calculateAndSaveTravel(startAddress, endAddress, arrivalPointageId) {
+/**
+ * Calcule et enregistre le trajet entre deux adresses.
+ */
+async function calculateAndSaveTravel(startAddress, endAddress, arrivalPointageId, isDriver) {
     if (!startAddress || !endAddress) {
         console.log("Adresse de départ ou d'arrivée manquante pour le calcul du trajet.");
         return;
     }
 
     try {
-        // Fonction d'aide pour convertir une adresse en coordonnées
         const getCoordinates = async (address) => {
             const geocodeUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${MAPBOX_ACCESS_TOKEN}&limit=1&country=BE`;
             const response = await fetch(geocodeUrl);
             const data = await response.json();
             if (!data.features || data.features.length === 0) throw new Error(`Adresse non trouvée : ${address}`);
-            return data.features[0].center; // Renvoie [longitude, latitude]
+            return data.features[0].center;
         };
 
-        // 1. Convertir les deux adresses en coordonnées
         const startCoords = await getCoordinates(startAddress);
         const endCoords = await getCoordinates(endAddress);
 
-        // 2. Calculer l'itinéraire avec les coordonnées
         const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${startCoords.join(',')};${endCoords.join(',')}?access_token=${MAPBOX_ACCESS_TOKEN}&geometries=geojson`;
         const response = await fetch(url);
         const data = await response.json();
@@ -287,14 +312,12 @@ async function calculateAndSaveTravel(startAddress, endAddress, arrivalPointageI
             throw new Error(data.message || "Itinéraire non trouvé.");
         }
         
-        // Enregistrer le trajet dans Firestore
         const route = data.routes[0];
-        const distanceKm = (route.distance / 1000).toFixed(2);
+        const distanceKm = isDriver ? (route.distance / 1000).toFixed(2) : 0;
         const durationMin = Math.round(route.duration / 60);
         
         await addDoc(collection(db, "trajets"), {
             id_utilisateur: currentUser.uid,
-            // On ne lie plus au pointage de départ, seulement à celui d'arrivée
             id_pointage_arrivee: arrivalPointageId, 
             distance_km: parseFloat(distanceKm),
             duree_min: durationMin,
@@ -306,6 +329,9 @@ async function calculateAndSaveTravel(startAddress, endAddress, arrivalPointageI
     }
 }
 
+/**
+ * Ouvre la modale pour démarrer un pointage.
+ */
 async function openStartModal() {
     const modal = document.getElementById('startPointageModal');
     const form = document.getElementById('startPointageForm');
@@ -377,6 +403,9 @@ async function openStartModal() {
     document.getElementById('cancelStartPointage').onclick = closeStartModal;
 }
 
+/**
+ * Récupère les listes contextuelles (chantiers, collègues) pour la journée/semaine.
+ */
 async function getContextualLists() {
     const { startOfWeek, endOfWeek } = getWeekDateRange(0);
     const todayStr = new Date().toISOString().split('T')[0];
@@ -401,10 +430,16 @@ async function getContextualLists() {
     return { weeklyChantiers, todaysColleagues, todaysChantiers };
 }
 
+/**
+ * Ferme la modale de démarrage de pointage.
+ */
 function closeStartModal() {
     document.getElementById('startPointageModal').classList.add('hidden');
 }
 
+/**
+ * Ouvre la modale pour arrêter un pointage.
+ */
 function openStopModal() {
     const modal = document.getElementById('stopPointageModal');
     const form = document.getElementById('stopPointageForm');
@@ -419,6 +454,9 @@ function openStopModal() {
     };
 }
 
+/**
+ * Affiche la vue du planning de la semaine.
+ */
 function displayWeekView() {
     const { startOfWeek, endOfWeek } = getWeekDateRange(currentWeekOffset);
     document.getElementById("prevWeekBtn").onclick = () => { currentWeekOffset--; displayWeekView(); };
@@ -443,6 +481,9 @@ function displayWeekView() {
     loadUserScheduleForWeek(startOfWeek, endOfWeek);
 }
 
+/**
+ * Charge les données du planning de l'utilisateur pour la semaine.
+ */
 async function loadUserScheduleForWeek(start, end) {
     const weekId = start.toISOString().split('T')[0];
     const publishDoc = await getDoc(doc(db, "publishedSchedules", weekId));
@@ -474,6 +515,9 @@ async function loadUserScheduleForWeek(start, end) {
     });
 }
 
+/**
+ * Crée l'élément HTML pour une tâche du planning.
+ */
 function createTaskElement(task) {
     const el = document.createElement('div');
     el.className = 'bg-white p-3 rounded-lg shadow-sm border-l-4 border-purple-500 text-sm';

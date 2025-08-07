@@ -2,20 +2,33 @@
 import { collection, query, getDocs, orderBy, where } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent } from "../app.js";
 
+/**
+ * Formate une durée en minutes en une chaîne de caractères "Xh Ymin".
+ * @param {number} totalMinutes - La durée totale en minutes.
+ * @returns {string} La durée formatée.
+ */
+function formatMinutes(totalMinutes) {
+    if (!totalMinutes || totalMinutes < 0) return "0h 0min";
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = Math.round(totalMinutes % 60);
+    return `${hours}h ${minutes}min`;
+}
+
 export async function render() {
     pageContent.innerHTML = `
-        <div class="max-w-4xl mx-auto">
+        <div class="max-w-5xl mx-auto">
             <h2 class="text-2xl font-bold mb-4">🚗 Rapport des Trajets</h2>
-            <div class="bg-white p-4 rounded-lg shadow-sm">
+            <div class="bg-white p-4 rounded-lg shadow-sm overflow-x-auto">
                 <table class="w-full text-left">
                     <thead>
                         <tr class="border-b">
                             <th class="p-2">Employé</th>
                             <th class="p-2">Total Kilomètres (ce mois-ci)</th>
+                            <th class="p-2">Temps de Trajet total (ce mois-ci)</th>
                         </tr>
                     </thead>
                     <tbody id="report-body">
-                        <tr><td colspan="2" class="p-4 text-center">Chargement...</td></tr>
+                        <tr><td colspan="3" class="p-4 text-center">Chargement...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -40,21 +53,26 @@ async function loadTravelReport() {
     const travelByUser = {};
     trajetsSnapshot.forEach(doc => {
         const trajet = doc.data();
-        travelByUser[trajet.id_utilisateur] = (travelByUser[trajet.id_utilisateur] || 0) + trajet.distance_km;
+        if (!travelByUser[trajet.id_utilisateur]) {
+            travelByUser[trajet.id_utilisateur] = { km: 0, min: 0 };
+        }
+        travelByUser[trajet.id_utilisateur].km += trajet.distance_km || 0;
+        travelByUser[trajet.id_utilisateur].min += trajet.duree_min || 0;
     });
 
     if (users.length === 0) {
-        reportBody.innerHTML = `<tr><td colspan="2" class="p-4 text-center text-gray-500">Aucun utilisateur trouvé.</td></tr>`;
+        reportBody.innerHTML = `<tr><td colspan="3" class="p-4 text-center text-gray-500">Aucun utilisateur trouvé.</td></tr>`;
         return;
     }
 
     users.forEach(user => {
-        const totalKm = travelByUser[user.uid] || 0;
+        const travelData = travelByUser[user.uid] || { km: 0, min: 0 };
         const row = document.createElement('tr');
         row.className = 'border-b';
         row.innerHTML = `
             <td class="p-2">${user.displayName}</td>
-            <td class="p-2 font-semibold">${totalKm.toFixed(2)} km</td>
+            <td class="p-2 font-semibold">${travelData.km.toFixed(2)} km</td>
+            <td class="p-2 font-semibold">${formatMinutes(travelData.min)}</td>
         `;
         reportBody.appendChild(row);
     });
