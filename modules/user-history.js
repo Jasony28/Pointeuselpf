@@ -1,11 +1,10 @@
-import { collection, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { collection, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, isAdmin, pageContent, showConfirmationModal, showInfoModal } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 
 let currentWeekOffset = 0;
-let targetUser = null; 
-let historyDataCache = [];
-// Caches pour la modale d'édition
+let targetUser = null;
+let historyDataCache = []; // Gardé pour la fonction PDF
 let chantiersCache = [];
 let colleaguesCache = [];
 
@@ -21,10 +20,7 @@ export async function render(params = {}) {
             <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
                 <h2 id="history-title" class="text-2xl font-bold">🗓️ Historique de ${targetUser.name}</h2>
                 <button id="downloadPdfBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded-lg flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                        <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
-                        <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
-                    </svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/></svg>
                     Télécharger PDF
                 </button>
             </div>
@@ -36,34 +32,33 @@ export async function render(params = {}) {
                 </div>
                 <div id="weekTotalsDisplay" class="mt-3 text-center text-xl font-bold text-purple-700"></div>
             </div>
-            <div id="historyList" class="space-y-3"></div>
+            <div id="historyList" class="space-y-4"></div>
         </div>
 
-        <!-- NOUVELLE MODALE D'ÉDITION -->
-        <div id="editPointageModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-30 p-4">
+        <div id="entryModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-30 p-4">
             <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-lg">
-                <h3 class="text-xl font-bold mb-4">Modifier le pointage</h3>
-                <form id="editPointageForm" class="space-y-4">
-                    <input type="hidden" id="editPointageId">
+                <h3 id="modalTitle" class="text-xl font-bold mb-4"></h3>
+                <form id="entryForm" class="space-y-4">
+                    <input type="hidden" id="entryDate">
+                    <input type="hidden" id="entryId">
                     <div>
-                        <label for="editChantier" class="text-sm font-medium">Chantier</label>
-                        <select id="editChantier" class="w-full border p-2 rounded mt-1" required></select>
+                        <label for="entryChantier" class="text-sm font-medium">Chantier</label>
+                        <select id="entryChantier" class="w-full border p-2 rounded mt-1" required></select>
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div><label for="editDate" class="text-sm font-medium">Date</label><input id="editDate" type="date" class="w-full border p-2 rounded mt-1" required /></div>
-                        <div><label for="editStartTime" class="text-sm font-medium">Début</label><input id="editStartTime" type="time" class="w-full border p-2 rounded mt-1" required /></div>
-                        <div><label for="editEndTime" class="text-sm font-medium">Fin</label><input id="editEndTime" type="time" class="w-full border p-2 rounded mt-1" required /></div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div><label for="entryStartTime" class="text-sm font-medium">Début</label><input id="entryStartTime" type="time" class="w-full border p-2 rounded mt-1" required /></div>
+                        <div><label for="entryEndTime" class="text-sm font-medium">Fin</label><input id="entryEndTime" type="time" class="w-full border p-2 rounded mt-1" required /></div>
                     </div>
                     <div>
                         <label class="text-sm font-medium">Collègues</label>
-                        <div id="editColleaguesContainer" class="mt-1 p-2 border rounded max-h-32 overflow-y-auto space-y-1"></div>
+                        <div id="entryColleaguesContainer" class="mt-1 p-2 border rounded max-h-32 overflow-y-auto space-y-1"></div>
                     </div>
                     <div>
-                        <label for="editNotes" class="text-sm font-medium">Notes</label>
-                        <textarea id="editNotes" class="w-full border p-2 rounded mt-1"></textarea>
+                        <label for="entryNotes" class="text-sm font-medium">Notes</label>
+                        <textarea id="entryNotes" class="w-full border p-2 rounded mt-1"></textarea>
                     </div>
                     <div class="flex justify-end gap-4 pt-4 border-t">
-                        <button type="button" id="cancelEditBtn" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">Annuler</button>
+                        <button type="button" id="cancelEntryBtn" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">Annuler</button>
                         <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded">Enregistrer</button>
                     </div>
                 </form>
@@ -72,7 +67,7 @@ export async function render(params = {}) {
     `;
 
     setTimeout(async () => {
-        await cacheEditModalData(); // On charge les données pour la modale une seule fois
+        await cacheModalData();
         document.getElementById("prevWeekBtn").onclick = () => { currentWeekOffset--; loadHistoryForWeek(); };
         document.getElementById("nextWeekBtn").onclick = () => { currentWeekOffset++; loadHistoryForWeek(); };
         document.getElementById("downloadPdfBtn").onclick = generateHistoryPDF;
@@ -81,16 +76,13 @@ export async function render(params = {}) {
     }, 0);
 }
 
-async function cacheEditModalData() {
+async function cacheModalData() {
     const chantiersQuery = query(collection(db, "chantiers"), where("status", "==", "active"), orderBy("name"));
     const colleaguesQuery = query(collection(db, "colleagues"), orderBy("name"));
     const usersQuery = query(collection(db, "users"), where("status", "==", "approved"), orderBy("displayName"));
 
-    // CORRECTION: The variable name was incorrect here.
     const [chantiersSnapshot, colleaguesSnapshot, usersSnapshot] = await Promise.all([
-        getDocs(chantiersQuery),
-        getDocs(colleaguesQuery),
-        getDocs(usersQuery) // Corrected from usersSnapshot to usersQuery
+        getDocs(chantiersQuery), getDocs(colleaguesQuery), getDocs(usersQuery)
     ]);
 
     chantiersCache = chantiersSnapshot.docs.map(doc => doc.data().name);
@@ -100,213 +92,220 @@ async function cacheEditModalData() {
 }
 
 async function loadHistoryForWeek() {
-    if (!targetUser) return;
-    historyDataCache = [];
-
     const historyList = document.getElementById("historyList");
     const weekTotalsDisplay = document.getElementById("weekTotalsDisplay");
-    const currentPeriodDisplay = document.getElementById("currentPeriodDisplay");
-    
     const { startOfWeek, endOfWeek } = getWeekDateRange(currentWeekOffset);
     
-    const options = { day: 'numeric', month: 'long', timeZone: 'UTC' };
-    currentPeriodDisplay.textContent = `Semaine du ${startOfWeek.toLocaleDateString('fr-FR', options)} au ${endOfWeek.toLocaleDateString('fr-FR', options)}`;
-    historyList.innerHTML = "<p class='text-center p-4'>Chargement...</p>";
-    weekTotalsDisplay.innerHTML = "";
-    
-    try {
-        const pointagesQuery = query(
-            collection(db, "pointages"),
-            where("uid", "==", targetUser.uid),
-            where("timestamp", ">=", startOfWeek.toISOString()),
-            where("timestamp", "<=", endOfWeek.toISOString()),
-            orderBy("timestamp", "desc")
-        );
-        const pointagesSnapshot = await getDocs(pointagesQuery);
-        
-        if (pointagesSnapshot.empty) {
-            historyList.innerHTML = "<p class='text-center text-gray-500 p-4'>Aucun pointage trouvé pour cette période.</p>";
-            weekTotalsDisplay.textContent = "Total travail effectif : 0h 0min";
-            return;
-        }
-        
-        const pointages = pointagesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const pointageIds = pointages.map(p => p.id);
-        const trajetsMap = new Map();
+    document.getElementById("currentPeriodDisplay").textContent = `Semaine du ${startOfWeek.toLocaleDateString('fr-FR', {timeZone: 'UTC', day: 'numeric', month: 'long'})}`;
+    historyList.innerHTML = `<p class='text-center p-4'>Chargement...</p>`;
 
-        if (pointageIds.length > 0) {
-            const trajetsQuery = query(collection(db, "trajets"), 
-                where("id_utilisateur", "==", targetUser.uid),
-                where("id_pointage_arrivee", "in", pointageIds)
-            );
-            const trajetsSnapshot = await getDocs(trajetsQuery);
-            trajetsSnapshot.forEach(doc => {
-                const trajet = doc.data();
-                trajetsMap.set(trajet.id_pointage_arrivee, trajet);
+    const pointagesQuery = query(collection(db, "pointages"),
+        where("uid", "==", targetUser.uid),
+        where("timestamp", ">=", startOfWeek.toISOString()),
+        where("timestamp", "<=", endOfWeek.toISOString()),
+        orderBy("timestamp", "asc") // Tri par ordre chronologique pour la journée
+    );
+    const pointagesSnapshot = await getDocs(pointagesQuery);
+    historyDataCache = pointagesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    const pointagesByDate = historyDataCache.reduce((acc, p) => {
+        const date = new Date(p.timestamp).toISOString().split('T')[0];
+        if (!acc[date]) acc[date] = [];
+        acc[date].push(p);
+        return acc;
+    }, {});
+
+    historyList.innerHTML = "";
+    const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+    let totalEffectiveMs = 0;
+
+    for (let i = 0; i < 7; i++) {
+        const dayDate = new Date(startOfWeek);
+        dayDate.setUTCDate(startOfWeek.getUTCDate() + i);
+        const dateString = dayDate.toISOString().split('T')[0];
+        
+        const dayWrapper = document.createElement('div');
+        dayWrapper.className = 'bg-white p-4 rounded-lg shadow-sm';
+        
+        const dayHeader = document.createElement('div');
+        dayHeader.className = 'flex justify-between items-center border-b pb-2 mb-3';
+        dayHeader.innerHTML = `<h3 class="font-bold text-lg">${days[i]} ${dayDate.toLocaleDateString('fr-FR', {day: 'numeric', month: 'long'})}</h3>`;
+        
+        const addBtn = document.createElement('button');
+        addBtn.innerHTML = `+ Ajouter`;
+        addBtn.className = 'add-pointage-btn text-blue-600 hover:text-blue-800 text-sm font-semibold';
+        addBtn.dataset.date = dateString;
+        dayHeader.appendChild(addBtn);
+        
+        dayWrapper.appendChild(dayHeader);
+
+        const entriesContainer = document.createElement('div');
+        entriesContainer.className = 'space-y-3';
+        const dayEntries = pointagesByDate[dateString] || [];
+        
+        if (dayEntries.length === 0) {
+            entriesContainer.innerHTML = `<p class="text-gray-500 text-center py-4">Aucun pointage pour ce jour.</p>`;
+        } else {
+            dayEntries.forEach(d => {
+                entriesContainer.appendChild(createHistoryEntryElement(d));
+                if (d.endTime) {
+                    const duration = new Date(d.endTime) - new Date(d.timestamp) - (d.pauseDurationMs || 0);
+                    totalEffectiveMs += duration;
+                }
             });
         }
+        dayWrapper.appendChild(entriesContainer);
+        historyList.appendChild(dayWrapper);
+    }
+    
+    weekTotalsDisplay.textContent = `Total travail effectif : ${formatMilliseconds(totalEffectiveMs)}`;
+    historyList.addEventListener('click', handleHistoryClick);
+}
 
-        historyList.innerHTML = "";
-        let totalEffectiveMs = 0;
-        historyDataCache = pointages.map(p => ({ ...p, trajet: trajetsMap.get(p.id) }));
-
-        historyDataCache.forEach(d => {
-            historyList.appendChild(createHistoryEntryElement(d));
-            if (d.endTime) {
-                const totalDurationMs = new Date(d.endTime) - new Date(d.timestamp);
-                const pauseMs = d.pauseDurationMs || 0;
-                totalEffectiveMs += (totalDurationMs - pauseMs);
-            }
-        });
-        
-        weekTotalsDisplay.textContent = `Total travail effectif : ${formatMilliseconds(totalEffectiveMs)}`;
-
-    } catch (error) {
-        console.error("Erreur de chargement de l'historique:", error);
-        historyList.innerHTML = `<p class='text-red-500 text-center p-4'>Erreur de chargement.</p>`;
+function handleHistoryClick(e) {
+    const target = e.target;
+    if (target.closest('.add-pointage-btn')) {
+        openEntryModal({ date: target.closest('.add-pointage-btn').dataset.date });
+    } else if (target.closest('.edit-btn')) {
+        const pointageId = target.closest('.edit-btn').dataset.id;
+        const pointageData = historyDataCache.find(p => p.id === pointageId);
+        openEntryModal(pointageData);
+    } else if (target.closest('.delete-btn')) {
+        const pointageId = target.closest('.delete-btn').dataset.id;
+        deletePointage(pointageId);
     }
 }
 
 function createHistoryEntryElement(d) {
     const wrapper = document.createElement("div");
-    wrapper.className = "p-4 border rounded-lg bg-white relative shadow-sm space-y-1";
+    wrapper.className = "p-3 border rounded-lg bg-gray-50 relative";
     
     const startDate = new Date(d.timestamp);
     const endDate = d.endTime ? new Date(d.endTime) : null;
-    let timeDisplay = "", durationDisplay = "", pauseDisplay = "", travelDisplay = "";
 
+    let timeDisplay = "", durationDisplay = "";
     if (endDate) {
-        const timeFormat = { hour: '2-digit', minute: '2-digit' };
-        timeDisplay = `<div>De ${startDate.toLocaleTimeString('fr-FR', timeFormat)} à ${endDate.toLocaleTimeString('fr-FR', timeFormat)}</div>`;
-        
-        const totalDurationMs = endDate - startDate;
-        const pauseMs = d.pauseDurationMs || 0;
-        const effectiveWorkMs = totalDurationMs - pauseMs;
-
-        durationDisplay = `<div class="text-sm text-gray-600"><strong>Durée effective :</strong> ${formatMilliseconds(effectiveWorkMs)}</div>`;
-        if (pauseMs > 0) {
-            pauseDisplay = `<div class="text-sm text-yellow-600">Pause : ${formatMilliseconds(pauseMs)}</div>`;
-        }
-    }
-
-    if (d.trajet) {
-        travelDisplay = `<div class="text-sm text-blue-600">🚗 Trajet : ${d.trajet.distance_km} km (${d.trajet.duree_min} min)</div>`;
+        timeDisplay = `De ${startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} à ${endDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+        durationDisplay = `<span class="font-bold text-purple-700">${formatMilliseconds(endDate - startDate - (d.pauseDurationMs || 0))}</span>`;
     }
 
     wrapper.innerHTML = `
-      <div class="font-bold text-lg">${d.chantier}</div>
-      <div>${startDate.toLocaleDateString('fr-FR', {weekday: 'long', day: 'numeric', month: 'long'})}</div>
-      ${timeDisplay}
-      ${durationDisplay}
-      ${pauseDisplay}
-      ${travelDisplay}
-      <div class="mt-2"><strong>Collègues :</strong> ${Array.isArray(d.colleagues) ? d.colleagues.join(", ") : 'N/A'}</div>
-      ${d.notes ? `<div class="mt-1 pt-2 border-t text-sm"><strong>Notes :</strong> ${d.notes}</div>` : ""}
+      <div class="flex justify-between items-start">
+        <div>
+            <div class="font-bold">${d.chantier}</div>
+            <div class="text-sm text-gray-600">${timeDisplay}</div>
+            <div class="text-xs mt-1">Collègues : ${Array.isArray(d.colleagues) && d.colleagues.length > 0 ? d.colleagues.join(", ") : 'Aucun'}</div>
+        </div>
+        <div class="text-right">
+            ${durationDisplay}
+        </div>
+      </div>
+      ${d.notes ? `<div class="mt-2 pt-2 border-t text-xs text-gray-500"><strong>Notes:</strong> ${d.notes}</div>` : ""}
     `;
 
     if (isAdmin || currentUser.uid === targetUser.uid) {
         const controlsWrapper = document.createElement("div");
         controlsWrapper.className = "absolute top-2 right-3 flex gap-2";
-
-        const editBtn = document.createElement("button");
-        editBtn.innerHTML = `✏️`;
-        editBtn.className = "text-gray-400 hover:text-blue-600 font-bold";
-        editBtn.title = "Modifier ce pointage";
-        editBtn.onclick = () => openEditModal(d);
-        controlsWrapper.appendChild(editBtn);
-
-        const deleteBtn = document.createElement("button");
-        deleteBtn.textContent = "✖";
-        deleteBtn.className = "text-gray-400 hover:text-red-600 font-bold";
-        deleteBtn.title = "Supprimer ce pointage";
-        deleteBtn.onclick = async () => {
-            const confirmed = await showConfirmationModal("Confirmation", "Supprimer ce pointage ?");
-            if (confirmed) {
-                await deleteDoc(doc(db, "pointages", d.id));
-                loadHistoryForWeek();
-            }
-        };
-        controlsWrapper.appendChild(deleteBtn);
+        controlsWrapper.innerHTML = `
+            <button class="edit-btn text-gray-400 hover:text-blue-600 font-bold" title="Modifier" data-id="${d.id}">✏️</button>
+            <button class="delete-btn text-gray-400 hover:text-red-600 font-bold" title="Supprimer" data-id="${d.id}">✖</button>
+        `;
         wrapper.appendChild(controlsWrapper);
     }
     return wrapper;
 }
 
-function openEditModal(pointage) {
-    const modal = document.getElementById('editPointageModal');
-    const form = document.getElementById('editPointageForm');
-    
-    document.getElementById('editPointageId').value = pointage.id;
-    
-    const chantierSelect = document.getElementById('editChantier');
-    chantierSelect.innerHTML = chantiersCache.map(name => `<option value="${name}" ${name === pointage.chantier ? 'selected' : ''}>${name}</option>`).join('');
+async function deletePointage(pointageId) {
+    const confirmed = await showConfirmationModal("Confirmation", "Supprimer ce pointage ?");
+    if (confirmed) {
+        await deleteDoc(doc(db, "pointages", pointageId));
+        loadHistoryForWeek();
+    }
+}
 
-    const startDate = new Date(pointage.timestamp);
-    const endDate = new Date(pointage.endTime);
-    document.getElementById('editDate').value = startDate.toISOString().split('T')[0];
-    document.getElementById('editStartTime').value = startDate.toTimeString().substring(0, 5);
-    document.getElementById('editEndTime').value = endDate.toTimeString().substring(0, 5);
+function openEntryModal(data = {}) {
+    const modal = document.getElementById('entryModal');
+    const form = document.getElementById('entryForm');
+    const title = document.getElementById('modalTitle');
+    form.reset();
 
-    const colleaguesContainer = document.getElementById('editColleaguesContainer');
+    const isEditing = !!data.id;
+    document.getElementById('entryId').value = isEditing ? data.id : '';
+    const dateString = isEditing ? new Date(data.timestamp).toISOString().split('T')[0] : data.date;
+    document.getElementById('entryDate').value = dateString;
+    
+    title.textContent = isEditing ? "Modifier le pointage" : `Ajouter un pointage pour le ${new Date(dateString + 'T12:00:00Z').toLocaleDateString('fr-FR', {day:'numeric', month:'long'})}`;
+    
+    const chantierSelect = document.getElementById('entryChantier');
+    chantierSelect.innerHTML = '<option value="">-- Choisissez --</option>' + chantiersCache.map(name => `<option value="${name}" ${isEditing && name === data.chantier ? 'selected' : ''}>${name}</option>`).join('');
+
+    if (isEditing) {
+        const startDate = new Date(data.timestamp);
+        const endDate = new Date(data.endTime);
+        document.getElementById('entryStartTime').value = startDate.toTimeString().substring(0, 5);
+        document.getElementById('entryEndTime').value = endDate.toTimeString().substring(0, 5);
+        document.getElementById('entryNotes').value = data.notes || '';
+    }
+    
+    const colleaguesContainer = document.getElementById('entryColleaguesContainer');
+    const checkedColleagues = isEditing ? data.colleagues || [] : [];
     colleaguesContainer.innerHTML = colleaguesCache.map(name => `
-        <label class="flex items-center gap-2">
-            <input type="checkbox" value="${name}" name="editColleagues" ${(pointage.colleagues || []).includes(name) ? 'checked' : ''} />
-            <span>${name}</span>
-        </label>
+        <label class="flex items-center gap-2"><input type="checkbox" value="${name}" name="entryColleagues" ${checkedColleagues.includes(name) ? 'checked' : ''} /><span>${name}</span></label>
     `).join('');
 
-    document.getElementById('editNotes').value = pointage.notes || '';
-
-    form.onsubmit = savePointageChanges;
-    document.getElementById('cancelEditBtn').onclick = () => modal.classList.add('hidden');
+    form.onsubmit = saveEntry;
+    document.getElementById('cancelEntryBtn').onclick = () => modal.classList.add('hidden');
     modal.classList.remove('hidden');
 }
 
-async function savePointageChanges(e) {
+async function saveEntry(e) {
     e.preventDefault();
-    const modal = document.getElementById('editPointageModal');
-    const pointageId = document.getElementById('editPointageId').value;
+    const modal = document.getElementById('entryModal');
+    const entryId = document.getElementById('entryId').value;
+    const date = document.getElementById('entryDate').value;
+    const startTime = document.getElementById('entryStartTime').value;
+    const endTime = document.getElementById('entryEndTime').value;
     
-    const date = document.getElementById('editDate').value;
-    const startTime = document.getElementById('editStartTime').value;
-    const endTime = document.getElementById('editEndTime').value;
-    
-    const newStartTimestamp = new Date(`${date}T${startTime}`).toISOString();
-    const newEndTimestamp = new Date(`${date}T${endTime}`).toISOString();
-
-    if (newEndTimestamp <= newStartTimestamp) {
+    if (endTime <= startTime) {
         showInfoModal("Erreur", "L'heure de fin doit être après l'heure de début.");
         return;
     }
 
-    const selectedColleagues = Array.from(document.querySelectorAll('input[name="editColleagues"]:checked')).map(el => el.value);
+    const selectedColleagues = Array.from(document.querySelectorAll('input[name="entryColleagues"]:checked')).map(el => el.value);
 
-    const updatedData = {
-        chantier: document.getElementById('editChantier').value,
-        timestamp: newStartTimestamp,
-        endTime: newEndTimestamp,
-        colleagues: selectedColleagues.length ? selectedColleagues : ["Seul"],
-        notes: document.getElementById('editNotes').value.trim()
+    const dataToSave = {
+        chantier: document.getElementById('entryChantier').value,
+        timestamp: new Date(`${date}T${startTime}`).toISOString(),
+        endTime: new Date(`${date}T${endTime}`).toISOString(),
+        colleagues: selectedColleagues,
+        notes: document.getElementById('entryNotes').value.trim()
     };
 
     try {
-        const pointageRef = doc(db, "pointages", pointageId);
-        await updateDoc(pointageRef, updatedData);
+        if (entryId) { // Mise à jour
+            const pointageRef = doc(db, "pointages", entryId);
+            await updateDoc(pointageRef, dataToSave);
+            showInfoModal("Succès", "Le pointage a été mis à jour.");
+        } else { // Ajout
+            const fullData = {
+                ...dataToSave,
+                uid: targetUser.uid,
+                userName: targetUser.name === "Mon" ? currentUser.displayName : targetUser.name,
+                createdAt: serverTimestamp(),
+                status: 'completed'
+            };
+            await addDoc(collection(db, "pointages"), fullData);
+            showInfoModal("Succès", "Le pointage a été ajouté.");
+        }
         modal.classList.add('hidden');
-        showInfoModal("Succès", "Le pointage a été mis à jour.");
         loadHistoryForWeek();
     } catch (error) {
-        console.error("Erreur de mise à jour du pointage:", error);
-        showInfoModal("Erreur", "La mise à jour a échoué.");
+        console.error("Erreur de sauvegarde:", error);
+        showInfoModal("Erreur", "L'enregistrement a échoué.");
     }
 }
 
-/**
- * Génère un PDF d'historique simple et compact, avec des séparateurs de jours,
- * optimisé pour tenir sur une seule page, et qui filtre les remarques automatiques.
- */
 function generateHistoryPDF() {
-    // 1. Vérification initiale
     if (historyDataCache.length === 0) {
         showInfoModal("Information", "Il n'y a rien à télécharger pour cette période.");
         return;
@@ -317,10 +316,8 @@ function generateHistoryPDF() {
         return;
     }
 
-    // --- ÉTAPE A : Tri des données ---
     historyDataCache.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
-    // --- ÉTAPE B : Création du document et de l'en-tête ---
     const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
     const userName = targetUser.name === "Mon" ? currentUser.displayName : targetUser.name;
     const { startOfWeek, endOfWeek } = getWeekDateRange(currentWeekOffset);
@@ -335,13 +332,14 @@ function generateHistoryPDF() {
     doc.text(`Employé : ${userName}`, 40, 75);
     doc.text(`Semaine du ${startOfWeek.toLocaleDateString('fr-FR')} au ${endOfWeek.toLocaleDateString('fr-FR')}`, 40, 85);
 
-    // --- ÉTAPE C : Préparation du corps du tableau avec séparateurs de jours ---
     const tableHead = [['Date', 'Chantier', 'Durée Travail', 'Collègues', 'Remarques']];
     const tableBody = [];
     let currentDayKey = null;
     let totalEffectiveMs = 0;
 
     historyDataCache.forEach(d => {
+        if (!d.endTime) return; // Ignore les pointages non terminés
+
         const startDate = new Date(d.timestamp);
         const dayKey = startDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' });
 
@@ -353,62 +351,36 @@ function generateHistoryPDF() {
                 styles: { fillColor: '#f3f4f6', fontStyle: 'bold', textColor: '#374151' }
             }]);
         }
-
-        let durationStr = 'En cours';
-        if (d.endTime) {
-            const effectiveWorkMs = (new Date(d.endTime) - startDate) - (d.pauseDurationMs || 0);
-            durationStr = formatMilliseconds(effectiveWorkMs);
-            totalEffectiveMs += effectiveWorkMs;
-        }
+        
+        const effectiveWorkMs = (new Date(d.endTime) - startDate) - (d.pauseDurationMs || 0);
+        const durationStr = formatMilliseconds(effectiveWorkMs);
+        totalEffectiveMs += effectiveWorkMs;
         
         const dateStr = startDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
         const colleaguesStr = Array.isArray(d.colleagues) && d.colleagues.length > 0 ? d.colleagues.join(", ") : 'Aucun';
-        
-        // --- NOUVELLE LOGIQUE DE FILTRAGE ---
-        // On ne garde que les remarques qui NE SONT PAS des logs de modification.
-        let humanNotes = '';
-        if (d.notes) {
-            // Sépare les notes par le "---" et garde seulement les parties qui ne sont pas des logs.
-            const notesParts = d.notes.split('---');
-            const filteredParts = notesParts.filter(part => !part.includes("Modification (par"));
-            humanNotes = filteredParts.join(' ').trim(); // Rejoint les parties valides.
-        }
+        let humanNotes = d.notes ? d.notes.split('---').filter(part => !part.includes("Modification (par")).join(' ').trim() : '';
 
         tableBody.push([dateStr, d.chantier, durationStr, colleaguesStr, humanNotes]);
     });
 
-    // --- ÉTAPE D : Génération du PDF avec autoTable ---
     doc.autoTable({
         startY: 100,
         head: tableHead,
         body: tableBody,
         theme: 'striped',
-        headStyles: { 
-            fillColor: [41, 51, 92],
-            textColor: 255, 
-            fontStyle: 'bold' 
-        },
-        styles: {
-            fontSize: 8,
-            cellPadding: 4,
-            overflow: 'linebreak'
-        },
+        headStyles: { fillColor: [41, 51, 92], textColor: 255, fontStyle: 'bold' },
+        styles: { fontSize: 8, cellPadding: 4, overflow: 'linebreak' },
         columnStyles: {
-            0: { cellWidth: 40 },
-            1: { cellWidth: 'auto' },
-            2: { cellWidth: 60 },
-            3: { cellWidth: 80 },
-            4: { cellWidth: 'auto' }
+            0: { cellWidth: 40 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 60 },
+            3: { cellWidth: 80 }, 4: { cellWidth: 'auto' }
         }
     });
 
-    // --- ÉTAPE E : Ajout du total en bas de page ---
     const finalY = doc.lastAutoTable.finalY;
     doc.setFontSize(12);
     doc.setFont(undefined, 'bold');
     doc.text(`Total travail effectif : ${formatMilliseconds(totalEffectiveMs)}`, 40, finalY + 20);
 
-    // --- ÉTAPE F : Sauvegarde du fichier ---
     const fileName = `Historique_${userName.replace(/ /g, '_')}_${startOfWeek.toISOString().split('T')[0]}.pdf`;
     doc.save(fileName);
 }

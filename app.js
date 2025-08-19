@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 // CORRIGÉ : Ajout de writeBatch et de toutes les fonctions nécessaires pour le script
-import { getFirestore, doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit, enableIndexedDbPersistence, writeBatch, addDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit, enableIndexedDbPersistence, writeBatch, addDoc, initializeFirestore, CACHE_SIZE_UNLIMITED } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 
 // --- CONFIGURATION ---
 const firebaseConfig = {
@@ -16,17 +16,10 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-export const db = getFirestore(app);
-
-enableIndexedDbPersistence(db)
-    .catch((err) => {
-        console.error("Erreur d'activation de la persistance hors ligne: ", err.code);
-    });
-
-// --- LIGNE TEMPORAIRE POUR LE SCRIPT DE NETTOYAGE ---
-// CORRIGÉ : Placée au bon endroit, après l'initialisation de `db` et des imports.
-// Pensez à la supprimer une fois le nettoyage terminé !
-window.firebaseTools = { db, collection, query, orderBy, getDocs, writeBatch, doc, addDoc, serverTimestamp, where };
+// Syntaxe mise à jour pour la persistance hors-ligne
+export const db = initializeFirestore(app, {
+    cacheSizeBytes: CACHE_SIZE_UNLIMITED
+});
 
 
 // --- VARIABLES GLOBALES DE L'APPLICATION ---
@@ -38,12 +31,12 @@ let isMasqueradingAsUser = false;
 // --- VARIABLES DE LA MODALE ---
 let genericModal, modalTitle, modalMessage, modalConfirmBtn, modalCancelBtn;
 
-// --- DÉFINITION DES MENUS ---
+// --- DÉFINITION DES MENUS (MISE À JOUR ICI) ---
 const userTabs = [
     { id: 'user-dashboard', name: 'Planning' },
     { id: 'user-updates', name: 'Détails chantier' },
     { id: 'chantiers', name: 'Infos Chantiers' },
-    { id: 'add-entry', name: 'Nouveau Pointage' },
+    // { id: 'add-entry', name: 'Nouveau Pointage' }, // <-- CETTE LIGNE EST SUPPRIMÉE
     { id: 'user-history', name: 'Mon Historique' },
 ];
 

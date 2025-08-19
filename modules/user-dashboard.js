@@ -16,6 +16,9 @@ export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto space-y-8">
             <div id="live-tracker-container" class="bg-white p-6 rounded-lg shadow-lg"></div>
+            
+            <div id="missed-pointage-suggestions" class="space-y-4"></div>
+
             <div>
                 <h2 class="text-xl font-bold mb-2">🗓️ Mon Planning de la Semaine</h2>
                 <div class="bg-white rounded-lg shadow-sm p-4">
@@ -76,6 +79,12 @@ export async function render() {
         try {
             await cacheDataForModals();
             await checkForOpenPointage();
+            
+            // Si aucun pointage n'est actif, on cherche les suggestions
+            if (!localStorage.getItem('activePointage')) {
+                checkForMissedPointages();
+            }
+
             displayWeekView();
         } catch (error) {
             console.error("Erreur critique dans le rendu du dashboard utilisateur:", error);
@@ -526,4 +535,143 @@ function createTaskElement(task) {
     const note = task.notes ? `<div class="mt-2 pt-2 border-t text-blue-600 text-xs"><strong>Note:</strong> ${task.notes}</div>` : '';
     el.innerHTML = `<div class="font-semibold">${task.chantierName}</div><div class="text-xs text-gray-700 mt-1">${start}${task.duration || ''}h prévues</div><div class="text-xs text-gray-500 mt-1">${team}</div>${note}`;
     return el;
+}
+
+// --- NOUVELLES FONCTIONS POUR LA SUGGESTION DE POINTAGES ---
+
+/**
+ * Cherche les pointages récents où l'utilisateur était listé comme collègue 
+ * mais n'a pas de pointage correspondant, et affiche des suggestions.
+ */
+async function checkForMissedPointages() {
+    const suggestionsContainer = document.getElementById('missed-pointage-suggestions');
+    if (!suggestionsContainer) return;
+
+    // 1. Définir la période de recherche (ex: les 2 derniers jours)
+    const twoDaysAgo = new Date();
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+
+    // 2. Trouver les pointages où l'utilisateur est dans la liste "colleagues"
+    const suggestionsQuery = query(
+        collection(db, "pointages"),
+        where("colleagues", "array-contains", currentUser.displayName),
+        where("timestamp", ">=", twoDaysAgo.toISOString()),
+        orderBy("timestamp", "desc")
+    );
+    
+    // 3. Récupérer les propres pointages de l'utilisateur pour la même période
+    const userPointagesQuery = query(
+        collection(db, "pointages"),
+        where("uid", "==", currentUser.uid),
+        where("timestamp", ">=", twoDaysAgo.toISOString())
+    );
+
+    const [suggestionsSnapshot, userPointagesSnapshot] = await Promise.all([
+        getDocs(suggestionsQuery),
+        getDocs(userPointagesQuery)
+    ]);
+
+    // 4. Créer un set des pointages de l'utilisateur pour une vérification rapide
+    const userExistingPointages = new Set();
+    userPointagesSnapshot.forEach(doc => {
+        const data = doc.data();
+        const day = new Date(data.timestamp).toISOString().split('T')[0];
+        userExistingPointages.add(`${day}_${data.chantier}`); // Clé unique: "2025-08-19_Chantier Durand"
+    });
+
+    // 5. Filtrer les suggestions pour ne garder que les pertinentes
+    const refusedPointages = JSON.parse(localStorage.getItem('refusedPointages') || '[]');
+    const finalSuggestions = [];
+
+    suggestionsSnapshot.forEach(doc => {
+        const suggestion = { id: doc.id, ...doc.data() };
+        // On ne suggère que les pointages terminés
+        if (!suggestion.endTime) return;
+        
+        const suggestionDay = new Date(suggestion.timestamp).toISOString().split('T')[0];
+        const suggestionKey = `${suggestionDay}_${suggestion.chantier}`;
+
+        if (!refusedPointages.includes(suggestion.id) && !userExistingPointages.has(suggestionKey)) {
+            finalSuggestions.push(suggestion);
+        }
+    });
+
+    if (finalSuggestions.length > 0) {
+        renderSuggestions(finalSuggestions);
+    }
+}
+
+/**
+ * Affiche les cartes de suggestion dans le DOM.
+ */
+function renderSuggestions(suggestions) {
+    const container = document.getElementById('missed-pointage-suggestions');
+    container.innerHTML = `<h3 class="text-lg font-semibold text-gray-700">Suggestions de pointages manqués :</h3>`;
+
+    suggestions.forEach(sugg => {
+        const start = new Date(sugg.timestamp);
+        const end = new Date(sugg.endTime);
+        const timeFormat = { hour: '2-digit', minute: '2-digit' };
+
+        const card = document.createElement('div');
+        card.className = 'bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg shadow-sm';
+        card.innerHTML = `
+            <p class="font-semibold">${sugg.userName} a pointé sur le chantier <strong class="text-purple-700">${sugg.chantier}</strong>.</p>
+            <p class="text-sm text-gray-600">Le ${start.toLocaleDateString('fr-FR')} de ${start.toLocaleTimeString('fr-FR', timeFormat)} à ${end.toLocaleTimeString('fr-FR', timeFormat)}.</p>
+            <p class="mt-2 font-medium">Étiez-vous avec cette personne ?</p>
+            <div class="flex gap-4 mt-3">
+                <button class="accept-suggestion-btn bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded-lg" data-sugg-id="${sugg.id}">Oui, accepter</button>
+                <button class="refuse-suggestion-btn bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded-lg" data-sugg-id="${sugg.id}">Non, refuser</button>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+
+    // Attacher les écouteurs d'événements
+    container.addEventListener('click', handleSuggestionClick);
+}
+
+/**
+ * Gère les clics sur les boutons "Accepter" ou "Refuser".
+ */
+async function handleSuggestionClick(e) {
+    const button = e.target;
+    const suggId = button.dataset.suggId;
+
+    if (!suggId) return;
+
+    if (button.classList.contains('accept-suggestion-btn')) {
+        const suggDoc = await getDoc(doc(db, "pointages", suggId));
+        if (!suggDoc.exists()) {
+             showInfoModal("Erreur", "Le pointage original n'a pas été trouvé.");
+             return;
+        }
+        const suggestion = suggDoc.data();
+        
+        const newPointageData = {
+            ...suggestion, // Copie toutes les données (chantier, heures, etc.)
+            uid: currentUser.uid,
+            userName: currentUser.displayName,
+            createdAt: serverTimestamp(),
+            notes: `(Pointage ajouté depuis la saisie de ${suggestion.userName}) --- ${suggestion.notes || ''}`
+        };
+
+        try {
+            await addDoc(collection(db, "pointages"), newPointageData);
+            showInfoModal("Succès", "Le pointage a été ajouté à votre historique.");
+        } catch (error) {
+            console.error(error);
+            showInfoModal("Erreur", "Impossible d'ajouter le pointage.");
+        }
+
+    } else if (button.classList.contains('refuse-suggestion-btn')) {
+        const refusedPointages = JSON.parse(localStorage.getItem('refusedPointages') || '[]');
+        if (!refusedPointages.includes(suggId)) {
+            refusedPointages.push(suggId);
+            localStorage.setItem('refusedPointages', JSON.stringify(refusedPointages));
+        }
+    }
+    
+    // Cache la carte de suggestion après l'action
+    button.closest('.bg-yellow-50').remove();
 }
