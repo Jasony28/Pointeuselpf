@@ -186,30 +186,36 @@ function createHistoryEntryElement(d) {
     let timeDisplay = "", durationDisplay = "";
     if (endDate) {
         timeDisplay = `De ${startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} à ${endDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
-        durationDisplay = `<span class="font-bold text-purple-700">${formatMilliseconds(endDate - startDate - (d.pauseDurationMs || 0))}</span>`;
+        // On prépare la durée ici pour la réutiliser plus tard
+        durationDisplay = `<div class="text-sm font-bold text-purple-700 mt-1">${formatMilliseconds(endDate - startDate - (d.pauseDurationMs || 0))}</div>`;
     }
 
+    // 1. On retire la durée de l'affichage principal (elle n'est plus dans un div à droite)
     wrapper.innerHTML = `
-      <div class="flex justify-between items-start">
-        <div>
-            <div class="font-bold">${d.chantier}</div>
-            <div class="text-sm text-gray-600">${timeDisplay}</div>
-            <div class="text-xs mt-1">Collègues : ${Array.isArray(d.colleagues) && d.colleagues.length > 0 ? d.colleagues.join(", ") : 'Aucun'}</div>
-        </div>
-        <div class="text-right">
-            ${durationDisplay}
-        </div>
+      <div class="pr-16"> <div class="font-bold">${d.chantier}</div>
+        <div class="text-sm text-gray-600">${timeDisplay}</div>
+        <div class="text-xs mt-1">Collègues : ${Array.isArray(d.colleagues) && d.colleagues.length > 0 ? d.colleagues.join(", ") : 'Aucun'}</div>
       </div>
       ${d.notes ? `<div class="mt-2 pt-2 border-t text-xs text-gray-500"><strong>Notes:</strong> ${d.notes}</div>` : ""}
     `;
 
     if (isAdmin || currentUser.uid === targetUser.uid) {
         const controlsWrapper = document.createElement("div");
-        controlsWrapper.className = "absolute top-2 right-3 flex gap-2";
-        controlsWrapper.innerHTML = `
+        // 2. On change le style du conteneur des contrôles pour aligner verticalement
+        controlsWrapper.className = "absolute top-2 right-3 flex flex-col items-end";
+
+        // On crée un sous-conteneur pour les boutons
+        const buttonsDiv = document.createElement('div');
+        buttonsDiv.className = 'flex gap-2';
+        buttonsDiv.innerHTML = `
             <button class="edit-btn text-gray-400 hover:text-blue-600 font-bold" title="Modifier" data-id="${d.id}">✏️</button>
-            <button class="delete-btn text-gray-400 hover:text-red-600 font-bold" title="Supprimer" data-id="${d.id}">✖</button>
+            <button class="delete-btn text-gray-400 hover:text-red-600 font-bold" title="Supprimer" data-id="${d.id}">✖️</button>
         `;
+        
+        // 3. On ajoute les boutons, PUIS la durée juste en dessous
+        controlsWrapper.appendChild(buttonsDiv);
+        controlsWrapper.innerHTML += durationDisplay; // On ajoute la durée ici
+        
         wrapper.appendChild(controlsWrapper);
     }
     return wrapper;
