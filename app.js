@@ -1,7 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
-// CORRIGÉ : Ajout de writeBatch et de toutes les fonctions nécessaires pour le script
-import { getFirestore, doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit, enableIndexedDbPersistence, writeBatch, addDoc, initializeFirestore, CACHE_SIZE_UNLIMITED } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit, writeBatch, addDoc, initializeFirestore, CACHE_SIZE_UNLIMITED } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 
 // --- CONFIGURATION ---
 const firebaseConfig = {
@@ -31,12 +30,11 @@ let isMasqueradingAsUser = false;
 // --- VARIABLES DE LA MODALE ---
 let genericModal, modalTitle, modalMessage, modalConfirmBtn, modalCancelBtn;
 
-// --- DÉFINITION DES MENUS (MISE À JOUR ICI) ---
+// --- DÉFINITION DES MENUS ---
 const userTabs = [
     { id: 'user-dashboard', name: 'Planning' },
     { id: 'user-updates', name: 'Détails chantier' },
     { id: 'chantiers', name: 'Infos Chantiers' },
-    // { id: 'add-entry', name: 'Nouveau Pointage' }, // <-- CETTE LIGNE EST SUPPRIMÉE
     { id: 'user-history', name: 'Mon Historique' },
 ];
 
@@ -232,14 +230,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     onAuthStateChanged(auth, async (user) => {
-        try {
-            authContainer.style.display = 'none';
-            pendingContainer.style.display = 'none';
-            appContainer.style.display = 'none';
-            loader.style.display = 'flex';
+        authContainer.style.display = 'none';
+        pendingContainer.style.display = 'none';
+        appContainer.style.display = 'none';
+        loader.style.display = 'flex';
 
-            if (user) {
-                const userRef = doc(db, "users", user.uid);
+        if (user) {
+            const userRef = doc(db, "users", user.uid);
+            try {
                 const userDoc = await getDoc(userRef);
                 if (userDoc.exists()) {
                     const userData = userDoc.data();
@@ -250,7 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             pendingContainer.style.display = 'flex';
                             break;
                         case 'banned':
-                            showInfoModal("Compte Banni", "Votre compte a été banni par un administrateur.");
+                            showInfoModal("Compte Banni", "Votre compte a été banni.");
                             signOut(auth);
                             break;
                         case 'approved':
@@ -261,43 +259,55 @@ document.addEventListener('DOMContentLoaded', () => {
                             appContainer.style.display = 'block';
                             break;
                         default:
-                            showInfoModal("Erreur de Compte", "Le statut de votre compte est inconnu.");
+                            showInfoModal("Erreur de Compte", "Statut de compte inconnu.");
                             signOut(auth);
                     }
                 } else {
+                    showInfoModal("Erreur de Compte", "Compte non trouvé dans la base de données.");
                     signOut(auth);
                 }
-            } else {
-                currentUser = null;
-                isAdmin = false;
-                isMasqueradingAsUser = false;
+            } catch (error) {
+                console.error("Erreur de récupération du profil (probablement hors-ligne):", error);
+                showInfoModal("Mode hors-ligne", "Impossible de vérifier votre compte sans connexion. Veuillez vous reconnecter pour le premier démarrage.");
                 authContainer.style.display = 'flex';
             }
-        } catch (error) {
-            console.error("Erreur critique d'initialisation :", error);
-            showInfoModal("Erreur Critique", "Une erreur critique est survenue.");
-            if (auth.currentUser) signOut(auth);
-            else authContainer.style.display = 'flex';
-        } finally {
-            loader.style.display = 'none';
+        } else {
+            currentUser = null;
+            isAdmin = false;
+            isMasqueradingAsUser = false;
+            authContainer.style.display = 'flex';
         }
+        loader.style.display = 'none';
     });
-
+    
+    // --- GESTION DU SERVICE WORKER ET DES MISES À JOUR (VERSION AMÉLIORÉE) ---
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('./sw.js').then(registration => {
-            registration.addEventListener('updatefound', () => {
-                const newWorker = registration.installing;
+        let newWorker;
+        const updateBanner = document.getElementById('update-banner');
+        const updateBtn = document.getElementById('update-btn');
+
+        navigator.serviceWorker.register('./sw.js').then(reg => {
+            reg.addEventListener('updatefound', () => {
+                // Une nouvelle version du SW a été trouvée
+                newWorker = reg.installing;
                 newWorker.addEventListener('statechange', () => {
                     if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                        const updateBanner = document.getElementById('update-banner');
+                        // Le nouveau SW est prêt, on affiche le bandeau
                         updateBanner.classList.remove('hidden');
-                        document.getElementById('update-btn').onclick = () => {
-                            newWorker.postMessage({ type: 'SKIP_WAITING' });
-                        };
                     }
                 });
             });
         });
+
+        // Quand l'utilisateur clique sur "Mettre à jour"
+        updateBtn.addEventListener('click', () => {
+            if (newWorker) {
+                newWorker.postMessage({ type: 'SKIP_WAITING' });
+                updateBanner.classList.add('hidden');
+            }
+        });
+
+        // Cet événement se déclenche quand le nouveau Service Worker a pris le contrôle
         let refreshing;
         navigator.serviceWorker.addEventListener('controllerchange', () => {
             if (refreshing) return;
