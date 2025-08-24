@@ -1,6 +1,7 @@
 import { collection, query, where, getDocs, orderBy, doc, getDoc, addDoc, serverTimestamp, updateDoc, limit } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, pageContent, showInfoModal } from "../app.js";
 import { getWeekDateRange } from "./utils.js";
+import { getActiveChantiers, getTeamMembers } from "./data-service.js"; // <-- NOUVEAU
 
 // --- CONFIGURATION ---
 const MAPBOX_ACCESS_TOKEN = "pk.eyJ1IjoiamFzb255MjgiLCJhIjoiY21lMDcyYWhzMDIyODJsczl0cmM0aTVjciJ9.V14cJXdBNoq3yAQTDeUg-A";
@@ -80,7 +81,6 @@ export async function render() {
             await cacheDataForModals();
             await checkForOpenPointage();
             
-            // Si aucun pointage n'est actif, on cherche les suggestions
             if (!localStorage.getItem('activePointage')) {
                 checkForMissedPointages();
             }
@@ -96,23 +96,14 @@ export async function render() {
  * Met en cache les listes de chantiers et de collègues pour les modales.
  */
 async function cacheDataForModals() {
-    const chantiersQuery = query(collection(db, "chantiers"), where("status", "==", "active"), orderBy("name"));
-    const colleaguesQuery = query(collection(db, "colleagues"), orderBy("name"));
-    const usersQuery = query(collection(db, "users"), where("status", "==", "approved"), orderBy("displayName"));
-
-    const [chantiersSnapshot, colleaguesSnapshot, usersSnapshot] = await Promise.all([
-        getDocs(chantiersQuery),
-        getDocs(colleaguesQuery),
-        getDocs(usersQuery)
-    ]);
-
-    chantiersCache = chantiersSnapshot.docs.map(doc => doc.data().name);
-    const colleagueNames = colleaguesSnapshot.docs.map(doc => doc.data().name);
-    const userNames = usersSnapshot.docs.map(doc => doc.data().displayName);
-
-    const combinedNames = [...new Set([...colleagueNames, ...userNames])];
-    colleaguesCache = combinedNames.sort((a, b) => a.localeCompare(b));
+    // La logique de requête complexe est remplacée par des appels simples
+    const chantiersData = await getActiveChantiers(); // <-- MODIFIÉ
+    chantiersCache = chantiersData.map(c => c.name); // On garde que les noms pour la compatibilité
+    colleaguesCache = await getTeamMembers(); // <-- MODIFIÉ
 }
+
+// ... Le reste du fichier user-dashboard.js ne change pas ...
+// (Toutes les fonctions comme checkForOpenPointage, initLiveTracker, startPointage, etc. restent identiques)
 
 /**
  * Vérifie s'il y a un pointage en cours et met à jour l'interface.
@@ -254,7 +245,7 @@ async function startPointage(chantierName, colleagues) {
             const newChantierAddress = newChantierSnapshot.docs[0].data().address;
             
             if (newChantierAddress !== startAddressForTravel) {
-                showInfoModal("Calcul du trajet", "Le calcul de la distance est en cours en arrière-plan...");
+                //showInfoModal("Calcul du trajet", "Le calcul de la distance est en cours en arrière-plan...");
                 calculateAndSaveTravel(startAddressForTravel, newChantierAddress, newPointageRef.id, isDriver);
             }
         }

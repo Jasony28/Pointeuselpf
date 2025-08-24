@@ -1,7 +1,6 @@
-// modules/admin-updates.js
-
-import { collection, doc, getDoc, setDoc, serverTimestamp, query, where, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, pageContent, showInfoModal } from "../app.js";
+import { getActiveChantiers } from "./data-service.js"; // <-- NOUVEAU
 
 let chantiersCache = [];
 
@@ -40,10 +39,7 @@ export async function render() {
 async function loadChantiers() {
     const select = document.getElementById('chantier-select');
     try {
-        const q = query(collection(db, "chantiers"), where("status", "==", "active"), orderBy("name"));
-        const snapshot = await getDocs(q);
-        chantiersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
+        chantiersCache = await getActiveChantiers(); // <-- MODIFIÉ
         chantiersCache.forEach(chantier => {
             select.innerHTML += `<option value="${chantier.id}">${chantier.name}</option>`;
         });

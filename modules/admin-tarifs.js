@@ -1,5 +1,6 @@
-import { collection, query, where, getDocs, doc, updateDoc, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, showInfoModal } from "../app.js";
+import { getUsers, getActiveChantiers } from "./data-service.js"; // <-- NOUVEAU
 
 let usersCache = [];
 let chantiersCache = [];
@@ -34,30 +35,23 @@ export async function render() {
     }, 0);
 }
 
-/**
- * Charge uniquement les utilisateurs et les chantiers actifs depuis Firestore.
- */
 async function loadData() {
-    const usersQuery = query(collection(db, "users"), where("status", "!=", "banned"));
-    const usersSnapshot = await getDocs(usersQuery);
-    usersCache = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-        .sort((a, b) => a.displayName.localeCompare(b.displayName));
-
-    const chantiersQuery = query(collection(db, "chantiers"), where("status", "==", "active"), orderBy("name"));
-    const chantiersSnapshot = await getDocs(chantiersQuery);
-    chantiersCache = chantiersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    usersCache = await getUsers(); // <-- MODIFIÉ
+    chantiersCache = await getActiveChantiers(); // <-- MODIFIÉ
 }
 
 function displayUsers() {
     const container = document.getElementById('user-rates-list');
     container.innerHTML = '';
 
-    if (usersCache.length === 0) {
+    const activeUsers = usersCache.filter(user => user.status !== 'banned'); // Filtre supplémentaire pour l'UI
+
+    if (activeUsers.length === 0) {
         container.innerHTML = `<p class="text-center text-gray-500">Aucun utilisateur actif trouvé.</p>`;
         return;
     }
 
-    usersCache.forEach(user => {
+    activeUsers.forEach(user => {
         const div = document.createElement('div');
         div.className = 'flex items-center justify-between p-2 border-b';
         div.innerHTML = `
@@ -71,20 +65,24 @@ function displayUsers() {
         container.appendChild(div);
     });
 
-    document.querySelectorAll('.save-user-rate-btn').forEach(btn => {
-        btn.onclick = async () => {
+    // Utilisation de la délégation d'événement pour la performance
+    container.addEventListener('click', async (e) => {
+        if (e.target.classList.contains('save-user-rate-btn')) {
+            const btn = e.target;
             const userId = btn.dataset.id;
             const newRate = document.getElementById(`user-rate-${userId}`).valueAsNumber;
             if (isNaN(newRate)) return;
             try {
                 await updateDoc(doc(db, "users", userId), { tauxHoraire: newRate });
                 btn.textContent = '✔️';
+                // Rafraîchir le cache des utilisateurs car une donnée a changé
+                await getUsers(true);
                 setTimeout(() => { btn.textContent = 'OK'; }, 1500);
             } catch (error) {
                 console.error("Erreur de mise à jour du taux horaire:", error);
                 showInfoModal("Erreur", "La mise à jour a échoué.");
             }
-        };
+        }
     });
 }
 
@@ -111,19 +109,23 @@ function displayChantiers() {
         container.appendChild(div);
     });
 
-    document.querySelectorAll('.save-chantier-rate-btn').forEach(btn => {
-        btn.onclick = async () => {
+    // Utilisation de la délégation d'événement
+    container.addEventListener('click', async (e) => {
+        if (e.target.classList.contains('save-chantier-rate-btn')) {
+            const btn = e.target;
             const chantierId = btn.dataset.id;
             const newRate = document.getElementById(`chantier-rate-${chantierId}`).valueAsNumber;
             if (isNaN(newRate)) return;
             try {
                 await updateDoc(doc(db, "chantiers", chantierId), { tauxFacturation: newRate });
                 btn.textContent = '✔️';
+                // Rafraîchir le cache des chantiers
+                await getActiveChantiers(true);
                 setTimeout(() => { btn.textContent = 'OK'; }, 1500);
             } catch (error) {
                 console.error("Erreur de mise à jour du taux de facturation:", error);
                 showInfoModal("Erreur", "La mise à jour a échoué.");
             }
-        };
+        }
     });
 }

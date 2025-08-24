@@ -1,16 +1,14 @@
-import { collection, query, where, orderBy, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, pageContent, isAdmin, currentUser, showInfoModal } from "../app.js";
-// CORRECTION: Import des fonctions utilitaires depuis le fichier centralisé.
-import { getWeekDateRange, getGoogleMapsUrl } from "./utils.js";
+import { doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { db, pageContent, isAdmin, showInfoModal } from "../app.js";
+import { getGoogleMapsUrl } from "./utils.js";
+import { getActiveChantiers } from "./data-service.js"; // <-- NOUVEAU
 
 let chantiersCache = [];
-
-// CORRECTION: La fonction locale getWeekDateRange a été supprimée pour utiliser celle de utils.js
 
 export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto">
-            <h2 class="text-2xl font-bold mb-4">📄 Informations sur mes Chantiers de la Semaine</h2>
+            <h2 class="text-2xl font-bold mb-4">📄 Liste des Chantiers Actifs</h2>
             <div id="chantiers-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
         </div>
         
@@ -31,60 +29,39 @@ export async function render() {
                 <input type="hidden" id="editChantierId">
                 <div><label for="editChantierName" class="text-sm font-medium">Nom</label><input id="editChantierName" type="text" class="w-full border p-2 rounded mt-1" required /></div>
                 <div><label for="editChantierAddress" class="text-sm font-medium">Adresse</label><input id="editChantierAddress" type="text" class="w-full border p-2 rounded mt-1" /></div>
-                <div><label class="text-sm font-medium">Codes</label><div class="flex items-center gap-2 mt-1"><input id="editNewKeyCodeInput" type="text" placeholder="Entrez un code" class="flex-grow border p-2 rounded" /><button type="button" id="editAddKeyCodeBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold px-4 py-2 rounded">Ajouter</button></div><ul id="editKeyCodesList" class="mt-2 space-y-1"></ul></div>
+                <div>
+                    <label class="text-sm font-medium">Codes</label>
+                    <div class="flex items-center gap-2 mt-1">
+                        <input id="editNewKeyCodeInput" type="text" placeholder="Entrez un code" class="flex-grow border p-2 rounded" />
+                        <button type="button" id="editAddKeyCodeBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold px-4 py-2 rounded">Ajouter</button>
+                    </div>
+                    <ul id="editKeyCodesList" class="mt-2 space-y-1"></ul>
+                </div>
                 <div><label for="editChantierInfo" class="text-sm font-medium">Infos</label><textarea id="editChantierInfo" class="w-full border p-2 rounded mt-1"></textarea></div>
-                <div class="flex justify-end gap-4 pt-4"><button type="button" id="cancelEditBtn" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">Annuler</button><button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Enregistrer</button></div>
+                <div class="flex justify-end gap-4 pt-4">
+                    <button type="button" id="cancelEditBtn" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">Annuler</button>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Enregistrer</button>
+                </div>
             </form>
         </div>
     `;
 
-  setTimeout(() => {
+    setTimeout(() => {
         loadChantiersList();
         setupEventListeners();
     }, 0);
 }
 
-/**
- * Charge uniquement les chantiers sur lesquels l'utilisateur est planifié cette semaine.
- */
 async function loadChantiersList() {
     const listContainer = document.getElementById('chantiers-list');
     listContainer.innerHTML = '<p class="col-span-full text-center">Chargement...</p>';
-    
-    // CORRECTION: Utilise la fonction UTC centralisée.
-    const { startOfWeek, endOfWeek } = getWeekDateRange(0);
 
     try {
-        const planningQuery = query(
-            collection(db, "planning"),
-            where("date", ">=", startOfWeek.toISOString().split('T')[0]),
-            where("date", "<=", endOfWeek.toISOString().split('T')[0])
-        );
-        const planningSnapshot = await getDocs(planningQuery);
-        
-        const userPlanningTasks = planningSnapshot.docs
-            .map(doc => doc.data())
-            .filter(task => task.teamNames && task.teamNames.includes(currentUser.displayName));
-
-        if (userPlanningTasks.length === 0) {
-            listContainer.innerHTML = '<p class="col-span-full text-center text-gray-500">Vous n\'êtes planifié sur aucun chantier cette semaine.</p>';
-            return;
-        }
-
-        const chantierNames = [...new Set(userPlanningTasks.map(task => task.chantierName))];
-
-        if (chantierNames.length > 0) {
-            const chantiersQuery = query(collection(db, "chantiers"), where("name", "in", chantierNames));
-            const chantiersSnapshot = await getDocs(chantiersQuery);
-            chantiersCache = chantiersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        } else {
-            chantiersCache = [];
-        }
-
+        // La logique de requête complexe est remplacée par un simple appel
+        chantiersCache = await getActiveChantiers(); // <-- MODIFIÉ
         displayChantierCards();
-
     } catch (error) {
-        console.error("Erreur de chargement des chantiers planifiés:", error);
+        console.error("Erreur de chargement des chantiers :", error);
         listContainer.innerHTML = '<p class="col-span-full text-center text-red-500">Erreur de chargement des chantiers.</p>';
     }
 }
@@ -93,10 +70,9 @@ function displayChantierCards() {
     const listContainer = document.getElementById('chantiers-list');
     listContainer.innerHTML = '';
     if (chantiersCache.length === 0) {
-        listContainer.innerHTML = '<p class="col-span-full text-center text-gray-500">Aucun chantier à afficher.</p>';
+        listContainer.innerHTML = '<p class="col-span-full text-center text-gray-500">Aucun chantier actif trouvé.</p>';
         return;
     }
-    chantiersCache.sort((a, b) => a.name.localeCompare(b.name));
     chantiersCache.forEach(chantier => {
         const card = document.createElement('div');
         card.className = 'bg-white p-4 rounded-lg shadow-sm cursor-pointer hover:shadow-md hover:scale-105 transition-transform';
@@ -111,17 +87,14 @@ function showDetailsModal(chantierId) {
     if (!chantier) return;
 
     document.getElementById('modalChantierName').textContent = chantier.name;
-    
     const addressLink = document.getElementById('modalChantierAddress');
     if (chantier.address) {
         addressLink.textContent = chantier.address;
-        // CORRECTION: Utilisation de la fonction pour générer une URL Google Maps valide et robuste.
         addressLink.href = getGoogleMapsUrl(chantier.address);
         addressLink.parentElement.style.display = 'block';
     } else {
         addressLink.parentElement.style.display = 'none';
     }
-    
     const keyboxContainer = document.getElementById('modalChantierKeybox');
     keyboxContainer.innerHTML = '';
     if (Array.isArray(chantier.keyboxCodes) && chantier.keyboxCodes.length > 0) {
@@ -136,13 +109,10 @@ function showDetailsModal(chantierId) {
     } else {
         keyboxContainer.textContent = "Non spécifié";
     }
-
     document.getElementById('modalChantierInfo').textContent = chantier.additionalInfo || "Aucune";
-    
     if (isAdmin) {
         document.getElementById('editChantierBtn').onclick = () => showEditModal(chantier);
     }
-    
     document.getElementById('detailsModal').classList.remove('hidden');
 }
 
@@ -183,9 +153,7 @@ function setupKeyCodeHandlers(inputId, addButtonId, listId) {
         }
     };
     addKeyCodeBtn.onclick = addCode;
-    newKeyCodeInput.onkeydown = (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); addCode(); }
-    };
+    newKeyCodeInput.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); addCode(); } };
 }
 
 function setupEventListeners() {
@@ -208,12 +176,10 @@ function setupEventListeners() {
             try {
                 await updateDoc(docRef, updatedData);
                 document.getElementById('editModal').classList.add('hidden');
-                // On met à jour le cache local pour refléter les changements sans recharger de la DB
-                const cacheIndex = chantiersCache.findIndex(c => c.id === chantierId);
-                if(cacheIndex > -1) {
-                    chantiersCache[cacheIndex] = { ...chantiersCache[cacheIndex], ...updatedData };
-                }
-                showDetailsModal(chantierId); // Ré-ouvre la modale avec les infos à jour
+                // Force le rafraîchissement du cache au prochain chargement
+                await getActiveChantiers(true); // <-- MODIFIÉ
+                showInfoModal("Succès", "Chantier mis à jour.");
+                loadChantiersList();
             } catch(error) {
                 console.error("Erreur de mise à jour: ", error);
                 showInfoModal("Erreur", "La mise à jour a échoué.");

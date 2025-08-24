@@ -28,9 +28,9 @@ export function getWeekDateRange(offset = 0) {
  */
 export function formatMilliseconds(ms) {
     if (!ms || ms < 0) return "0h 0min";
-    const totalHours = Math.floor(ms / 3600000);
-    const totalMinutes = Math.round((ms % 3600000) / 60000);
-    return `${totalHours}h ${totalMinutes}min`;
+    const totalMinutes = Math.round(ms / 60000);
+    // On réutilise la fonction formatMinutes pour ne pas dupliquer le code
+    return formatMinutes(totalMinutes);
 }
 
 /**
@@ -52,5 +52,6 @@ export function formatMinutes(totalMinutes) {
  */
 export function getGoogleMapsUrl(address) {
     if (!address) return '#';
+    // **CORRECTION FINALE** : La syntaxe correcte pour l'URL et la variable.
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 }

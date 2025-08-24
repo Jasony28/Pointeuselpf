@@ -17,7 +17,7 @@ if (workbox) {
     { url: 'app.js', revision: null },
     { url: 'manifest.json', revision: null },
     
-    // Tous les modules JavaScript locaux (add-entry.js a été retiré)
+    // Tous les modules JavaScript locaux
     { url: 'modules/utils.js', revision: null },
     { url: 'modules/user-dashboard.js', revision: null },
     { url: 'modules/user-history.js', revision: null },
@@ -45,7 +45,6 @@ if (workbox) {
   // --- RÈGLES DE ROUTAGE POUR LES REQUÊTES DYNAMIQUES ---
 
   // Règle 1 : Les pages HTML (navigation)
-  // Stratégie : On essaie d'abord le réseau. Si ça ne marche pas, on prend le cache.
   workbox.routing.registerRoute(
     ({ request }) => request.mode === 'navigate',
     new workbox.strategies.NetworkFirst({
@@ -54,7 +53,6 @@ if (workbox) {
   );
 
   // Règle 2 : Les fichiers JS, CSS, et les librairies externes (CDNs)
-  // Stratégie : On sert instantanément depuis le cache, puis on met le cache à jour en arrière-plan.
   workbox.routing.registerRoute(
     ({ request }) => 
       request.destination === 'script' ||
@@ -67,14 +65,12 @@ if (workbox) {
   );
   
   // Règle 3 : Les requêtes vers l'API Mapbox
-  // Stratégie : Réseau uniquement. On ne met jamais en cache ces appels.
   workbox.routing.registerRoute(
     ({ url }) => url.hostname === 'api.mapbox.com',
     new workbox.strategies.NetworkOnly()
   );
 
   // --- GESTION DES MISES À JOUR ---
-  // Permet à l'application de forcer l'activation d'une nouvelle version.
   self.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'SKIP_WAITING') {
       self.skipWaiting();

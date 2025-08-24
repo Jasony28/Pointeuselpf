@@ -1,6 +1,5 @@
 import { collection, query, where, orderBy, getDocs, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, showConfirmationModal, navigateTo } from "../app.js";
-// CORRECTION: Import des fonctions utilitaires centralisées.
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 
 export async function render() {
@@ -47,15 +46,14 @@ export async function render() {
             </div>
         </div>
     `;
-setTimeout(() => {
-    loadGlobalStats();
-    loadDetailedWeekStats();
-    loadRecentActivity();
-     }, 0);
+    setTimeout(() => {
+        loadGlobalStats();
+        loadDetailedWeekStats();
+        loadRecentActivity();
+    }, 0);
 }
 
 async function loadGlobalStats() {
-    // CORRECTION: Utilisation de la fonction centralisée pour le début de semaine et d'une méthode UTC fiable pour le début du mois.
     const now = new Date();
     const { startOfWeek } = getWeekDateRange(0);
     const startOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
@@ -76,26 +74,40 @@ async function loadGlobalStats() {
             const data = doc.data();
             if (data.endTime) weekMs += new Date(data.endTime) - new Date(data.timestamp);
         });
-        document.querySelector('#week-total-card p').textContent = formatMilliseconds(weekMs);
-        document.querySelector('#week-total-card p').classList.remove('animate-pulse');
+        
+        // **CORRECTION AJOUTÉE** : Vérifie si l'élément existe avant de le modifier.
+        const weekCard = document.querySelector('#week-total-card p');
+        if (weekCard) {
+            weekCard.textContent = formatMilliseconds(weekMs);
+            weekCard.classList.remove('animate-pulse');
+        }
 
         let monthMs = 0;
         monthSnapshot.forEach(doc => {
             const data = doc.data();
             if (data.endTime) monthMs += new Date(data.endTime) - new Date(data.timestamp);
         });
-        document.querySelector('#month-total-card p').textContent = formatMilliseconds(monthMs);
-        document.querySelector('#month-total-card p').classList.remove('animate-pulse');
 
-        document.querySelector('#active-projects-card p').textContent = chantiersSnapshot.size;
-        document.querySelector('#active-projects-card p').classList.remove('animate-pulse');
+        // **CORRECTION AJOUTÉE**
+        const monthCard = document.querySelector('#month-total-card p');
+        if (monthCard) {
+            monthCard.textContent = formatMilliseconds(monthMs);
+            monthCard.classList.remove('animate-pulse');
+        }
+
+        // **CORRECTION AJOUTÉE**
+        const projectsCard = document.querySelector('#active-projects-card p');
+        if (projectsCard) {
+            projectsCard.textContent = chantiersSnapshot.size;
+            projectsCard.classList.remove('animate-pulse');
+        }
+
     } catch (error) {
         console.error("Erreur de chargement des statistiques globales:", error);
     }
 }
 
 async function loadDetailedWeekStats() {
-    // CORRECTION: Utilise la fonction centralisée pour une définition cohérente de "cette semaine".
     const { startOfWeek } = getWeekDateRange(0);
 
     try {
@@ -122,6 +134,9 @@ async function loadDetailedWeekStats() {
 }
 
 function displayStats(statsObject, container, emptyMessage, isClickable = false) {
+    // **CORRECTION AJOUTÉE** : Vérifie si le conteneur existe avant toute manipulation.
+    if (!container) return;
+
     container.innerHTML = "";
     const sortedEntries = Object.entries(statsObject).sort(([, a], [, b]) => b - a);
 
@@ -152,6 +167,9 @@ function displayStats(statsObject, container, emptyMessage, isClickable = false)
 
 async function loadRecentActivity() {
     const container = document.getElementById('recent-activity-list');
+    // **CORRECTION AJOUTÉE** : Ajout d'une vérification pour plus de robustesse.
+    if (!container) return;
+
     try {
         const q = query(collection(db, "pointages"), orderBy("createdAt", "desc"), where("createdAt", "!=", null));
         const querySnapshot = await getDocs(q);
@@ -204,14 +222,11 @@ function createDetailedActivityElement(docId, d) {
     deleteBtn.textContent = "✖";
     deleteBtn.className = "absolute top-2 right-3 text-gray-400 hover:text-red-600 font-bold";
     deleteBtn.onclick = async () => {
-        const confirmed = await showConfirmationModal("Confirmation", "Supprimer ce pointage ?");
-        if (confirmed) {
+        if (await showConfirmationModal("Confirmation", "Supprimer ce pointage ?")) {
             await deleteDoc(doc(db, "pointages", docId));
-            render(); // Re-render the entire dashboard to reflect the change
+            render();
         }
     };
     wrapper.appendChild(deleteBtn);
     return wrapper;
 }
-
-// CORRECTION: La fonction locale a été supprimée car elle est maintenant importée depuis utils.js

@@ -1,10 +1,11 @@
 import { collection, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, isAdmin, pageContent, showConfirmationModal, showInfoModal } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
+import { getActiveChantiers, getTeamMembers } from "./data-service.js"; // <-- NOUVEAU
 
 let currentWeekOffset = 0;
 let targetUser = null;
-let historyDataCache = []; // Gardé pour la fonction PDF
+let historyDataCache = [];
 let chantiersCache = [];
 let colleaguesCache = [];
 
@@ -77,20 +78,12 @@ export async function render(params = {}) {
 }
 
 async function cacheModalData() {
-    const chantiersQuery = query(collection(db, "chantiers"), where("status", "==", "active"), orderBy("name"));
-    const colleaguesQuery = query(collection(db, "colleagues"), orderBy("name"));
-    const usersQuery = query(collection(db, "users"), where("status", "==", "approved"), orderBy("displayName"));
-
-    const [chantiersSnapshot, colleaguesSnapshot, usersSnapshot] = await Promise.all([
-        getDocs(chantiersQuery), getDocs(colleaguesQuery), getDocs(usersQuery)
-    ]);
-
-    chantiersCache = chantiersSnapshot.docs.map(doc => doc.data().name);
-    const colleagueNames = colleaguesSnapshot.docs.map(doc => doc.data().name);
-    const userNames = usersSnapshot.docs.map(doc => doc.data().displayName);
-    colleaguesCache = [...new Set([...colleagueNames, ...userNames])].sort((a, b) => a.localeCompare(b));
+    const chantiersData = await getActiveChantiers(); // <-- MODIFIÉ
+    chantiersCache = chantiersData.map(c => c.name);
+    colleaguesCache = await getTeamMembers(); // <-- MODIFIÉ
 }
 
+// ... Le reste du fichier user-history.js ne change pas ...
 async function loadHistoryForWeek() {
     const historyList = document.getElementById("historyList");
     const weekTotalsDisplay = document.getElementById("weekTotalsDisplay");
@@ -186,11 +179,9 @@ function createHistoryEntryElement(d) {
     let timeDisplay = "", durationDisplay = "";
     if (endDate) {
         timeDisplay = `De ${startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} à ${endDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
-        // On prépare la durée ici pour la réutiliser plus tard
         durationDisplay = `<div class="text-sm font-bold text-purple-700 mt-1">${formatMilliseconds(endDate - startDate - (d.pauseDurationMs || 0))}</div>`;
     }
 
-    // 1. On retire la durée de l'affichage principal (elle n'est plus dans un div à droite)
     wrapper.innerHTML = `
       <div class="pr-16"> <div class="font-bold">${d.chantier}</div>
         <div class="text-sm text-gray-600">${timeDisplay}</div>
@@ -201,21 +192,15 @@ function createHistoryEntryElement(d) {
 
     if (isAdmin || currentUser.uid === targetUser.uid) {
         const controlsWrapper = document.createElement("div");
-        // 2. On change le style du conteneur des contrôles pour aligner verticalement
         controlsWrapper.className = "absolute top-2 right-3 flex flex-col items-end";
-
-        // On crée un sous-conteneur pour les boutons
         const buttonsDiv = document.createElement('div');
         buttonsDiv.className = 'flex gap-2';
         buttonsDiv.innerHTML = `
             <button class="edit-btn text-gray-400 hover:text-blue-600 font-bold" title="Modifier" data-id="${d.id}">✏️</button>
             <button class="delete-btn text-gray-400 hover:text-red-600 font-bold" title="Supprimer" data-id="${d.id}">✖️</button>
         `;
-        
-        // 3. On ajoute les boutons, PUIS la durée juste en dessous
         controlsWrapper.appendChild(buttonsDiv);
-        controlsWrapper.innerHTML += durationDisplay; // On ajoute la durée ici
-        
+        controlsWrapper.innerHTML += durationDisplay;
         wrapper.appendChild(controlsWrapper);
     }
     return wrapper;
@@ -344,7 +329,7 @@ function generateHistoryPDF() {
     let totalEffectiveMs = 0;
 
     historyDataCache.forEach(d => {
-        if (!d.endTime) return; // Ignore les pointages non terminés
+        if (!d.endTime) return;
 
         const startDate = new Date(d.timestamp);
         const dayKey = startDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' });

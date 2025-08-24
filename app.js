@@ -15,19 +15,15 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-// Syntaxe mise à jour pour la persistance hors-ligne
 export const db = initializeFirestore(app, {
     cacheSizeBytes: CACHE_SIZE_UNLIMITED
 });
 
-
-// --- VARIABLES GLOBALES DE L'APPLICATION ---
+// --- VARIABLES GLOBALES ---
 export const pageContent = document.getElementById('page-content');
 export let currentUser = null;
 export let isAdmin = false;
 let isMasqueradingAsUser = false;
-
-// --- VARIABLES DE LA MODALE ---
 let genericModal, modalTitle, modalMessage, modalConfirmBtn, modalCancelBtn;
 
 // --- DÉFINITION DES MENUS ---
@@ -80,7 +76,7 @@ function setupNavigation() {
     const switchBtn = document.getElementById('switchViewBtn');
     if (isAdmin) {
         switchBtn.classList.remove('hidden');
-        switchBtn.textContent = isMasqueradingAsUser ? 'Retour vue Admin' : 'Passer en vue Employé';
+        switchBtn.textContent = isMasqueradingAsUser ? 'Vue Admin' : 'Vue Employé';
         switchBtn.onclick = toggleView;
     } else {
         switchBtn.classList.add('hidden');
@@ -243,6 +239,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     const userData = userDoc.data();
                     currentUser = { ...user, ...userData };
                     isAdmin = userData.role === 'admin';
+                    isMasqueradingAsUser = isAdmin; // MODIFICATION CLÉ : L'admin commence en vue employé
+
                     switch (userData.status) {
                         case 'pending':
                             pendingContainer.style.display = 'flex';
@@ -255,7 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             document.getElementById('currentUserDisplay').textContent = userData.displayName || user.email;
                             setupNavigation();
                             setupNotifications();
-                            navigateTo(isAdmin ? 'admin-dashboard' : 'user-dashboard');
+                            navigateTo('user-dashboard'); // Tout le monde va sur le dashboard user
                             appContainer.style.display = 'block';
                             break;
                         default:
@@ -280,7 +278,7 @@ document.addEventListener('DOMContentLoaded', () => {
         loader.style.display = 'none';
     });
     
-    // --- GESTION DU SERVICE WORKER ET DES MISES À JOUR (VERSION AMÉLIORÉE) ---
+    // GESTION DU SERVICE WORKER (VERSION FIABLE)
     if ('serviceWorker' in navigator) {
         let newWorker;
         const updateBanner = document.getElementById('update-banner');
@@ -288,18 +286,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
         navigator.serviceWorker.register('./sw.js').then(reg => {
             reg.addEventListener('updatefound', () => {
-                // Une nouvelle version du SW a été trouvée
                 newWorker = reg.installing;
                 newWorker.addEventListener('statechange', () => {
                     if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                        // Le nouveau SW est prêt, on affiche le bandeau
+                        const statusDot = document.getElementById('version-status-dot');
+                        statusDot.classList.remove('bg-green-500');
+                        statusDot.classList.add('bg-orange-500', 'cursor-pointer');
+                        statusDot.title = 'Une mise à jour est disponible ! Cliquez pour l\'afficher.';
+                        statusDot.onclick = () => updateBanner.classList.remove('hidden');
                         updateBanner.classList.remove('hidden');
                     }
                 });
             });
+            const statusDot = document.getElementById('version-status-dot');
+            statusDot.classList.remove('hidden', 'bg-orange-500');
+            statusDot.classList.add('bg-green-500');
+            statusDot.title = 'Vous avez la dernière version.';
         });
 
-        // Quand l'utilisateur clique sur "Mettre à jour"
         updateBtn.addEventListener('click', () => {
             if (newWorker) {
                 newWorker.postMessage({ type: 'SKIP_WAITING' });
@@ -307,7 +311,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Cet événement se déclenche quand le nouveau Service Worker a pris le contrôle
         let refreshing;
         navigator.serviceWorker.addEventListener('controllerchange', () => {
             if (refreshing) return;
