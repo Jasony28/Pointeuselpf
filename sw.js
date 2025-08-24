@@ -9,8 +9,7 @@ if (workbox) {
 
   // --- MISE EN CACHE DES FICHIERS DE BASE (PRECACHING) ---
   
-  // Workbox a besoin d'une liste de tous les fichiers qui composent "l'application de base" (le shell).
-  // Si un seul de ces fichiers change, Workbox installera intelligemment la nouvelle version.
+  // Workbox met en cache tous les fichiers essentiels au démarrage de l'application.
   const precacheManifest = [
     // Fichiers de base
     { url: './', revision: null },
@@ -40,12 +39,13 @@ if (workbox) {
     { url: 'icons/icon-512x512.png', revision: null },
   ];
 
-  // On dit à Workbox d'utiliser cette liste.
+  // On dit à Workbox de gérer cette liste.
   workbox.precaching.precacheAndRoute(precacheManifest);
 
   // --- RÈGLES DE ROUTAGE POUR LES REQUÊTES DYNAMIQUES ---
 
   // Règle 1 : Les pages HTML (navigation)
+  // Stratégie : On essaie d'abord le réseau. Si ça ne marche pas, on prend le cache.
   workbox.routing.registerRoute(
     ({ request }) => request.mode === 'navigate',
     new workbox.strategies.NetworkFirst({
@@ -54,6 +54,7 @@ if (workbox) {
   );
 
   // Règle 2 : Les fichiers JS, CSS, et les librairies externes (CDNs)
+  // Stratégie : On sert instantanément depuis le cache, puis on met le cache à jour en arrière-plan.
   workbox.routing.registerRoute(
     ({ request }) => 
       request.destination === 'script' ||
@@ -66,12 +67,14 @@ if (workbox) {
   );
   
   // Règle 3 : Les requêtes vers l'API Mapbox
+  // Stratégie : Réseau uniquement. On ne met jamais en cache ces appels.
   workbox.routing.registerRoute(
     ({ url }) => url.hostname === 'api.mapbox.com',
     new workbox.strategies.NetworkOnly()
   );
 
   // --- GESTION DES MISES À JOUR ---
+  // Permet à l'application de forcer l'activation d'une nouvelle version.
   self.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'SKIP_WAITING') {
       self.skipWaiting();
@@ -79,5 +82,5 @@ if (workbox) {
   });
 
 } else {
-  console.log(`[Workbox] Le chargement a échoué 😬`);
+  console.log(`[Workbox] Le chargement a échoué.`);
 }

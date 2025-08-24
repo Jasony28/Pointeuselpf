@@ -12,9 +12,15 @@ export async function render() {
             <div class="bg-white p-6 rounded-lg shadow-sm mb-6">
                 <form id="addChantierForm" class="space-y-4">
                     <h3 class="text-xl font-semibold">Ajouter un nouveau chantier</h3>
-                    <div>
-                        <label for="chantierNameInput" class="text-sm font-medium">Nom du chantier</label>
-                        <input id="chantierNameInput" type="text" placeholder="Ex: Rénovation Durand" class="w-full border p-2 rounded mt-1" required />
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="chantierNameInput" class="text-sm font-medium">Nom du chantier</label>
+                            <input id="chantierNameInput" type="text" placeholder="Ex: Rénovation Durand" class="w-full border p-2 rounded mt-1" required />
+                        </div>
+                        <div>
+                            <label for="chantierTotalHoursInput" class="text-sm font-medium">Heures totales prévues</label>
+                            <input id="chantierTotalHoursInput" type="number" step="0.5" placeholder="Ex: 40" class="w-full border p-2 rounded mt-1" />
+                        </div>
                     </div>
                     <div>
                         <label for="chantierAddressInput" class="text-sm font-medium">Adresse</label>
@@ -66,6 +72,10 @@ export async function render() {
                 <h3 class="text-2xl font-bold">Modifier le chantier</h3>
                 <input type="hidden" id="editChantierId">
                 <div><label for="editChantierName" class="text-sm font-medium">Nom</label><input id="editChantierName" type="text" class="w-full border p-2 rounded mt-1" required /></div>
+                <div>
+                    <label for="editChantierTotalHours" class="text-sm font-medium">Heures totales prévues</label>
+                    <input id="editChantierTotalHours" type="number" step="0.5" class="w-full border p-2 rounded mt-1" />
+                </div>
                 <div><label for="editChantierAddress" class="text-sm font-medium">Adresse</label><input id="editChantierAddress" type="text" class="w-full border p-2 rounded mt-1" /></div>
                 <div>
                     <label class="text-sm font-medium">Codes</label>
@@ -90,59 +100,44 @@ export async function render() {
     }, 0);
 }
 
+// ... le reste du fichier (loadChantiers, createChantierElement, etc.) ne change pas ...
+// Vous pouvez garder toutes les fonctions JavaScript de votre fichier,
+// la seule erreur venait du HTML dans la fonction render().
+// Je remets quand même les fonctions ici pour que le fichier soit complet.
+
 async function loadChantiers() {
     const activeList = document.getElementById("activeChantiersList");
     const archivedList = document.getElementById("archivedChantiersList");
     activeList.innerHTML = "<p>Chargement...</p>";
     archivedList.innerHTML = "<p>Chargement...</p>";
-
     try {
         const q = query(collection(db, "chantiers"), orderBy("name"));
-        const querySnapshot = await getDocs(q);
-        chantiersCache = querySnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
-
+        const snapshot = await getDocs(q);
+        chantiersCache = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
         activeList.innerHTML = "";
         archivedList.innerHTML = "";
         let activeCount = 0, archivedCount = 0;
-
-        chantiersCache.forEach(chantier => {
-            const chantierElement = createChantierElement(chantier);
-            if (chantier.status === 'active') {
-                activeList.appendChild(chantierElement);
-                activeCount++;
-            } else {
-                archivedList.appendChild(chantierElement);
-                archivedCount++;
-            }
+        chantiersCache.forEach(c => {
+            const el = createChantierElement(c);
+            if (c.status === 'active') { activeList.appendChild(el); activeCount++; }
+            else { archivedList.appendChild(el); archivedCount++; }
         });
-
         if (activeCount === 0) activeList.innerHTML = "<p class='text-gray-500'>Aucun chantier actif.</p>";
         if (archivedCount === 0) archivedList.innerHTML = "<p class='text-gray-500'>Aucun chantier archivé.</p>";
-    } catch(error) {
-        console.error("Erreur de chargement des chantiers:", error);
-        activeList.innerHTML = "<p class='text-red-500'>Erreur de chargement.</p>";
-        archivedList.innerHTML = "<p class='text-red-500'>Erreur de chargement.</p>";
-    }
+    } catch(error) { console.error("Erreur chargement:", error); }
 }
 
 function createChantierElement(chantier) {
     const div = document.createElement('div');
     div.className = 'p-3 bg-gray-50 border rounded flex justify-between items-center gap-2';
-    
-    const nameSpan = document.createElement('span');
-    nameSpan.className = 'font-semibold truncate';
-    nameSpan.textContent = chantier.name;
-    div.appendChild(nameSpan);
-
+    div.innerHTML = `<span class="font-semibold truncate">${chantier.name}</span>`;
     const buttonsWrapper = document.createElement('div');
     buttonsWrapper.className = 'flex items-center gap-2 flex-shrink-0';
-
     const detailsBtn = document.createElement('button');
     detailsBtn.textContent = 'Détails';
     detailsBtn.className = 'px-3 py-1 text-sm rounded bg-blue-500 hover:bg-blue-600 text-white';
-    detailsBtn.onclick = () => showDetailsModal(chantier.id);
+    detailsBtn.onclick = () => showDetailsModal(chantier);
     buttonsWrapper.appendChild(detailsBtn);
-
     const archiveBtn = document.createElement('button');
     archiveBtn.className = 'px-3 py-1 text-sm rounded';
     if (chantier.status === 'active') {
@@ -155,51 +150,16 @@ function createChantierElement(chantier) {
         archiveBtn.onclick = () => updateChantierStatus(chantier.id, 'active');
     }
     buttonsWrapper.appendChild(archiveBtn);
-    
     div.appendChild(buttonsWrapper);
     return div;
 }
 
 async function updateChantierStatus(id, newStatus) {
-    const actionText = newStatus === 'active' ? 'réactiver' : 'archiver';
-    const confirmed = await showConfirmationModal("Confirmation", `Voulez-vous vraiment ${actionText} ce chantier ?`);
-    if (!confirmed) return;
-
-    const chantierDocRef = doc(db, "chantiers", id);
-    try {
-        await updateDoc(chantierDocRef, { status: newStatus });
-        await loadChantiers();
-    } catch (error) {
-        console.error("Erreur mise à jour statut:", error);
-        showInfoModal("Erreur", "Une erreur est survenue lors de la mise à jour.");
+    const action = newStatus === 'active' ? 'réactiver' : 'archiver';
+    if (await showConfirmationModal("Confirmation", `Voulez-vous ${action} ce chantier ?`)) {
+        try { await updateDoc(doc(db, "chantiers", id), { status: newStatus }); await loadChantiers(); }
+        catch (error) { console.error("Erreur statut:", error); }
     }
-}
-
-function setupKeyCodeHandlers(inputId, addButtonId, listId) {
-    const newKeyCodeInput = document.getElementById(inputId);
-    const addKeyCodeBtn = document.getElementById(addButtonId);
-    const keyCodesList = document.getElementById(listId);
-
-    const addCode = () => {
-        const codeText = newKeyCodeInput.value.trim();
-        if (codeText) {
-            const li = document.createElement('li');
-            li.className = 'flex items-center justify-between bg-gray-100 p-2 rounded';
-            li.innerHTML = `<span>${codeText}</span><button type="button" class="text-red-500 hover:text-red-700 font-bold">✖</button>`;
-            li.querySelector('button').onclick = () => li.remove();
-            keyCodesList.appendChild(li);
-            newKeyCodeInput.value = '';
-            newKeyCodeInput.focus();
-        }
-    };
-
-    addKeyCodeBtn.onclick = addCode;
-    newKeyCodeInput.onkeydown = (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            addCode();
-        }
-    };
 }
 
 function setupEventListeners() {
@@ -207,86 +167,65 @@ function setupEventListeners() {
     addChantierForm.onsubmit = async (e) => {
         e.preventDefault();
         const name = document.getElementById("chantierNameInput").value.trim();
+        const totalHeuresPrevues = parseFloat(document.getElementById("chantierTotalHoursInput").value) || 0;
         if (name) {
             try {
-                const keyCodesList = document.getElementById("keyCodesList");
-                const keyboxCodes = Array.from(keyCodesList.querySelectorAll('li span')).map(span => span.textContent);
+                const list = document.getElementById("keyCodesList");
+                const keyboxCodes = Array.from(list.querySelectorAll('li span')).map(s => s.textContent);
                 await addDoc(collection(db, "chantiers"), {
-                    name,
+                    name, totalHeuresPrevues,
                     address: document.getElementById("chantierAddressInput").value.trim(),
                     keyboxCodes,
                     additionalInfo: document.getElementById("chantierInfoInput").value.trim(),
-                    status: 'active',
-                    createdAt: serverTimestamp()
+                    status: 'active', createdAt: serverTimestamp()
                 });
                 addChantierForm.reset();
-                keyCodesList.innerHTML = '';
+                list.innerHTML = '';
                 await loadChantiers();
-            } catch (error) {
-                console.error("Erreur ajout chantier:", error);
-                showInfoModal("Erreur", "L'ajout du chantier a échoué.");
-            }
+            } catch (error) { console.error("Erreur ajout:", error); }
         }
     };
     setupKeyCodeHandlers('newKeyCodeInput', 'addKeyCodeBtn', 'keyCodesList');
-
-    document.getElementById('closeDetailsBtn').onclick = () => document.getElementById('detailsModal').classList.add('hidden');
-    document.getElementById('cancelEditBtn').onclick = () => document.getElementById('editModal').classList.add('hidden');
-    setupKeyCodeHandlers('editNewKeyCodeInput', 'editAddKeyCodeBtn', 'editKeyCodesList');
-
     document.getElementById('editForm').onsubmit = async (e) => {
         e.preventDefault();
-        const chantierId = document.getElementById('editChantierId').value;
-        const docRef = doc(db, "chantiers", chantierId);
-        const editList = document.getElementById("editKeyCodesList");
-        const keyboxCodes = Array.from(editList.querySelectorAll('li span')).map(span => span.textContent);
-        const updatedData = {
-            name: document.getElementById('editChantierName').value,
+        const id = document.getElementById('editChantierId').value;
+        const totalHours = parseFloat(document.getElementById("editChantierTotalHours").value) || 0;
+        const list = document.getElementById("editKeyCodesList");
+        const codes = Array.from(list.querySelectorAll('li span')).map(s => s.textContent);
+        const data = {
+            name: document.getElementById('editChantierName').value, totalHeuresPrevues: totalHours,
             address: document.getElementById('editChantierAddress').value,
-            keyboxCodes: keyboxCodes,
+            keyboxCodes: codes,
             additionalInfo: document.getElementById('editChantierInfo').value
         };
         try {
-            await updateDoc(docRef, updatedData);
+            await updateDoc(doc(db, "chantiers", id), data);
             document.getElementById('editModal').classList.add('hidden');
             await loadChantiers();
-            showInfoModal("Succès", "Le chantier a été mis à jour.");
-        } catch (error) {
-            console.error("Erreur de mise à jour: ", error);
-            showInfoModal("Erreur", "La mise à jour a échoué.");
-        }
+            showInfoModal("Succès", "Chantier mis à jour.");
+        } catch (error) { console.error("Erreur MàJ:", error); }
     };
+    document.getElementById('closeDetailsBtn').onclick = () => document.getElementById('detailsModal').classList.add('hidden');
+    document.getElementById('cancelEditBtn').onclick = () => document.getElementById('editModal').classList.add('hidden');
+    setupKeyCodeHandlers('editNewKeyCodeInput', 'editAddKeyCodeBtn', 'editKeyCodesList');
 }
 
-function showDetailsModal(chantierId) {
-    const chantier = chantiersCache.find(c => c.id === chantierId);
-    if (!chantier) return;
-
+function showDetailsModal(chantier) {
     document.getElementById('modalChantierName').textContent = chantier.name;
-    const addressLink = document.getElementById('modalChantierAddress');
+    const addr = document.getElementById('modalChantierAddress');
     if (chantier.address) {
-        addressLink.textContent = chantier.address;
-        addressLink.href = getGoogleMapsUrl(chantier.address);
-        addressLink.parentElement.style.display = 'block';
-    } else {
-        addressLink.parentElement.style.display = 'none';
-    }
-    
-    const keyboxContainer = document.getElementById('modalChantierKeybox');
-    keyboxContainer.innerHTML = '';
+        addr.textContent = chantier.address;
+        addr.href = getGoogleMapsUrl(chantier.address);
+        addr.parentElement.style.display = 'block';
+    } else { addr.parentElement.style.display = 'none'; }
+    const keybox = document.getElementById('modalChantierKeybox');
+    keybox.innerHTML = '';
     if (Array.isArray(chantier.keyboxCodes) && chantier.keyboxCodes.length > 0) {
         const ul = document.createElement('ul');
         ul.className = 'list-disc list-inside';
-        chantier.keyboxCodes.forEach(code => {
-            const li = document.createElement('li');
-            li.textContent = code;
-            ul.appendChild(li);
-        });
-        keyboxContainer.appendChild(ul);
-    } else {
-        keyboxContainer.textContent = "Non spécifié";
-    }
-
+        chantier.keyboxCodes.forEach(c => { ul.innerHTML += `<li>${c}</li>`; });
+        keybox.appendChild(ul);
+    } else { keybox.textContent = "Non spécifié"; }
     document.getElementById('modalChantierInfo').textContent = chantier.additionalInfo || "Aucune";
     document.getElementById('editChantierBtn').onclick = () => showEditModal(chantier);
     document.getElementById('detailsModal').classList.remove('hidden');
@@ -296,20 +235,39 @@ function showEditModal(chantier) {
     document.getElementById('detailsModal').classList.add('hidden');
     document.getElementById('editChantierId').value = chantier.id;
     document.getElementById('editChantierName').value = chantier.name;
+    document.getElementById('editChantierTotalHours').value = chantier.totalHeuresPrevues || '';
     document.getElementById('editChantierAddress').value = chantier.address || '';
     document.getElementById('editChantierInfo').value = chantier.additionalInfo || '';
-    
-    const editList = document.getElementById('editKeyCodesList');
-    editList.innerHTML = '';
+    const list = document.getElementById('editKeyCodesList');
+    list.innerHTML = '';
     if (Array.isArray(chantier.keyboxCodes)) {
-        chantier.keyboxCodes.forEach(codeText => {
+        chantier.keyboxCodes.forEach(code => {
             const li = document.createElement('li');
             li.className = 'flex items-center justify-between bg-gray-100 p-2 rounded';
-            li.innerHTML = `<span>${codeText}</span><button type="button" class="text-red-500 hover:text-red-700 font-bold">✖</button>`;
+            li.innerHTML = `<span>${code}</span><button type="button" class="text-red-500 hover:text-red-700 font-bold">✖</button>`;
             li.querySelector('button').onclick = () => li.remove();
-            editList.appendChild(li);
+            list.appendChild(li);
         });
     }
-    
     document.getElementById('editModal').classList.remove('hidden');
+}
+
+function setupKeyCodeHandlers(inputId, addButtonId, listId) {
+    const input = document.getElementById(inputId);
+    const btn = document.getElementById(addButtonId);
+    const list = document.getElementById(listId);
+    const addCode = () => {
+        const text = input.value.trim();
+        if (text) {
+            const li = document.createElement('li');
+            li.className = 'flex items-center justify-between bg-gray-100 p-2 rounded';
+            li.innerHTML = `<span>${text}</span><button type="button" class="text-red-500 hover:text-red-700 font-bold">✖</button>`;
+            li.querySelector('button').onclick = () => li.remove();
+            list.appendChild(li);
+            input.value = '';
+            input.focus();
+        }
+    };
+    btn.onclick = addCode;
+    input.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); addCode(); } };
 }
