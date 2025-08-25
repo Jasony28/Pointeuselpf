@@ -79,4 +79,5 @@ if (workbox) {
 
 } else {
   console.log(`[Workbox] Le chargement a échoué.`);
+
 }
