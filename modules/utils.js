@@ -52,6 +52,6 @@ export function formatMinutes(totalMinutes) {
  */
 export function getGoogleMapsUrl(address) {
     if (!address) return '#';
-    // **CORRECTION FINALE** : La syntaxe correcte pour l'URL et la variable.
+    // CORRIGÉ : Utilisation de la bonne URL et de la bonne syntaxe
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 }

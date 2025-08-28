@@ -120,9 +120,8 @@
             <div class="flex items-center">
                 <button id="switchViewBtn" class="hidden text-sm bg-purple-100 text-purple-700 hover:bg-purple-200 px-3 py-1.5 rounded-md mr-4"></button>
                 <span id="currentUserDisplay" class="text-sm mr-4 hidden sm:inline"></span>
-                
+                <span id="app-version-display" class="text-xs text-gray-400 mr-4"></span>
                 <div id="version-status-dot" class="hidden w-3 h-3 rounded-full mr-4" title="État de la version"></div>
-                
                 <div class="relative">
                     <div id="notification-bell" class="cursor-pointer">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="text-gray-600 hover:text-gray-800" viewBox="0 0 16 16">
@@ -135,18 +134,12 @@
                         <div id="notification-list" class="max-h-96 overflow-y-auto"></div>
                     </div>
                 </div>
-                
                 <button id="logoutBtn" class="ml-4 bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-md text-sm">Déconnexion</button>
             </div>
         </header>
 
         <nav id="mobile-nav" class="md:hidden bg-white shadow-inner p-2 flex justify-start overflow-x-auto whitespace-nowrap border-t sticky top-[65px] z-10"></nav>
         <main id="page-content" class="p-4 md:p-6"></main>
-    </div>
-    
-    <div id="update-banner" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-4 z-50">
-        <span>Une nouvelle version est disponible.</span>
-        <button id="update-btn" class="bg-blue-600 hover:bg-blue-700 px-4 py-1.5 rounded">Mettre à jour</button>
     </div>
 
     <div id="genericModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4">
