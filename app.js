@@ -1,8 +1,9 @@
+const APP_VERSION = 'v1.2.5';
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit, writeBatch, addDoc, initializeFirestore, CACHE_SIZE_UNLIMITED } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 
-// --- CONFIGURATION ---
 const firebaseConfig = {
   apiKey: "AIzaSyDm-C8VDT1Td85WUBWR7MxlrjDkY78eoHs",
   authDomain: "pointeuse-lpf.firebaseapp.com",
@@ -19,14 +20,12 @@ export const db = initializeFirestore(app, {
     cacheSizeBytes: CACHE_SIZE_UNLIMITED
 });
 
-// --- VARIABLES GLOBALES ---
 export const pageContent = document.getElementById('page-content');
 export let currentUser = null;
 export let isAdmin = false;
 let isMasqueradingAsUser = false;
 let genericModal, modalTitle, modalMessage, modalConfirmBtn, modalCancelBtn;
 
-// --- DÉFINITION DES MENUS ---
 const userTabs = [
     { id: 'user-dashboard', name: 'Planning' },
     { id: 'user-updates', name: 'Détails chantier' },
@@ -42,11 +41,9 @@ const adminTabs = [
     { id: 'admin-chantiers', name: 'Gestion Chantiers' },
     { id: 'admin-data', name: 'Données' },
     { id: 'admin-travel-report', name: 'Rapport Trajets' },
-    { id: 'admin-colleagues', name: 'Collègues' },
-    { id: 'admin-users', name: 'Utilisateurs' },
+    { id: 'admin-hours-report', name: 'Rapport Horaires' },
+    { id: 'admin-team', name: 'Gestion Équipe' },
 ];
-
-// --- FONCTIONS DE L'APPLICATION ---
 
 function toggleView() {
     isMasqueradingAsUser = !isMasqueradingAsUser;
@@ -58,7 +55,6 @@ function toggleView() {
 function setupNavigation() {
     const isEffectiveAdmin = isAdmin && !isMasqueradingAsUser;
     const tabs = isEffectiveAdmin ? adminTabs : userTabs;
-
     const mainNav = document.getElementById('main-nav');
     const mobileNav = document.getElementById('mobile-nav');
     [mainNav, mobileNav].forEach(nav => {
@@ -72,7 +68,6 @@ function setupNavigation() {
             nav.appendChild(tabButton);
         });
     });
-
     const switchBtn = document.getElementById('switchViewBtn');
     if (isAdmin) {
         switchBtn.classList.remove('hidden');
@@ -97,8 +92,6 @@ export async function navigateTo(pageId, params = {}) {
         pageContent.innerHTML = `<p class="text-red-500 text-center mt-8">Erreur: Impossible de charger la page "${pageId}".</p>`;
     }
 }
-
-// --- GESTION DES NOTIFICATIONS ---
 
 function setupNotifications() {
     const notificationBell = document.getElementById('notification-bell');
@@ -154,8 +147,6 @@ function markNotificationsAsRead() {
     document.getElementById('notification-dot').classList.add('hidden');
     localStorage.setItem('lastNotificationCheck', new Date().toISOString());
 }
-
-// --- LOGIQUE DE DÉMARRAGE DE L'APPLICATION ---
 
 document.addEventListener('DOMContentLoaded', () => {
     genericModal = document.getElementById('genericModal');
@@ -230,7 +221,6 @@ document.addEventListener('DOMContentLoaded', () => {
         pendingContainer.style.display = 'none';
         appContainer.style.display = 'none';
         loader.style.display = 'flex';
-
         if (user) {
             const userRef = doc(db, "users", user.uid);
             try {
@@ -239,8 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const userData = userDoc.data();
                     currentUser = { ...user, ...userData };
                     isAdmin = userData.role === 'admin';
-                    isMasqueradingAsUser = isAdmin; // MODIFICATION CLÉ : L'admin commence en vue employé
-
+                    isMasqueradingAsUser = isAdmin;
                     switch (userData.status) {
                         case 'pending':
                             pendingContainer.style.display = 'flex';
@@ -251,9 +240,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             break;
                         case 'approved':
                             document.getElementById('currentUserDisplay').textContent = userData.displayName || user.email;
+                            document.getElementById('app-version-display').textContent = APP_VERSION;
                             setupNavigation();
                             setupNotifications();
-                            navigateTo('user-dashboard'); // Tout le monde va sur le dashboard user
+                            navigateTo('user-dashboard');
                             appContainer.style.display = 'block';
                             break;
                         default:
@@ -278,39 +268,44 @@ document.addEventListener('DOMContentLoaded', () => {
         loader.style.display = 'none';
     });
     
-    // GESTION DU SERVICE WORKER (VERSION FIABLE)
     if ('serviceWorker' in navigator) {
         let newWorker;
-        const updateBanner = document.getElementById('update-banner');
-        const updateBtn = document.getElementById('update-btn');
-
+        const promptUpdate = (worker) => {
+            showConfirmationModal(
+                "Mise à jour disponible",
+                "Une nouvelle version de l'application est prête. L'installation est rapide. Voulez-vous mettre à jour maintenant ?"
+            ).then(confirmed => {
+                if (confirmed && worker) {
+                    worker.postMessage({ type: 'SKIP_WAITING' });
+                } else {
+                    alert("Vous utilisez une ancienne version. La mise à jour vous sera reproposée.");
+                }
+            });
+        };
         navigator.serviceWorker.register('./sw.js').then(reg => {
+            if (reg.waiting) {
+                newWorker = reg.waiting;
+                promptUpdate(newWorker);
+            }
             reg.addEventListener('updatefound', () => {
                 newWorker = reg.installing;
                 newWorker.addEventListener('statechange', () => {
                     if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                        const statusDot = document.getElementById('version-status-dot');
-                        statusDot.classList.remove('bg-green-500');
-                        statusDot.classList.add('bg-orange-500', 'cursor-pointer');
-                        statusDot.title = 'Une mise à jour est disponible ! Cliquez pour l\'afficher.';
-                        statusDot.onclick = () => updateBanner.classList.remove('hidden');
-                        updateBanner.classList.remove('hidden');
+                        promptUpdate(newWorker);
                     }
                 });
             });
             const statusDot = document.getElementById('version-status-dot');
-            statusDot.classList.remove('hidden', 'bg-orange-500');
-            statusDot.classList.add('bg-green-500');
-            statusDot.title = 'Vous avez la dernière version.';
-        });
-
-        updateBtn.addEventListener('click', () => {
-            if (newWorker) {
-                newWorker.postMessage({ type: 'SKIP_WAITING' });
-                updateBanner.classList.add('hidden');
+            statusDot.classList.remove('hidden');
+            if (reg.waiting) {
+                statusDot.classList.add('bg-orange-500', 'cursor-pointer');
+                statusDot.title = 'Une mise à jour est en attente ! Cliquez pour installer.';
+                statusDot.onclick = () => promptUpdate(reg.waiting);
+            } else {
+                statusDot.classList.add('bg-green-500');
+                statusDot.title = 'Vous avez la dernière version.';
             }
         });
-
         let refreshing;
         navigator.serviceWorker.addEventListener('controllerchange', () => {
             if (refreshing) return;
@@ -320,15 +315,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// --- SYSTÈME DE MODALE GÉNÉRIQUE ---
-
 export function showConfirmationModal(title, message) {
     modalTitle.textContent = title;
     modalMessage.textContent = message;
     modalConfirmBtn.style.display = 'inline-block';
     modalCancelBtn.textContent = 'Annuler';
     genericModal.classList.remove('hidden');
-
     return new Promise((resolve) => {
         modalConfirmBtn.onclick = () => { genericModal.classList.add('hidden'); resolve(true); };
         modalCancelBtn.onclick = () => { genericModal.classList.add('hidden'); resolve(false); };
