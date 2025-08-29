@@ -639,10 +639,22 @@ async function handleSuggestionClick(e) {
         }
         const suggestion = suggDoc.data();
         
+        // --- LOGIQUE CORRIGÉE POUR LES COLLÈGUES ---
+        // 1. On prend la liste de collègues de base
+        const originalColleagues = suggestion.colleagues || [];
+
+        // 2. On retire le nom de l'utilisateur actuel de cette liste
+        const filteredColleagues = originalColleagues.filter(name => name !== currentUser.displayName);
+
+        // 3. On ajoute le nom de la personne qui a fait le pointage original
+        const finalColleagues = [...new Set([...filteredColleagues, suggestion.userName])];
+        // --- FIN DE LA LOGIQUE CORRIGÉE ---
+
         const newPointageData = {
-            ...suggestion, // Copie toutes les données (chantier, heures, etc.)
+            ...suggestion, // Copie les données (chantier, heures, etc.)
             uid: currentUser.uid,
             userName: currentUser.displayName,
+            colleagues: finalColleagues, // On utilise la nouvelle liste corrigée
             createdAt: serverTimestamp(),
             notes: `(Pointage ajouté depuis la saisie de ${suggestion.userName}) --- ${suggestion.notes || ''}`
         };
