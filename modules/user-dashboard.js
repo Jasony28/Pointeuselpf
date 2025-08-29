@@ -625,6 +625,9 @@ function renderSuggestions(suggestions) {
 /**
  * Gère les clics sur les boutons "Accepter" ou "Refuser".
  */
+/**
+ * Gère les clics sur les boutons "Accepter" ou "Refuser".
+ */
 async function handleSuggestionClick(e) {
     const button = e.target;
     const suggId = button.dataset.suggId;
@@ -639,10 +642,22 @@ async function handleSuggestionClick(e) {
         }
         const suggestion = suggDoc.data();
         
+        // --- NOUVELLE LOGIQUE CORRIGÉE ---
+        // 1. On prend la liste de collègues de base (ex: ["Eli", "Laura"])
+        const originalColleagues = suggestion.colleagues || [];
+
+        // 2. On retire le nom de l'utilisateur actuel (ex: Eli) de cette liste
+        const filteredColleagues = originalColleagues.filter(name => name !== currentUser.displayName);
+
+        // 3. On ajoute le nom de la personne qui a fait le pointage original (ex: Jason)
+        const finalColleagues = [...new Set([...filteredColleagues, suggestion.userName])];
+        // --- FIN DE LA NOUVELLE LOGIQUE ---
+
         const newPointageData = {
-            ...suggestion, // Copie toutes les données (chantier, heures, etc.)
+            ...suggestion, // Copie les données (chantier, heures, etc.)
             uid: currentUser.uid,
             userName: currentUser.displayName,
+            colleagues: finalColleagues, // <-- On utilise la nouvelle liste corrigée
             createdAt: serverTimestamp(),
             notes: `(Pointage ajouté depuis la saisie de ${suggestion.userName}) --- ${suggestion.notes || ''}`
         };

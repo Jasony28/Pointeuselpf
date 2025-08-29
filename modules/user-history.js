@@ -372,6 +372,14 @@ function generateHistoryPDF() {
     doc.setFont(undefined, 'bold');
     doc.text(`Total travail effectif : ${formatMilliseconds(totalEffectiveMs)}`, 40, finalY + 20);
 
-    const fileName = `Historique_${userName.replace(/ /g, '_')}_${startOfWeek.toISOString().split('T')[0]}.pdf`;
+   // --- NOUVELLE LOGIQUE POUR UN NOM DE FICHIER UNIQUE ---
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    // On crée un horodatage lisible comme "14h35m22s"
+    const timestamp = `${hours}h${minutes}m${seconds}s`;
+
+    const fileName = `Historique_${userName.replace(/ /g, '_')}_${startOfWeek.toISOString().split('T')[0]}_${timestamp}.pdf`;
     doc.save(fileName);
 }
