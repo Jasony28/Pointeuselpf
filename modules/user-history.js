@@ -1,7 +1,6 @@
 import { collection, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, isAdmin, pageContent, showConfirmationModal, showInfoModal } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
-import { getActiveChantiers, getTeamMembers } from "./data-service.js"; // <-- NOUVEAU
 
 let currentWeekOffset = 0;
 let targetUser = null;
@@ -78,12 +77,20 @@ export async function render(params = {}) {
 }
 
 async function cacheModalData() {
-    const chantiersData = await getActiveChantiers(); // <-- MODIFIÉ
-    chantiersCache = chantiersData.map(c => c.name);
-    colleaguesCache = await getTeamMembers(); // <-- MODIFIÉ
+    const chantiersQuery = query(collection(db, "chantiers"), where("status", "==", "active"), orderBy("name"));
+    const colleaguesQuery = query(collection(db, "colleagues"), orderBy("name"));
+    const usersQuery = query(collection(db, "users"), where("status", "==", "approved"), orderBy("displayName"));
+
+    const [chantiersSnapshot, colleaguesSnapshot, usersSnapshot] = await Promise.all([
+        getDocs(chantiersQuery), getDocs(colleaguesQuery), getDocs(usersQuery)
+    ]);
+
+    chantiersCache = chantiersSnapshot.docs.map(doc => doc.data().name);
+    const colleagueNames = colleaguesSnapshot.docs.map(doc => doc.data().name);
+    const userNames = usersSnapshot.docs.map(doc => doc.data().displayName);
+    colleaguesCache = [...new Set([...colleagueNames, ...userNames])].sort((a, b) => a.localeCompare(b));
 }
 
-// ... Le reste du fichier user-history.js ne change pas ...
 async function loadHistoryForWeek() {
     const historyList = document.getElementById("historyList");
     const weekTotalsDisplay = document.getElementById("weekTotalsDisplay");
@@ -96,7 +103,7 @@ async function loadHistoryForWeek() {
         where("uid", "==", targetUser.uid),
         where("timestamp", ">=", startOfWeek.toISOString()),
         where("timestamp", "<=", endOfWeek.toISOString()),
-        orderBy("timestamp", "asc") // Tri par ordre chronologique pour la journée
+        orderBy("timestamp", "asc")
     );
     const pointagesSnapshot = await getDocs(pointagesQuery);
     historyDataCache = pointagesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -116,13 +123,30 @@ async function loadHistoryForWeek() {
         const dayDate = new Date(startOfWeek);
         dayDate.setUTCDate(startOfWeek.getUTCDate() + i);
         const dateString = dayDate.toISOString().split('T')[0];
+        const dayEntries = pointagesByDate[dateString] || [];
+        
+        // CALCULE LE TOTAL POUR LA JOURNÉE
+        let dailyTotalMs = 0;
+        dayEntries.forEach(entry => {
+            if (entry.endTime) {
+                const duration = new Date(entry.endTime) - new Date(entry.timestamp) - (entry.pauseDurationMs || 0);
+                dailyTotalMs += duration;
+            }
+        });
         
         const dayWrapper = document.createElement('div');
         dayWrapper.className = 'bg-white p-4 rounded-lg shadow-sm';
         
         const dayHeader = document.createElement('div');
         dayHeader.className = 'flex justify-between items-center border-b pb-2 mb-3';
-        dayHeader.innerHTML = `<h3 class="font-bold text-lg">${days[i]} ${dayDate.toLocaleDateString('fr-FR', {day: 'numeric', month: 'long'})}</h3>`;
+        
+        // AFFICHE LE TOTAL DANS L'EN-TÊTE
+        dayHeader.innerHTML = `
+            <div class="flex items-center gap-4">
+                <h3 class="font-bold text-lg">${days[i]} ${dayDate.toLocaleDateString('fr-FR', {day: 'numeric', month: 'long'})}</h3>
+                ${dailyTotalMs > 0 ? `<span class="font-bold text-purple-700">${formatMilliseconds(dailyTotalMs)}</span>` : ''}
+            </div>
+        `;
         
         const addBtn = document.createElement('button');
         addBtn.innerHTML = `+ Ajouter`;
@@ -134,7 +158,6 @@ async function loadHistoryForWeek() {
 
         const entriesContainer = document.createElement('div');
         entriesContainer.className = 'space-y-3';
-        const dayEntries = pointagesByDate[dateString] || [];
         
         if (dayEntries.length === 0) {
             entriesContainer.innerHTML = `<p class="text-gray-500 text-center py-4">Aucun pointage pour ce jour.</p>`;
@@ -193,14 +216,17 @@ function createHistoryEntryElement(d) {
     if (isAdmin || currentUser.uid === targetUser.uid) {
         const controlsWrapper = document.createElement("div");
         controlsWrapper.className = "absolute top-2 right-3 flex flex-col items-end";
+
         const buttonsDiv = document.createElement('div');
         buttonsDiv.className = 'flex gap-2';
         buttonsDiv.innerHTML = `
             <button class="edit-btn text-gray-400 hover:text-blue-600 font-bold" title="Modifier" data-id="${d.id}">✏️</button>
             <button class="delete-btn text-gray-400 hover:text-red-600 font-bold" title="Supprimer" data-id="${d.id}">✖️</button>
         `;
+        
         controlsWrapper.appendChild(buttonsDiv);
         controlsWrapper.innerHTML += durationDisplay;
+        
         wrapper.appendChild(controlsWrapper);
     }
     return wrapper;
@@ -273,11 +299,11 @@ async function saveEntry(e) {
     };
 
     try {
-        if (entryId) { // Mise à jour
+        if (entryId) {
             const pointageRef = doc(db, "pointages", entryId);
             await updateDoc(pointageRef, dataToSave);
             showInfoModal("Succès", "Le pointage a été mis à jour.");
-        } else { // Ajout
+        } else {
             const fullData = {
                 ...dataToSave,
                 uid: targetUser.uid,
@@ -323,36 +349,51 @@ function generateHistoryPDF() {
     doc.text(`Employé : ${userName}`, 40, 75);
     doc.text(`Semaine du ${startOfWeek.toLocaleDateString('fr-FR')} au ${endOfWeek.toLocaleDateString('fr-FR')}`, 40, 85);
 
-    const tableHead = [['Date', 'Chantier', 'Durée Travail', 'Collègues', 'Remarques']];
-    const tableBody = [];
-    let currentDayKey = null;
-    let totalEffectiveMs = 0;
-
-    historyDataCache.forEach(d => {
-        if (!d.endTime) return;
-
-        const startDate = new Date(d.timestamp);
-        const dayKey = startDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' });
-
-        if (dayKey !== currentDayKey) {
-            currentDayKey = dayKey;
-            tableBody.push([{
-                content: dayKey,
-                colSpan: 5,
-                styles: { fillColor: '#f3f4f6', fontStyle: 'bold', textColor: '#374151' }
-            }]);
+    // --- NOUVEAU : On regroupe les pointages par jour et on calcule les totaux ---
+    const pointagesByDay = historyDataCache.reduce((acc, p) => {
+        if (!p.endTime) return acc;
+        const dayKey = new Date(p.timestamp).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' });
+        
+        if (!acc[dayKey]) {
+            acc[dayKey] = { entries: [], totalMs: 0 };
         }
         
-        const effectiveWorkMs = (new Date(d.endTime) - startDate) - (d.pauseDurationMs || 0);
-        const durationStr = formatMilliseconds(effectiveWorkMs);
-        totalEffectiveMs += effectiveWorkMs;
+        const durationMs = (new Date(p.endTime) - new Date(p.timestamp)) - (p.pauseDurationMs || 0);
+        acc[dayKey].entries.push(p);
+        acc[dayKey].totalMs += durationMs;
         
-        const dateStr = startDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
-        const colleaguesStr = Array.isArray(d.colleagues) && d.colleagues.length > 0 ? d.colleagues.join(", ") : 'Aucun';
-        let humanNotes = d.notes ? d.notes.split('---').filter(part => !part.includes("Modification (par")).join(' ').trim() : '';
+        return acc;
+    }, {});
+    
+    // --- MODIFIÉ : On construit le tableau à partir des données regroupées ---
+    const tableHead = [['Date', 'Chantier', 'Durée Travail', 'Collègues', 'Remarques']];
+    const tableBody = [];
+    let totalEffectiveMs = 0;
 
-        tableBody.push([dateStr, d.chantier, durationStr, colleaguesStr, humanNotes]);
-    });
+    for (const dayKey in pointagesByDay) {
+        const dayData = pointagesByDay[dayKey];
+        totalEffectiveMs += dayData.totalMs;
+
+        // On crée la ligne d'en-tête pour le jour avec son total
+        tableBody.push([{
+            content: `${dayKey} - Total : ${formatMilliseconds(dayData.totalMs)}`,
+            colSpan: 5,
+            styles: { fillColor: '#f3f4f6', fontStyle: 'bold', textColor: '#374151' }
+        }]);
+
+        // On ajoute les pointages pour ce jour
+        dayData.entries.forEach(d => {
+            const startDate = new Date(d.timestamp);
+            const effectiveWorkMs = (new Date(d.endTime) - startDate) - (d.pauseDurationMs || 0);
+            
+            const dateStr = startDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+            const durationStr = formatMilliseconds(effectiveWorkMs);
+            const colleaguesStr = Array.isArray(d.colleagues) && d.colleagues.length > 0 ? d.colleagues.join(", ") : 'Aucun';
+            const humanNotes = d.notes ? d.notes.split('---').filter(part => !part.includes("Modification (par")).join(' ').trim() : '';
+
+            tableBody.push([dateStr, d.chantier, durationStr, colleaguesStr, humanNotes]);
+        });
+    }
 
     doc.autoTable({
         startY: 100,
@@ -370,14 +411,12 @@ function generateHistoryPDF() {
     const finalY = doc.lastAutoTable.finalY;
     doc.setFontSize(12);
     doc.setFont(undefined, 'bold');
-    doc.text(`Total travail effectif : ${formatMilliseconds(totalEffectiveMs)}`, 40, finalY + 20);
+    doc.text(`Total travail effectif de la semaine : ${formatMilliseconds(totalEffectiveMs)}`, 40, finalY + 20);
 
-   // --- NOUVELLE LOGIQUE POUR UN NOM DE FICHIER UNIQUE ---
     const now = new Date();
     const hours = String(now.getHours()).padStart(2, '0');
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const seconds = String(now.getSeconds()).padStart(2, '0');
-    // On crée un horodatage lisible comme "14h35m22s"
     const timestamp = `${hours}h${minutes}m${seconds}s`;
 
     const fileName = `Historique_${userName.replace(/ /g, '_')}_${startOfWeek.toISOString().split('T')[0]}_${timestamp}.pdf`;

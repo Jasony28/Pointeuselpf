@@ -126,11 +126,19 @@ async function checkForOpenPointage() {
 /**
  * Initialise ou met à jour le tracker de pointage en temps réel.
  */
+/**
+ * Initialise ou met à jour le tracker de pointage en temps réel.
+ */
 function initLiveTracker() {
     const container = document.getElementById('live-tracker-container');
+    // --- CORRECTION AJOUTÉE ---
+    if (!container) return; // Si le conteneur n'existe pas sur la page, on arrête la fonction.
+    // --- FIN DE LA CORRECTION ---
+
     const activePointage = JSON.parse(localStorage.getItem('activePointage'));
 
     if (activePointage && activePointage.uid === currentUser.uid) {
+        // ... (le reste de la fonction ne change pas)
         const isPaused = activePointage.status === 'paused';
         container.innerHTML = `
             <div class="text-center">

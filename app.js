@@ -1,4 +1,4 @@
-const APP_VERSION = 'v1.2.8';
+const APP_VERSION = 'v1.9.0';
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
@@ -36,9 +36,10 @@ const userTabs = [
 const adminTabs = [
     { id: 'admin-dashboard', name: 'Tableau de Bord' },
     { id: 'admin-planning', name: 'Planification' },
-    { id: 'admin-updates', name: 'Détails Chantiers' },
+    { id: 'admin-invoicing', name: 'Facturation' }, // <-- LIGNE AJOUTÉE
     { id: 'admin-tarifs', name: 'Tarifs' },
     { id: 'admin-chantiers', name: 'Gestion Chantiers' },
+    
     { id: 'admin-data', name: 'Données' },
     { id: 'admin-travel-report', name: 'Rapport Trajets' },
     { id: 'admin-hours-report', name: 'Rapport Horaires' },
@@ -334,6 +335,4 @@ export function showInfoModal(title, message) {
     modalCancelBtn.textContent = 'OK';
     genericModal.classList.remove('hidden');
     modalCancelBtn.onclick = () => { genericModal.classList.add('hidden'); };
-
 }
-
