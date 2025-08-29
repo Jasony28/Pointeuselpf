@@ -1,4 +1,4 @@
-const APP_VERSION = 'v1.2.6';
+const APP_VERSION = 'v1.2.7';
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
@@ -334,4 +334,5 @@ export function showInfoModal(title, message) {
     modalCancelBtn.textContent = 'OK';
     genericModal.classList.remove('hidden');
     modalCancelBtn.onclick = () => { genericModal.classList.add('hidden'); };
+
 }
