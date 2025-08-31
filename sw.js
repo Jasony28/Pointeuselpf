@@ -7,7 +7,7 @@ if (workbox) {
 
   // --- VERSION DE L'APPLICATION ---
   // DOIT être exactement le même numéro que dans app.js
-  const APP_VERSION = 'v1.3.0';
+  const APP_VERSION = 'v2.0.0';
 
   // --- MISE EN CACHE DES FICHIERS DE BASE (PRECACHING) ---
   const precacheManifest = [
