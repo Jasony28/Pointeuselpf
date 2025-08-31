@@ -2,7 +2,6 @@ import { collection, query, where, orderBy, getDocs, doc, deleteDoc } from "http
 import { db, pageContent, showConfirmationModal, navigateTo } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 
-// --- NOUVEAU : Objets pour gérer l'état complet des filtres ---
 let userStatsFilter = { period: 'week', offset: 0 };
 let chantierStatsFilter = { period: 'week', offset: 0 };
 
@@ -13,11 +12,11 @@ export async function render() {
             
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div id="week-total-card" class="bg-white p-6 rounded-lg shadow-sm text-center">
-                    <h3 class="text-sm font-medium text-gray-500">Heures cette semaine (Total)</h3>
+                    <h3 class="text-sm font-medium text-gray-500">Heures cette semaine (Total Effectif)</h3>
                     <p class="mt-1 text-3xl font-semibold animate-pulse">...</p>
                 </div>
                 <div id="month-total-card" class="bg-white p-6 rounded-lg shadow-sm text-center">
-                    <h3 class="text-sm font-medium text-gray-500">Heures ce mois-ci (Total)</h3>
+                    <h3 class="text-sm font-medium text-gray-500">Heures ce mois-ci (Total Effectif)</h3>
                     <p class="mt-1 text-3xl font-semibold animate-pulse">...</p>
                 </div>
                 <div id="active-projects-card" class="bg-white p-6 rounded-lg shadow-sm text-center">
@@ -61,7 +60,7 @@ export async function render() {
                     <div id="chantier-stats-list" class="space-y-3"></div>
                 </div>
             </div>
-
+            
             <div>
                 <h3 class="text-xl font-semibold mb-2">Activité Récente</h3>
                 <div id="recent-activity-list" class="space-y-3"></div>
@@ -80,7 +79,7 @@ function setupEventListeners() {
     document.querySelectorAll('.user-stats-filter-btn').forEach(btn => {
         btn.onclick = () => {
             userStatsFilter.period = btn.dataset.period;
-            userStatsFilter.offset = 0; // Reset offset when changing period type
+            userStatsFilter.offset = 0;
             loadDetailedStats();
         };
     });
@@ -98,7 +97,6 @@ function setupEventListeners() {
 }
 
 async function loadGlobalStats() {
-    // ... (Cette fonction reste inchangée)
     const now = new Date();
     const { startOfWeek } = getWeekDateRange(0);
     const startOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
@@ -107,14 +105,29 @@ async function loadGlobalStats() {
     const chantiersQuery = query(collection(db, "chantiers"), where("status", "==", "active"));
     try {
         const [weekSnapshot, monthSnapshot, chantiersSnapshot] = await Promise.all([ getDocs(weekQuery), getDocs(monthQuery), getDocs(chantiersQuery) ]);
+        
         let weekMs = 0;
-        weekSnapshot.forEach(doc => { if (doc.data().endTime) weekMs += new Date(doc.data().endTime) - new Date(doc.data().timestamp); });
+        weekSnapshot.forEach(doc => { 
+            const data = doc.data();
+            if (data.endTime) {
+                // --- MODIFICATION ICI ---
+                weekMs += (new Date(data.endTime) - new Date(data.timestamp)) - (data.pauseDurationMs || 0); 
+            }
+        });
         const weekCard = document.querySelector('#week-total-card p');
         if (weekCard) { weekCard.textContent = formatMilliseconds(weekMs); weekCard.classList.remove('animate-pulse'); }
+        
         let monthMs = 0;
-        monthSnapshot.forEach(doc => { if (doc.data().endTime) monthMs += new Date(doc.data().endTime) - new Date(doc.data().timestamp); });
+        monthSnapshot.forEach(doc => { 
+            const data = doc.data();
+            if (data.endTime) {
+                // --- MODIFICATION ICI ---
+                monthMs += (new Date(data.endTime) - new Date(data.timestamp)) - (data.pauseDurationMs || 0); 
+            }
+        });
         const monthCard = document.querySelector('#month-total-card p');
         if (monthCard) { monthCard.textContent = formatMilliseconds(monthMs); monthCard.classList.remove('animate-pulse'); }
+
         const projectsCard = document.querySelector('#active-projects-card p');
         if (projectsCard) { projectsCard.textContent = chantiersSnapshot.size; projectsCard.classList.remove('animate-pulse'); }
     } catch (error) { console.error("Erreur de chargement des statistiques globales:", error); }
@@ -123,7 +136,6 @@ async function loadGlobalStats() {
 function getPeriodInfo(filter) {
     const now = new Date();
     let startDate, endDate, displayText;
-
     switch (filter.period) {
         case 'year':
             const year = now.getFullYear() + filter.offset;
@@ -167,7 +179,8 @@ async function loadDetailedStats() {
             const data = doc.data();
             const docDate = new Date(data.timestamp);
             if (data.endTime) {
-                const durationMs = new Date(data.endTime) - docDate;
+                // --- MODIFICATION ICI ---
+                const durationMs = (new Date(data.endTime) - docDate) - (data.pauseDurationMs || 0);
                 if (docDate >= userInfo.startDate && docDate <= userInfo.endDate) {
                     userStats[data.userName] = (userStats[data.userName] || 0) + durationMs;
                 }
@@ -195,7 +208,6 @@ function updateFilterUI(type, filter, displayText) {
 }
 
 function displayStats(statsObject, container, emptyMessage, isClickable = false) {
-    // ... (Cette fonction reste inchangée)
     if (!container) return;
     container.innerHTML = "";
     const sortedEntries = Object.entries(statsObject).sort(([, a], [, b]) => b - a);
@@ -217,7 +229,6 @@ function displayStats(statsObject, container, emptyMessage, isClickable = false)
 }
 
 async function loadRecentActivity() {
-    // ... (Cette fonction reste inchangée)
     const container = document.getElementById('recent-activity-list');
     if (!container) return;
     try {
@@ -233,15 +244,15 @@ async function loadRecentActivity() {
 }
 
 function createDetailedActivityElement(docId, d) {
-    // ... (Cette fonction reste inchangée)
     const wrapper = document.createElement("div");
     wrapper.className = "p-4 border rounded-lg bg-white relative shadow-sm space-y-1";
     const startDate = new Date(d.timestamp);
     const endDate = d.endTime ? new Date(d.endTime) : null;
     let timeDisplay = "", durationDisplay = "";
     if (endDate) {
-        timeDisplay = `<div>De ${startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} à ${endDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>`;
-        durationDisplay = `<div class="text-sm text-gray-600">Durée : ${formatMilliseconds(endDate - startDate)}</div>`;
+        timeDisplay = `De ${startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} à ${endDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+        // --- MODIFICATION ICI ---
+        durationDisplay = `<div class="text-sm text-gray-600">Durée effective : ${formatMilliseconds((endDate - startDate) - (d.pauseDurationMs || 0))}</div>`;
     } else {
         timeDisplay = `<div>Débuté à ${startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} (en cours)</div>`;
     }

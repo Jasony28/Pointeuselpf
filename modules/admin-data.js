@@ -1,16 +1,14 @@
 import { collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, showInfoModal } from "../app.js";
-// CORRECTION: Import de la fonction utilitaire pour la gestion des dates.
 import { getWeekDateRange } from "./utils.js";
 
-// Variables pour les graphiques et les données
 let chantierChart = null;
 let userChart = null;
 let evolutionChart = null;
 let pointagesCache = [];
 let usersCache = [];
 let chantiersCache = [];
-let currentStats = {}; // Pour stocker les dernières statistiques calculées
+let currentStats = {};
 
 export async function render() {
     pageContent.innerHTML = `
@@ -61,10 +59,10 @@ export async function render() {
             </div>
         </div>
     `;
-setTimeout(async () => {
-    await cacheInitialData();
-    setupEventListeners();
-    await loadDataForPeriod('week');
+    setTimeout(async () => {
+        await cacheInitialData();
+        setupEventListeners();
+        await loadDataForPeriod('week');
     }, 0);
 }
 
@@ -91,7 +89,6 @@ function setupEventListeners() {
         const activeFilterBtn = document.querySelector('.filter-btn.bg-white');
         loadDataForPeriod(activeFilterBtn ? activeFilterBtn.dataset.filter : null);
     };
-
     document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.onclick = () => {
             document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('bg-white', 'shadow'));
@@ -101,7 +98,6 @@ function setupEventListeners() {
             loadDataForPeriod(btn.dataset.filter);
         };
     });
-    
     document.getElementById('user-filter').onchange = refreshData;
     document.getElementById('chantier-filter').onchange = refreshData;
     document.getElementById('start-date-filter').onchange = refreshData;
@@ -135,7 +131,6 @@ async function loadDataForPeriod(period) {
                 break;
             case 'week':
             default:
-                // CORRECTION: Utilise la fonction centralisée pour obtenir une plage de semaine UTC cohérente.
                 const weekRange = getWeekDateRange(0);
                 startDate = weekRange.startOfWeek;
                 endDate = weekRange.endOfWeek;
@@ -166,7 +161,8 @@ async function loadDataForPeriod(period) {
         pointagesSnapshot.forEach(doc => {
             const data = doc.data();
             if (data.endTime) {
-                const durationMs = new Date(data.endTime) - new Date(data.timestamp);
+                // --- MODIFICATION ICI ---
+                const durationMs = (new Date(data.endTime) - new Date(data.timestamp)) - (data.pauseDurationMs || 0);
                 const durationHours = durationMs / 3600000;
                 const user = usersCache.find(u => u.uid === data.uid);
                 const cost = durationHours * (user?.tauxHoraire || 0);
@@ -199,7 +195,6 @@ async function loadDataForPeriod(period) {
         document.getElementById('kpi-container').innerHTML = `<div class="col-span-full text-center p-4 text-red-500">Erreur de chargement des données.</div>`;
     }
 }
-
 function updateKPIs(stats) {
     const topChantier = Object.entries(stats.hoursByChantier).sort((a, b) => b[1] - a[1])[0];
     const topUser = Object.entries(stats.hoursByUser).sort((a, b) => b[1] - a[1])[0];

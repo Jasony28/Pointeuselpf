@@ -1,5 +1,5 @@
-import { collection, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, currentUser, isAdmin, pageContent, showConfirmationModal, showInfoModal } from "../app.js";
+import { collection, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc, addDoc, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { db, currentUser, pageContent, showConfirmationModal, showInfoModal, isEffectiveAdmin } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 
 let currentWeekOffset = 0;
@@ -8,8 +8,23 @@ let historyDataCache = [];
 let chantiersCache = [];
 let colleaguesCache = [];
 
+async function logAction(pointageId, action, details = {}) {
+    try {
+        const logData = {
+            action: action,
+            modifiedBy: currentUser.displayName,
+            timestamp: serverTimestamp(),
+            details: details
+        };
+        const logCollectionRef = collection(db, `pointages/${pointageId}/auditLog`);
+        await addDoc(logCollectionRef, logData);
+    } catch (error) {
+        console.error("Erreur lors de l'enregistrement du log:", error);
+    }
+}
+
 export async function render(params = {}) {
-    if (params.userId && isAdmin) {
+    if (params.userId && currentUser.role === 'admin') {
         targetUser = { uid: params.userId, name: params.userName };
     } else {
         targetUser = { uid: currentUser.uid, name: "Mon" };
@@ -81,11 +96,10 @@ async function cacheModalData() {
     const colleaguesQuery = query(collection(db, "colleagues"), orderBy("name"));
     const usersQuery = query(collection(db, "users"), where("status", "==", "approved"), orderBy("displayName"));
 
-    // La correction est sur la dernière ligne de Promise.all
     const [chantiersSnapshot, colleaguesSnapshot, usersSnapshot] = await Promise.all([
         getDocs(chantiersQuery),
         getDocs(colleaguesQuery),
-        getDocs(usersQuery) // <-- CORRIGÉ
+        getDocs(usersQuery)
     ]);
 
     chantiersCache = chantiersSnapshot.docs.map(doc => doc.data().name);
@@ -149,11 +163,14 @@ async function loadHistoryForWeek() {
             </div>
         `;
         
-        const addBtn = document.createElement('button');
-        addBtn.innerHTML = `+ Ajouter`;
-        addBtn.className = 'add-pointage-btn text-blue-600 hover:text-blue-800 text-sm font-semibold';
-        addBtn.dataset.date = dateString;
-        dayHeader.appendChild(addBtn);
+        // CORRIGÉ : On vérifie simplement si l'utilisateur connecté est un admin
+        if (currentUser.role === 'admin') {
+            const addBtn = document.createElement('button');
+            addBtn.innerHTML = `+ Ajouter`;
+            addBtn.className = 'add-pointage-btn text-blue-600 hover:text-blue-800 text-sm font-semibold';
+            addBtn.dataset.date = dateString;
+            dayHeader.appendChild(addBtn);
+        }
         
         dayWrapper.appendChild(dayHeader);
 
@@ -180,6 +197,8 @@ async function loadHistoryForWeek() {
 }
 
 function handleHistoryClick(e) {
+    if (currentUser.role !== 'admin') return;
+
     const target = e.target;
     if (target.closest('.add-pointage-btn')) {
         openEntryModal({ date: target.closest('.add-pointage-btn').dataset.date });
@@ -200,31 +219,29 @@ function createHistoryEntryElement(d) {
     const startDate = new Date(d.timestamp);
     const endDate = d.endTime ? new Date(d.endTime) : null;
 
-    let timeDisplay = "", durationDisplay = "", pauseDisplay = ""; // <-- NOUVELLE VARIABLE
+    let timeDisplay = "", durationDisplay = "", pauseDisplay = "";
     if (endDate) {
         const effectiveWorkMs = (endDate - startDate) - (d.pauseDurationMs || 0);
         timeDisplay = `De ${startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} à ${endDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
         durationDisplay = `<div class="text-sm font-bold text-purple-700 mt-1">${formatMilliseconds(effectiveWorkMs)}</div>`;
-        // --- MODIFICATION : AJOUT DE L'AFFICHAGE DE LA PAUSE ---
         if (d.pauseDurationMs && d.pauseDurationMs > 0) {
             pauseDisplay = `<div class="text-xs text-yellow-600 mt-1">Pause : ${formatMilliseconds(d.pauseDurationMs)}</div>`;
         }
-        // --- FIN DE LA MODIFICATION ---
     }
 
     wrapper.innerHTML = `
-      <div class="pr-20"> <div class="font-bold">${d.chantier}</div>
+      <div class="pr-20">
+        <div class="font-bold">${d.chantier}</div>
         <div class="text-sm text-gray-600">${timeDisplay}</div>
         <div class="text-xs mt-1">Collègues : ${Array.isArray(d.colleagues) && d.colleagues.length > 0 ? d.colleagues.join(", ") : 'Aucun'}</div>
       </div>
       ${d.notes ? `<div class="mt-2 pt-2 border-t text-xs text-gray-500"><strong>Notes:</strong> ${d.notes}</div>` : ""}
     `;
 
-    if (isAdmin || currentUser.uid === targetUser.uid) {
+    // CORRIGÉ : On vérifie simplement si l'utilisateur connecté est un admin
+    if (currentUser.role === 'admin') {
         const controlsWrapper = document.createElement("div");
-        // --- MODIFICATION : AJOUT DE text-right pour aligner les durées ---
         controlsWrapper.className = "absolute top-2 right-3 flex flex-col items-end text-right"; 
-        // --- FIN DE LA MODIFICATION ---
 
         const buttonsDiv = document.createElement('div');
         buttonsDiv.className = 'flex gap-2';
@@ -234,23 +251,32 @@ function createHistoryEntryElement(d) {
         `;
         
         controlsWrapper.appendChild(buttonsDiv);
-        // --- MODIFICATION : AJOUT DE pauseDisplay ---
         controlsWrapper.innerHTML += pauseDisplay + durationDisplay;
-        // --- FIN DE LA MODIFICATION ---
         
         wrapper.appendChild(controlsWrapper);
+    } else {
+        const durationWrapper = document.createElement("div");
+        durationWrapper.className = "absolute top-2 right-3 flex flex-col items-end text-right";
+        durationWrapper.innerHTML = pauseDisplay + durationDisplay;
+        wrapper.appendChild(durationWrapper);
     }
     return wrapper;
 }
 
 async function deletePointage(pointageId) {
+    if (currentUser.role !== 'admin') return;
+    
     const confirmed = await showConfirmationModal("Confirmation", "Supprimer ce pointage ?");
     if (confirmed) {
-        await deleteDoc(doc(db, "pointages", pointageId));
+        const pointageRef = doc(db, "pointages", pointageId);
+        const pointageSnap = await getDoc(pointageRef);
+        if(pointageSnap.exists()) {
+             await logAction(pointageId, "Suppression", { deletedData: pointageSnap.data() });
+        }
+        await deleteDoc(pointageRef);
         loadHistoryForWeek();
     }
 }
-
 function openEntryModal(data = {}) {
     const modal = document.getElementById('entryModal');
     const form = document.getElementById('entryForm');
@@ -288,6 +314,8 @@ function openEntryModal(data = {}) {
 
 async function saveEntry(e) {
     e.preventDefault();
+    if (!isEffectiveAdmin()) return;
+
     const modal = document.getElementById('entryModal');
     const entryId = document.getElementById('entryId').value;
     const date = document.getElementById('entryDate').value;
@@ -312,8 +340,24 @@ async function saveEntry(e) {
     try {
         if (entryId) {
             const pointageRef = doc(db, "pointages", entryId);
+            
+            const beforeSnap = await getDoc(pointageRef);
+            const beforeData = beforeSnap.data();
+
             await updateDoc(pointageRef, dataToSave);
+
+            const changes = {};
+            for(const key in dataToSave) {
+                if(JSON.stringify(beforeData[key]) !== JSON.stringify(dataToSave[key])) {
+                    changes[key] = { from: beforeData[key] || "vide", to: dataToSave[key] };
+                }
+            }
+            if(Object.keys(changes).length > 0) {
+                 await logAction(entryId, "Modification", { changes });
+            }
+
             showInfoModal("Succès", "Le pointage a été mis à jour.");
+
         } else {
             const fullData = {
                 ...dataToSave,
@@ -322,7 +366,10 @@ async function saveEntry(e) {
                 createdAt: serverTimestamp(),
                 status: 'completed'
             };
-            await addDoc(collection(db, "pointages"), fullData);
+            const newDocRef = await addDoc(collection(db, "pointages"), fullData);
+            
+            await logAction(newDocRef.id, "Création Manuelle", { createdData: fullData });
+
             showInfoModal("Succès", "Le pointage a été ajouté.");
         }
         modal.classList.add('hidden');
@@ -332,6 +379,7 @@ async function saveEntry(e) {
         showInfoModal("Erreur", "L'enregistrement a échoué.");
     }
 }
+
 
 function generateHistoryPDF() {
     if (historyDataCache.length === 0) {

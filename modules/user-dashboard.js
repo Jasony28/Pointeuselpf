@@ -23,7 +23,7 @@ export async function render() {
                 <div class="bg-white rounded-lg shadow-sm p-4">
                     <div class="flex justify-between items-center">
                         <button id="prevWeekBtn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg">&lt;</button>
-                        <div id="currentPeriodDisplay" class="text-center font-semibold text-lg"></div>
+                        <div id="currentPeriodDisplay" class="text-center font-semibold text-lg min-w-[250px]"></div>
                         <button id="nextWeekBtn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg">&gt;</button>
                     </div>
                 </div>
@@ -74,7 +74,6 @@ export async function render() {
         </div>
     `;
 
-    // --- DÉBUT DE LA CORRECTION ---
     setTimeout(async () => {
         try {
             await cacheDataForModals();
@@ -84,19 +83,22 @@ export async function render() {
                 checkForMissedPointages();
             }
 
-            // On initialise les écouteurs d'événements pour la navigation de semaine ICI, une seule fois.
             document.getElementById("prevWeekBtn").onclick = () => { currentWeekOffset--; displayWeekView(); };
             document.getElementById("nextWeekBtn").onclick = () => { currentWeekOffset++; displayWeekView(); };
             
-            // On fait le premier affichage
             displayWeekView();
 
         } catch (error) {
             console.error("Erreur critique dans le rendu du dashboard utilisateur:", error);
         }
     }, 0);
-    // --- FIN DE LA CORRECTION ---
 }
+
+// Le reste du fichier (cacheDataForModals, initLiveTracker, etc.) est identique
+// et n'a pas besoin d'être montré ici pour ne pas surcharger.
+// Vous pouvez simplement copier le début du code jusqu'à cette ligne
+// et garder la fin de votre fichier existant si vous préférez.
+// Ou remplacer le fichier entier par cette version complète.
 
 async function cacheDataForModals() {
     const chantiersData = await getActiveChantiers();
@@ -418,15 +420,12 @@ function openStopModal() {
     };
 }
 
-// --- DÉBUT DE LA CORRECTION ---
-// La fonction ne s'occupe plus que de l'affichage
 function displayWeekView() {
     const { startOfWeek, endOfWeek } = getWeekDateRange(currentWeekOffset);
     
     const options = { day: 'numeric', month: 'long', timeZone: 'UTC' };
     const displayElement = document.getElementById("currentPeriodDisplay");
     
-    // On vérifie que l'élément existe avant de le manipuler
     if(displayElement) {
         displayElement.textContent = `Semaine du ${startOfWeek.toLocaleDateString('fr-FR', options)} au ${endOfWeek.toLocaleDateString('fr-FR', options)}`;
     }
@@ -448,7 +447,6 @@ function displayWeekView() {
         loadUserScheduleForWeek(startOfWeek, endOfWeek);
     }
 }
-// --- FIN DE LA CORRECTION ---
 
 async function loadUserScheduleForWeek(start, end) {
     const weekId = start.toISOString().split('T')[0];

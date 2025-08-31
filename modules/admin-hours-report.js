@@ -1,10 +1,7 @@
-// modules/admin-hours-report.js
-
 import { collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 
-// Variable pour gérer la période de temps sélectionnée (filtre)
 let filter = { period: 'week', offset: 0 };
 
 export async function render() {
@@ -31,7 +28,7 @@ export async function render() {
                         <thead>
                             <tr class="border-b">
                                 <th class="p-2">Employé</th>
-                                <th class="p-2">Heures Prestées</th>
+                                <th class="p-2">Heures Prestées (Effectif)</th>
                             </tr>
                         </thead>
                         <tbody id="report-body">
@@ -52,7 +49,7 @@ function setupEventListeners() {
     document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.onclick = () => {
             filter.period = btn.dataset.period;
-            filter.offset = 0; // Réinitialise le décalage quand on change de type de vue
+            filter.offset = 0;
             loadReport();
         };
     });
@@ -91,7 +88,6 @@ function getPeriodInfo(filter) {
 async function loadReport() {
     const periodInfo = getPeriodInfo(filter);
     
-    // Mettre à jour l'interface (titre de la période et boutons)
     document.getElementById('period-display').textContent = periodInfo.displayText;
     document.querySelectorAll('.filter-btn').forEach(btn => {
         const isSelected = btn.dataset.period === filter.period;
@@ -103,32 +99,28 @@ async function loadReport() {
     reportBody.innerHTML = `<tr><td colspan="2" class="p-4 text-center">Chargement...</td></tr>`;
 
     try {
-        // 1. Récupérer tous les utilisateurs approuvés
         const usersQuery = query(collection(db, "users"), where("status", "==", "approved"), orderBy("displayName"));
         const usersSnapshot = await getDocs(usersQuery);
         const approvedUsers = usersSnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
 
-        // 2. Préparer un objet pour stocker les heures par utilisateur
         const hoursByUid = new Map();
         approvedUsers.forEach(user => hoursByUid.set(user.uid, 0));
 
-        // 3. Récupérer tous les pointages pour la période sélectionnée
         const pointagesQuery = query(collection(db, "pointages"),
             where("timestamp", ">=", periodInfo.startDate.toISOString()),
             where("timestamp", "<=", periodInfo.endDate.toISOString())
         );
         const pointagesSnapshot = await getDocs(pointagesQuery);
 
-        // 4. Calculer le total des heures pour chaque utilisateur
         pointagesSnapshot.forEach(doc => {
             const pointage = doc.data();
             if (pointage.endTime && hoursByUid.has(pointage.uid)) {
-                const durationMs = new Date(pointage.endTime) - new Date(pointage.timestamp);
+                // --- MODIFICATION ICI ---
+                const durationMs = (new Date(pointage.endTime) - new Date(pointage.timestamp)) - (pointage.pauseDurationMs || 0);
                 hoursByUid.set(pointage.uid, hoursByUid.get(pointage.uid) + durationMs);
             }
         });
 
-        // 5. Afficher les résultats dans le tableau
         reportBody.innerHTML = '';
         if (approvedUsers.length === 0) {
             reportBody.innerHTML = `<tr><td colspan="2" class="p-4 text-center text-gray-500">Aucun employé approuvé trouvé.</td></tr>`;
