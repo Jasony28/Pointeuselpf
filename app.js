@@ -26,20 +26,24 @@ export let isAdmin = false;
 let isMasqueradingAsUser = false;
 let genericModal, modalTitle, modalMessage, modalConfirmBtn, modalCancelBtn;
 
+// Remplacez vos anciennes listes par celles-ci
+
 const userTabs = [
     { id: 'user-dashboard', name: 'Planning' },
+     { id: 'user-leave', name: 'Mes Congés' },
     { id: 'user-updates', name: 'Détails chantier' },
     { id: 'chantiers', name: 'Infos Chantiers' },
     { id: 'user-history', name: 'Mon Historique' },
+    // <-- LIGNE AJOUTÉE
 ];
 
 const adminTabs = [
     { id: 'admin-dashboard', name: 'Tableau de Bord' },
     { id: 'admin-planning', name: 'Planification' },
-    { id: 'admin-invoicing', name: 'Facturation' }, // <-- LIGNE AJOUTÉE
+    { id: 'admin-invoicing', name: 'Facturation' },
     { id: 'admin-tarifs', name: 'Tarifs' },
     { id: 'admin-chantiers', name: 'Gestion Chantiers' },
-    
+    { id: 'admin-leave', name: 'Gestion Congés' }, // <-- LIGNE AJOUTÉE
     { id: 'admin-data', name: 'Données' },
     { id: 'admin-travel-report', name: 'Rapport Trajets' },
     { id: 'admin-hours-report', name: 'Rapport Horaires' },

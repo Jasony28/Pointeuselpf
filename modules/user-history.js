@@ -20,7 +20,7 @@ export async function render(params = {}) {
             <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
                 <h2 id="history-title" class="text-2xl font-bold">🗓️ Historique de ${targetUser.name}</h2>
                 <button id="downloadPdfBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded-lg flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708-.708l3 3z"/></svg>
                     Télécharger PDF
                 </button>
             </div>
@@ -81,8 +81,11 @@ async function cacheModalData() {
     const colleaguesQuery = query(collection(db, "colleagues"), orderBy("name"));
     const usersQuery = query(collection(db, "users"), where("status", "==", "approved"), orderBy("displayName"));
 
+    // La correction est sur la dernière ligne de Promise.all
     const [chantiersSnapshot, colleaguesSnapshot, usersSnapshot] = await Promise.all([
-        getDocs(chantiersQuery), getDocs(colleaguesQuery), getDocs(usersQuery)
+        getDocs(chantiersQuery),
+        getDocs(colleaguesQuery),
+        getDocs(usersQuery) // <-- CORRIGÉ
     ]);
 
     chantiersCache = chantiersSnapshot.docs.map(doc => doc.data().name);
@@ -125,7 +128,6 @@ async function loadHistoryForWeek() {
         const dateString = dayDate.toISOString().split('T')[0];
         const dayEntries = pointagesByDate[dateString] || [];
         
-        // CALCULE LE TOTAL POUR LA JOURNÉE
         let dailyTotalMs = 0;
         dayEntries.forEach(entry => {
             if (entry.endTime) {
@@ -140,7 +142,6 @@ async function loadHistoryForWeek() {
         const dayHeader = document.createElement('div');
         dayHeader.className = 'flex justify-between items-center border-b pb-2 mb-3';
         
-        // AFFICHE LE TOTAL DANS L'EN-TÊTE
         dayHeader.innerHTML = `
             <div class="flex items-center gap-4">
                 <h3 class="font-bold text-lg">${days[i]} ${dayDate.toLocaleDateString('fr-FR', {day: 'numeric', month: 'long'})}</h3>
@@ -199,14 +200,20 @@ function createHistoryEntryElement(d) {
     const startDate = new Date(d.timestamp);
     const endDate = d.endTime ? new Date(d.endTime) : null;
 
-    let timeDisplay = "", durationDisplay = "";
+    let timeDisplay = "", durationDisplay = "", pauseDisplay = ""; // <-- NOUVELLE VARIABLE
     if (endDate) {
+        const effectiveWorkMs = (endDate - startDate) - (d.pauseDurationMs || 0);
         timeDisplay = `De ${startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} à ${endDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
-        durationDisplay = `<div class="text-sm font-bold text-purple-700 mt-1">${formatMilliseconds(endDate - startDate - (d.pauseDurationMs || 0))}</div>`;
+        durationDisplay = `<div class="text-sm font-bold text-purple-700 mt-1">${formatMilliseconds(effectiveWorkMs)}</div>`;
+        // --- MODIFICATION : AJOUT DE L'AFFICHAGE DE LA PAUSE ---
+        if (d.pauseDurationMs && d.pauseDurationMs > 0) {
+            pauseDisplay = `<div class="text-xs text-yellow-600 mt-1">Pause : ${formatMilliseconds(d.pauseDurationMs)}</div>`;
+        }
+        // --- FIN DE LA MODIFICATION ---
     }
 
     wrapper.innerHTML = `
-      <div class="pr-16"> <div class="font-bold">${d.chantier}</div>
+      <div class="pr-20"> <div class="font-bold">${d.chantier}</div>
         <div class="text-sm text-gray-600">${timeDisplay}</div>
         <div class="text-xs mt-1">Collègues : ${Array.isArray(d.colleagues) && d.colleagues.length > 0 ? d.colleagues.join(", ") : 'Aucun'}</div>
       </div>
@@ -215,7 +222,9 @@ function createHistoryEntryElement(d) {
 
     if (isAdmin || currentUser.uid === targetUser.uid) {
         const controlsWrapper = document.createElement("div");
-        controlsWrapper.className = "absolute top-2 right-3 flex flex-col items-end";
+        // --- MODIFICATION : AJOUT DE text-right pour aligner les durées ---
+        controlsWrapper.className = "absolute top-2 right-3 flex flex-col items-end text-right"; 
+        // --- FIN DE LA MODIFICATION ---
 
         const buttonsDiv = document.createElement('div');
         buttonsDiv.className = 'flex gap-2';
@@ -225,7 +234,9 @@ function createHistoryEntryElement(d) {
         `;
         
         controlsWrapper.appendChild(buttonsDiv);
-        controlsWrapper.innerHTML += durationDisplay;
+        // --- MODIFICATION : AJOUT DE pauseDisplay ---
+        controlsWrapper.innerHTML += pauseDisplay + durationDisplay;
+        // --- FIN DE LA MODIFICATION ---
         
         wrapper.appendChild(controlsWrapper);
     }
@@ -348,8 +359,7 @@ function generateHistoryPDF() {
     doc.setTextColor(100);
     doc.text(`Employé : ${userName}`, 40, 75);
     doc.text(`Semaine du ${startOfWeek.toLocaleDateString('fr-FR')} au ${endOfWeek.toLocaleDateString('fr-FR')}`, 40, 85);
-
-    // --- NOUVEAU : On regroupe les pointages par jour et on calcule les totaux ---
+    
     const pointagesByDay = historyDataCache.reduce((acc, p) => {
         if (!p.endTime) return acc;
         const dayKey = new Date(p.timestamp).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' });
@@ -365,8 +375,9 @@ function generateHistoryPDF() {
         return acc;
     }, {});
     
-    // --- MODIFIÉ : On construit le tableau à partir des données regroupées ---
-    const tableHead = [['Date', 'Chantier', 'Durée Travail', 'Collègues', 'Remarques']];
+    // --- MODIFICATION : AJOUT DE LA COLONNE "PAUSE" ---
+    const tableHead = [['Date', 'Chantier', 'Pause', 'Travail Effectif', 'Collègues']];
+    // --- FIN DE LA MODIFICATION ---
     const tableBody = [];
     let totalEffectiveMs = 0;
 
@@ -374,24 +385,26 @@ function generateHistoryPDF() {
         const dayData = pointagesByDay[dayKey];
         totalEffectiveMs += dayData.totalMs;
 
-        // On crée la ligne d'en-tête pour le jour avec son total
         tableBody.push([{
             content: `${dayKey} - Total : ${formatMilliseconds(dayData.totalMs)}`,
             colSpan: 5,
             styles: { fillColor: '#f3f4f6', fontStyle: 'bold', textColor: '#374151' }
         }]);
 
-        // On ajoute les pointages pour ce jour
         dayData.entries.forEach(d => {
             const startDate = new Date(d.timestamp);
             const effectiveWorkMs = (new Date(d.endTime) - startDate) - (d.pauseDurationMs || 0);
             
             const dateStr = startDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+            // --- MODIFICATION : AJOUT DES DONNÉES DE PAUSE ---
+            const pauseStr = formatMilliseconds(d.pauseDurationMs || 0);
             const durationStr = formatMilliseconds(effectiveWorkMs);
+            // --- FIN DE LA MODIFICATION ---
             const colleaguesStr = Array.isArray(d.colleagues) && d.colleagues.length > 0 ? d.colleagues.join(", ") : 'Aucun';
-            const humanNotes = d.notes ? d.notes.split('---').filter(part => !part.includes("Modification (par")).join(' ').trim() : '';
-
-            tableBody.push([dateStr, d.chantier, durationStr, colleaguesStr, humanNotes]);
+            
+            // --- MODIFICATION : AJOUT DE pauseStr AU TABLEAU ---
+            tableBody.push([dateStr, d.chantier, pauseStr, durationStr, colleaguesStr]);
+            // --- FIN DE LA MODIFICATION ---
         });
     }
 
@@ -403,8 +416,8 @@ function generateHistoryPDF() {
         headStyles: { fillColor: [41, 51, 92], textColor: 255, fontStyle: 'bold' },
         styles: { fontSize: 8, cellPadding: 4, overflow: 'linebreak' },
         columnStyles: {
-            0: { cellWidth: 40 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 60 },
-            3: { cellWidth: 80 }, 4: { cellWidth: 'auto' }
+            0: { cellWidth: 40 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 50 },
+            3: { cellWidth: 60 }, 4: { cellWidth: 'auto' }
         }
     });
 

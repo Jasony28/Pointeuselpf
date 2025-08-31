@@ -1,13 +1,11 @@
 import { collection, query, where, getDocs, orderBy, doc, getDoc, addDoc, serverTimestamp, updateDoc, limit } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, pageContent, showInfoModal } from "../app.js";
 import { getWeekDateRange } from "./utils.js";
-import { getActiveChantiers, getTeamMembers } from "./data-service.js"; // <-- NOUVEAU
+import { getActiveChantiers, getTeamMembers } from "./data-service.js";
 
-// --- CONFIGURATION ---
 const MAPBOX_ACCESS_TOKEN = "pk.eyJ1IjoiamFzb255MjgiLCJhIjoiY21lMDcyYWhzMDIyODJsczl0cmM0aTVjciJ9.V14cJXdBNoq3yAQTDeUg-A";
 const HOME_BASE_ADDRESS = "Marche-en-Famenne, Belgium";
 
-// --- Variables globales du module ---
 let timerInterval = null;
 let chantiersCache = [];
 let colleaguesCache = [];
@@ -76,6 +74,7 @@ export async function render() {
         </div>
     `;
 
+    // --- DÉBUT DE LA CORRECTION ---
     setTimeout(async () => {
         try {
             await cacheDataForModals();
@@ -85,29 +84,26 @@ export async function render() {
                 checkForMissedPointages();
             }
 
+            // On initialise les écouteurs d'événements pour la navigation de semaine ICI, une seule fois.
+            document.getElementById("prevWeekBtn").onclick = () => { currentWeekOffset--; displayWeekView(); };
+            document.getElementById("nextWeekBtn").onclick = () => { currentWeekOffset++; displayWeekView(); };
+            
+            // On fait le premier affichage
             displayWeekView();
+
         } catch (error) {
             console.error("Erreur critique dans le rendu du dashboard utilisateur:", error);
         }
     }, 0);
+    // --- FIN DE LA CORRECTION ---
 }
 
-/**
- * Met en cache les listes de chantiers et de collègues pour les modales.
- */
 async function cacheDataForModals() {
-    // La logique de requête complexe est remplacée par des appels simples
-    const chantiersData = await getActiveChantiers(); // <-- MODIFIÉ
-    chantiersCache = chantiersData.map(c => c.name); // On garde que les noms pour la compatibilité
-    colleaguesCache = await getTeamMembers(); // <-- MODIFIÉ
+    const chantiersData = await getActiveChantiers();
+    chantiersCache = chantiersData.map(c => c.name);
+    colleaguesCache = await getTeamMembers();
 }
 
-// ... Le reste du fichier user-dashboard.js ne change pas ...
-// (Toutes les fonctions comme checkForOpenPointage, initLiveTracker, startPointage, etc. restent identiques)
-
-/**
- * Vérifie s'il y a un pointage en cours et met à jour l'interface.
- */
 async function checkForOpenPointage() {
     const q = query(collection(db, "pointages"), where("uid", "==", currentUser.uid), where("endTime", "==", null), limit(1));
     const snapshot = await getDocs(q);
@@ -123,22 +119,13 @@ async function checkForOpenPointage() {
     initLiveTracker();
 }
 
-/**
- * Initialise ou met à jour le tracker de pointage en temps réel.
- */
-/**
- * Initialise ou met à jour le tracker de pointage en temps réel.
- */
 function initLiveTracker() {
     const container = document.getElementById('live-tracker-container');
-    // --- CORRECTION AJOUTÉE ---
-    if (!container) return; // Si le conteneur n'existe pas sur la page, on arrête la fonction.
-    // --- FIN DE LA CORRECTION ---
+    if (!container) return;
 
     const activePointage = JSON.parse(localStorage.getItem('activePointage'));
 
     if (activePointage && activePointage.uid === currentUser.uid) {
-        // ... (le reste de la fonction ne change pas)
         const isPaused = activePointage.status === 'paused';
         container.innerHTML = `
             <div class="text-center">
@@ -161,9 +148,6 @@ function initLiveTracker() {
     }
 }
 
-/**
- * Met à jour le chronomètre affiché.
- */
 function updateTimerUI() {
     const timerElement = document.getElementById('timer');
     const activePointage = JSON.parse(localStorage.getItem('activePointage'));
@@ -183,9 +167,6 @@ function updateTimerUI() {
     timerElement.textContent = `${hours}:${minutes}:${seconds}`;
 }
 
-/**
- * Met en pause le pointage en cours.
- */
 function pausePointage() {
     clearInterval(timerInterval);
     let activePointage = JSON.parse(localStorage.getItem('activePointage'));
@@ -198,9 +179,6 @@ function pausePointage() {
     initLiveTracker();
 }
 
-/**
- * Reprend un pointage mis en pause.
- */
 function resumePointage() {
     let activePointage = JSON.parse(localStorage.getItem('activePointage'));
     activePointage.status = 'running';
@@ -212,9 +190,6 @@ function resumePointage() {
     initLiveTracker();
 }
 
-/**
- * Démarre un nouveau pointage et déclenche le calcul du trajet.
- */
 async function startPointage(chantierName, colleagues) {
     const isDriver = document.getElementById('isDriverCheckbox').checked;
 
@@ -253,7 +228,6 @@ async function startPointage(chantierName, colleagues) {
             const newChantierAddress = newChantierSnapshot.docs[0].data().address;
             
             if (newChantierAddress !== startAddressForTravel) {
-                //showInfoModal("Calcul du trajet", "Le calcul de la distance est en cours en arrière-plan...");
                 calculateAndSaveTravel(startAddressForTravel, newChantierAddress, newPointageRef.id, isDriver);
             }
         }
@@ -266,9 +240,6 @@ async function startPointage(chantierName, colleagues) {
     }
 }
 
-/**
- * Arrête et enregistre le pointage en cours.
- */
 async function stopPointage(notes = "") {
     let activePointage = JSON.parse(localStorage.getItem('activePointage'));
     if (!activePointage || !activePointage.docId) return;
@@ -291,9 +262,6 @@ async function stopPointage(notes = "") {
     }
 }
 
-/**
- * Calcule et enregistre le trajet entre deux adresses.
- */
 async function calculateAndSaveTravel(startAddress, endAddress, arrivalPointageId, isDriver) {
     if (!startAddress || !endAddress) {
         console.log("Adresse de départ ou d'arrivée manquante pour le calcul du trajet.");
@@ -337,9 +305,6 @@ async function calculateAndSaveTravel(startAddress, endAddress, arrivalPointageI
     }
 }
 
-/**
- * Ouvre la modale pour démarrer un pointage.
- */
 async function openStartModal() {
     const modal = document.getElementById('startPointageModal');
     const form = document.getElementById('startPointageForm');
@@ -411,9 +376,6 @@ async function openStartModal() {
     document.getElementById('cancelStartPointage').onclick = closeStartModal;
 }
 
-/**
- * Récupère les listes contextuelles (chantiers, collègues) pour la journée/semaine.
- */
 async function getContextualLists() {
     const { startOfWeek, endOfWeek } = getWeekDateRange(0);
     const todayStr = new Date().toISOString().split('T')[0];
@@ -438,16 +400,10 @@ async function getContextualLists() {
     return { weeklyChantiers, todaysColleagues, todaysChantiers };
 }
 
-/**
- * Ferme la modale de démarrage de pointage.
- */
 function closeStartModal() {
     document.getElementById('startPointageModal').classList.add('hidden');
 }
 
-/**
- * Ouvre la modale pour arrêter un pointage.
- */
 function openStopModal() {
     const modal = document.getElementById('stopPointageModal');
     const form = document.getElementById('stopPointageForm');
@@ -462,36 +418,38 @@ function openStopModal() {
     };
 }
 
-/**
- * Affiche la vue du planning de la semaine.
- */
+// --- DÉBUT DE LA CORRECTION ---
+// La fonction ne s'occupe plus que de l'affichage
 function displayWeekView() {
     const { startOfWeek, endOfWeek } = getWeekDateRange(currentWeekOffset);
-    document.getElementById("prevWeekBtn").onclick = () => { currentWeekOffset--; displayWeekView(); };
-    document.getElementById("nextWeekBtn").onclick = () => { currentWeekOffset++; displayWeekView(); };
     
     const options = { day: 'numeric', month: 'long', timeZone: 'UTC' };
-    document.getElementById("currentPeriodDisplay").textContent = `Semaine du ${startOfWeek.toLocaleDateString('fr-FR', options)} au ${endOfWeek.toLocaleDateString('fr-FR', options)}`;
+    const displayElement = document.getElementById("currentPeriodDisplay");
     
-    const scheduleGrid = document.getElementById("schedule-grid");
-    scheduleGrid.innerHTML = ""; 
-
-    const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
-    for (let i = 0; i < 7; i++) {
-        const dayDate = new Date(startOfWeek);
-        dayDate.setUTCDate(startOfWeek.getUTCDate() + i);
-        const dayColumn = document.createElement('div');
-        dayColumn.className = 'bg-gray-50 rounded-lg p-2 min-h-[100px]';
-        dayColumn.innerHTML = `<h4 class="font-bold text-center border-b pb-1 mb-2">${days[i]} <span class="text-sm font-normal text-gray-500">${dayDate.getUTCDate()}</span></h4><div id="day-col-${i}" class="space-y-2"></div>`;
-        scheduleGrid.appendChild(dayColumn);
+    // On vérifie que l'élément existe avant de le manipuler
+    if(displayElement) {
+        displayElement.textContent = `Semaine du ${startOfWeek.toLocaleDateString('fr-FR', options)} au ${endOfWeek.toLocaleDateString('fr-FR', options)}`;
     }
     
-    loadUserScheduleForWeek(startOfWeek, endOfWeek);
-}
+    const scheduleGrid = document.getElementById("schedule-grid");
+    if(scheduleGrid) {
+        scheduleGrid.innerHTML = ""; 
 
-/**
- * Charge les données du planning de l'utilisateur pour la semaine.
- */
+        const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+        for (let i = 0; i < 7; i++) {
+            const dayDate = new Date(startOfWeek);
+            dayDate.setUTCDate(startOfWeek.getUTCDate() + i);
+            const dayColumn = document.createElement('div');
+            dayColumn.className = 'bg-gray-50 rounded-lg p-2 min-h-[100px]';
+            dayColumn.innerHTML = `<h4 class="font-bold text-center border-b pb-1 mb-2">${days[i]} <span class="text-sm font-normal text-gray-500">${dayDate.getUTCDate()}</span></h4><div id="day-col-${i}" class="space-y-2"></div>`;
+            scheduleGrid.appendChild(dayColumn);
+        }
+        
+        loadUserScheduleForWeek(startOfWeek, endOfWeek);
+    }
+}
+// --- FIN DE LA CORRECTION ---
+
 async function loadUserScheduleForWeek(start, end) {
     const weekId = start.toISOString().split('T')[0];
     const publishDoc = await getDoc(doc(db, "publishedSchedules", weekId));
@@ -523,9 +481,6 @@ async function loadUserScheduleForWeek(start, end) {
     });
 }
 
-/**
- * Crée l'élément HTML pour une tâche du planning.
- */
 function createTaskElement(task) {
     const el = document.createElement('div');
     el.className = 'bg-white p-3 rounded-lg shadow-sm border-l-4 border-purple-500 text-sm';
@@ -536,21 +491,13 @@ function createTaskElement(task) {
     return el;
 }
 
-// --- NOUVELLES FONCTIONS POUR LA SUGGESTION DE POINTAGES ---
-
-/**
- * Cherche les pointages récents où l'utilisateur était listé comme collègue 
- * mais n'a pas de pointage correspondant, et affiche des suggestions.
- */
 async function checkForMissedPointages() {
     const suggestionsContainer = document.getElementById('missed-pointage-suggestions');
     if (!suggestionsContainer) return;
 
-    // 1. Définir la période de recherche (ex: les 2 derniers jours)
     const twoDaysAgo = new Date();
     twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
 
-    // 2. Trouver les pointages où l'utilisateur est dans la liste "colleagues"
     const suggestionsQuery = query(
         collection(db, "pointages"),
         where("colleagues", "array-contains", currentUser.displayName),
@@ -558,7 +505,6 @@ async function checkForMissedPointages() {
         orderBy("timestamp", "desc")
     );
     
-    // 3. Récupérer les propres pointages de l'utilisateur pour la même période
     const userPointagesQuery = query(
         collection(db, "pointages"),
         where("uid", "==", currentUser.uid),
@@ -570,21 +516,18 @@ async function checkForMissedPointages() {
         getDocs(userPointagesQuery)
     ]);
 
-    // 4. Créer un set des pointages de l'utilisateur pour une vérification rapide
     const userExistingPointages = new Set();
     userPointagesSnapshot.forEach(doc => {
         const data = doc.data();
         const day = new Date(data.timestamp).toISOString().split('T')[0];
-        userExistingPointages.add(`${day}_${data.chantier}`); // Clé unique: "2025-08-19_Chantier Durand"
+        userExistingPointages.add(`${day}_${data.chantier}`);
     });
 
-    // 5. Filtrer les suggestions pour ne garder que les pertinentes
     const refusedPointages = JSON.parse(localStorage.getItem('refusedPointages') || '[]');
     const finalSuggestions = [];
 
     suggestionsSnapshot.forEach(doc => {
         const suggestion = { id: doc.id, ...doc.data() };
-        // On ne suggère que les pointages terminés
         if (!suggestion.endTime) return;
         
         const suggestionDay = new Date(suggestion.timestamp).toISOString().split('T')[0];
@@ -600,9 +543,6 @@ async function checkForMissedPointages() {
     }
 }
 
-/**
- * Affiche les cartes de suggestion dans le DOM.
- */
 function renderSuggestions(suggestions) {
     const container = document.getElementById('missed-pointage-suggestions');
     container.innerHTML = `<h3 class="text-lg font-semibold text-gray-700">Suggestions de pointages manqués :</h3>`;
@@ -626,13 +566,9 @@ function renderSuggestions(suggestions) {
         container.appendChild(card);
     });
 
-    // Attacher les écouteurs d'événements
     container.addEventListener('click', handleSuggestionClick);
 }
 
-/**
- * Gère les clics sur les boutons "Accepter" ou "Refuser".
- */
 async function handleSuggestionClick(e) {
     const button = e.target;
     const suggId = button.dataset.suggId;
@@ -647,22 +583,15 @@ async function handleSuggestionClick(e) {
         }
         const suggestion = suggDoc.data();
         
-        // --- LOGIQUE CORRIGÉE POUR LES COLLÈGUES ---
-        // 1. On prend la liste de collègues de base
         const originalColleagues = suggestion.colleagues || [];
-
-        // 2. On retire le nom de l'utilisateur actuel de cette liste
         const filteredColleagues = originalColleagues.filter(name => name !== currentUser.displayName);
-
-        // 3. On ajoute le nom de la personne qui a fait le pointage original
         const finalColleagues = [...new Set([...filteredColleagues, suggestion.userName])];
-        // --- FIN DE LA LOGIQUE CORRIGÉE ---
 
         const newPointageData = {
-            ...suggestion, // Copie les données (chantier, heures, etc.)
+            ...suggestion,
             uid: currentUser.uid,
             userName: currentUser.displayName,
-            colleagues: finalColleagues, // On utilise la nouvelle liste corrigée
+            colleagues: finalColleagues,
             createdAt: serverTimestamp(),
             notes: `(Pointage ajouté depuis la saisie de ${suggestion.userName}) --- ${suggestion.notes || ''}`
         };
@@ -683,6 +612,5 @@ async function handleSuggestionClick(e) {
         }
     }
     
-    // Cache la carte de suggestion après l'action
     button.closest('.bg-yellow-50').remove();
 }
