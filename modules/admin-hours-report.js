@@ -1,6 +1,8 @@
 import { collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
+import { isStealthMode } from "../app.js";
+import { getUsers } from "./data-service.js";
 
 let filter = { period: 'week', offset: 0 };
 
@@ -25,14 +27,9 @@ export async function render() {
 
                 <div class="overflow-x-auto">
                     <table class="w-full text-left">
-                        <thead>
-                            <tr class="border-b">
-                                <th class="p-2">Employé</th>
-                                <th class="p-2">Heures Prestées (Effectif)</th>
-                            </tr>
-                        </thead>
+                        <thead id="report-header"></thead>
                         <tbody id="report-body">
-                            <tr><td colspan="2" class="p-4 text-center">Chargement...</td></tr>
+                            <tr><td colspan="4" class="p-4 text-center">Chargement...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -60,7 +57,6 @@ function setupEventListeners() {
 function getPeriodInfo(filter) {
     const now = new Date();
     let startDate, endDate, displayText;
-
     switch (filter.period) {
         case 'year':
             const year = now.getFullYear() + filter.offset;
@@ -95,14 +91,13 @@ async function loadReport() {
         btn.classList.toggle('shadow', isSelected);
     });
 
+    const reportHeader = document.getElementById('report-header');
     const reportBody = document.getElementById('report-body');
-    reportBody.innerHTML = `<tr><td colspan="2" class="p-4 text-center">Chargement...</td></tr>`;
+    reportBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center">Chargement...</td></tr>`;
 
     try {
-        const usersQuery = query(collection(db, "users"), where("status", "==", "approved"), orderBy("displayName"));
-        const usersSnapshot = await getDocs(usersQuery);
-        const approvedUsers = usersSnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
-
+        const allUsers = await getUsers();
+        const approvedUsers = allUsers.filter(user => user.status === "approved");
         const hoursByUid = new Map();
         approvedUsers.forEach(user => hoursByUid.set(user.uid, 0));
 
@@ -115,7 +110,6 @@ async function loadReport() {
         pointagesSnapshot.forEach(doc => {
             const pointage = doc.data();
             if (pointage.endTime && hoursByUid.has(pointage.uid)) {
-                // --- MODIFICATION ICI ---
                 const durationMs = (new Date(pointage.endTime) - new Date(pointage.timestamp)) - (pointage.pauseDurationMs || 0);
                 hoursByUid.set(pointage.uid, hoursByUid.get(pointage.uid) + durationMs);
             }
@@ -123,23 +117,82 @@ async function loadReport() {
 
         reportBody.innerHTML = '';
         if (approvedUsers.length === 0) {
-            reportBody.innerHTML = `<tr><td colspan="2" class="p-4 text-center text-gray-500">Aucun employé approuvé trouvé.</td></tr>`;
+            reportBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-500">Aucun employé approuvé trouvé.</td></tr>`;
             return;
         }
 
-        approvedUsers.forEach(user => {
-            const totalMs = hoursByUid.get(user.uid) || 0;
-            const row = document.createElement('tr');
-            row.className = 'border-b';
-            row.innerHTML = `
-                <td class="p-2">${user.displayName}</td>
-                <td class="p-2 font-semibold text-purple-700">${formatMilliseconds(totalMs)}</td>
+        if (isStealthMode()) {
+            reportHeader.innerHTML = `
+                <tr class="border-b">
+                    <th class="p-2">Employé</th>
+                    <th class="p-2">Heures Prestées (Réel)</th>
+                </tr>
             `;
-            reportBody.appendChild(row);
-        });
+            approvedUsers.forEach(user => {
+                const totalMs = hoursByUid.get(user.uid) || 0;
+                const row = document.createElement('tr');
+                row.className = 'border-b';
+                row.innerHTML = `
+                    <td class="p-2">${user.displayName}</td>
+                    <td class="p-2 font-semibold text-purple-700">${formatMilliseconds(totalMs)}</td>
+                `;
+                reportBody.appendChild(row);
+            });
+        } else {
+            reportHeader.innerHTML = `
+                <tr class="border-b">
+                    <th class="p-2">Employé</th>
+                    <th class="p-2 text-center">Heures Contrat</th>
+                    <th class="p-2 text-center">Heures Prestées</th>
+                    <th class="p-2 text-center">Solde (+/-)</th>
+                </tr>
+            `;
+            approvedUsers.forEach(user => {
+                const totalMs = hoursByUid.get(user.uid) || 0;
+                const weeklyContractHours = user.contractHours || 0;
+                
+                let periodContractMs = 0;
+                if (weeklyContractHours > 0) {
+                    switch (filter.period) {
+                        case 'month': periodContractMs = weeklyContractHours * 4.33 * 3600000; break;
+                        case 'year': periodContractMs = weeklyContractHours * 52 * 3600000; break;
+                        default: periodContractMs = weeklyContractHours * 3600000; break;
+                    }
+                }
 
+                let balanceMs = totalMs - periodContractMs;
+                let displayedTotalMs = totalMs;
+
+                if (weeklyContractHours === 12) {
+                    displayedTotalMs = Math.min(totalMs, periodContractMs);
+                    balanceMs = Math.min(0, balanceMs);
+                }
+
+                let balanceClass = 'text-gray-700';
+                let balanceText = '0h 0min';
+
+                if (balanceMs > 0) {
+                    balanceClass = 'text-green-600 font-bold';
+                    balanceText = `+${formatMilliseconds(balanceMs)}`;
+                } else if (balanceMs < 0) {
+                    balanceClass = 'text-red-600';
+                    balanceText = `-${formatMilliseconds(Math.abs(balanceMs))}`;
+                }
+
+                const row = document.createElement('tr');
+                row.className = 'border-b';
+                row.innerHTML = `
+                    <td class="p-2 font-medium">${user.displayName}</td>
+                    <td class="p-2 text-center">${formatMilliseconds(periodContractMs)}</td>
+                    <td class="p-2 text-center font-semibold">${formatMilliseconds(displayedTotalMs)}</td>
+                    <td class="p-2 text-center ${balanceClass}">${balanceText}</td>
+                `;
+                reportBody.appendChild(row);
+            });
+        }
     } catch (error) {
         console.error("Erreur de chargement du rapport d'heures:", error);
-        reportBody.innerHTML = `<tr><td colspan="2" class="p-4 text-center text-red-500">Erreur de chargement du rapport.</td></tr>`;
+        reportBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Erreur de chargement du rapport.</td></tr>`;
     }
 }
+

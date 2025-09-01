@@ -1,4 +1,5 @@
-const APP_VERSION = 'v2.1.2';
+const APP_VERSION = 'v2.2.0';
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit, addDoc, initializeFirestore, CACHE_SIZE_UNLIMITED } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
@@ -25,6 +26,11 @@ export let isAdmin = false;
 export let isMasqueradingAsUser = false;
 let genericModal, modalTitle, modalMessage, modalConfirmBtn, modalCancelBtn;
 
+const STEALTH_PIN = "1801"; 
+
+// --- MODIFICATION : On utilise localStorage pour la persistance ---
+export const isStealthMode = () => localStorage.getItem('stealthMode') === 'true';
+
 export function isEffectiveAdmin() {
     return isAdmin && !isMasqueradingAsUser;
 }
@@ -42,10 +48,11 @@ const adminTabs = [
     { id: 'admin-planning', name: 'Planification' },
     { id: 'admin-invoicing', name: 'Facturation' },
     { id: 'admin-tarifs', name: 'Tarifs' },
+    { id: 'admin-contracts', name: 'Types de Contrat' },
     { id: 'admin-chantiers', name: 'Gestion Chantiers' },
     { id: 'admin-leave', name: 'Gestion Congés' },
-    { id: 'admin-pointage-log', name: 'Logs Pointages' },
-    { id: 'admin-data', name: 'Données' },
+    
+    
     { id: 'admin-travel-report', name: 'Rapport Trajets' },
     { id: 'admin-hours-report', name: 'Rapport Horaires' },
     { id: 'admin-team', name: 'Gestion Équipe' },
@@ -97,6 +104,8 @@ export async function navigateTo(pageId, params = {}) {
         pageContent.innerHTML = `<p class="text-red-500 text-center mt-8">Erreur: Impossible de charger la page "${pageId}".</p>`;
     }
 }
+
+// ... Le reste des fonctions (notifications, etc.) ne change pas ...
 
 function setupNotifications() {
     const notificationBell = document.getElementById('notification-bell');
@@ -153,6 +162,7 @@ function markNotificationsAsRead() {
     localStorage.setItem('lastNotificationCheck', new Date().toISOString());
 }
 
+
 document.addEventListener('DOMContentLoaded', () => {
     genericModal = document.getElementById('genericModal');
     modalTitle = document.getElementById('modalTitle');
@@ -177,6 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('logoutBtn').onclick = () => signOut(auth);
     document.getElementById('logoutPendingBtn').onclick = () => signOut(auth);
 
+    // ... La logique de connexion et d'inscription reste la même ...
     registerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const name = document.getElementById('register-name').value;
@@ -221,6 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+
     onAuthStateChanged(auth, async (user) => {
         authContainer.style.display = 'none';
         pendingContainer.style.display = 'none';
@@ -234,7 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const userData = userDoc.data();
                     currentUser = { ...user, ...userData };
                     isAdmin = userData.role === 'admin';
-                    isMasqueradingAsUser = isAdmin; // Un admin démarre en "vue employé"
+                    isMasqueradingAsUser = isAdmin; 
                     
                     switch (userData.status) {
                         case 'pending':
@@ -271,6 +283,46 @@ document.addEventListener('DOMContentLoaded', () => {
             authContainer.style.display = 'flex';
         }
         loader.style.display = 'none';
+    });
+    
+    // --- LOGIQUE DU STEALTH MODE MISE À JOUR ---
+    const pinModal = document.getElementById('pinModal');
+    const pinForm = document.getElementById('pinForm');
+    const pinInput = document.getElementById('pinInput');
+
+    const stealthTrigger = document.getElementById('stealth-trigger');
+    if (stealthTrigger) {
+        stealthTrigger.onclick = () => {
+            if (isStealthMode()) {
+                // --- MODIFICATION : On utilise localStorage ---
+                localStorage.removeItem('stealthMode');
+                showInfoModal("Mode Confidentiel", "Le mode confidentiel est désactivé. Rechargement...");
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                pinModal.classList.remove('hidden');
+                pinInput.focus();
+            }
+        };
+    }
+
+    document.getElementById('pinCancelBtn').onclick = () => {
+        pinModal.classList.add('hidden');
+        pinForm.reset();
+    };
+
+    pinForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (pinInput.value === STEALTH_PIN) {
+            // --- MODIFICATION : On utilise localStorage ---
+            localStorage.setItem('stealthMode', 'true');
+            pinModal.classList.add('hidden');
+            pinForm.reset();
+            showInfoModal("Mode Confidentiel", "Le mode confidentiel est activé. Rechargement...");
+            setTimeout(() => window.location.reload(), 1500);
+        } else {
+            showInfoModal("Erreur", "Code PIN incorrect.");
+            pinForm.reset();
+        }
     });
     
     if ('serviceWorker' in navigator) {

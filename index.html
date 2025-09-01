@@ -115,7 +115,7 @@
 
     <div id="app-container" class="hidden-by-default">
         <header class="bg-white shadow-md p-4 flex justify-between items-center sticky top-0 z-20">
-            <h1 class="text-xl font-bold">Pointeuse Lpf</h1>
+            <h1 class="text-xl font-bold">Pointe<span id="stealth-trigger" class="cursor-pointer">u</span>se Lpf</h1>
             <nav id="main-nav" class="hidden md:flex items-center gap-2"></nav>
             <div class="flex items-center">
                 <button id="switchViewBtn" class="hidden text-sm bg-purple-100 text-purple-700 hover:bg-purple-200 px-3 py-1.5 rounded-md mr-4"></button>
@@ -150,6 +150,20 @@
                 <button id="modalConfirmBtn" class="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2 rounded">Confirmer</button>
                 <button id="modalCancelBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold px-6 py-2 rounded">Annuler</button>
             </div>
+        </div>
+    </div>
+
+    <div id="pinModal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-xs text-center">
+            <h3 class="text-lg font-bold mb-4">Mode Confidentiel</h3>
+            <p class="text-gray-600 mb-4">Veuillez entrer le code PIN.</p>
+            <form id="pinForm">
+                <input type="password" id="pinInput" class="w-full border p-3 rounded text-center text-2xl tracking-[1em]" maxlength="4" required />
+                <div class="flex justify-center gap-4 mt-6">
+                    <button type="button" id="pinCancelBtn" class="bg-gray-300 hover:bg-gray-400 font-bold px-6 py-2 rounded">Annuler</button>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2 rounded">Valider</button>
+                </div>
+            </form>
         </div>
     </div>
 

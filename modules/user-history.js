@@ -1,13 +1,12 @@
 import { collection, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc, addDoc, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, currentUser, pageContent, showConfirmationModal, showInfoModal } from "../app.js";
+import { db, currentUser, pageContent, showConfirmationModal, showInfoModal, isStealthMode } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 
 let currentWeekOffset = 0;
 let targetUser = null;
-let historyDataCache = [];
 let chantiersCache = [];
 let colleaguesCache = [];
-
+let pointagesPourPdf = [];
 let entryWizardStep = 1;
 let entryWizardData = {};
 
@@ -37,10 +36,12 @@ export async function render(params = {}) {
         <div class="max-w-4xl mx-auto">
             <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
                 <h2 id="history-title" class="text-2xl font-bold">🗓️ Historique de ${targetUser.name}</h2>
+                ${targetUser.uid === currentUser.uid ? `
                 <button id="downloadPdfBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded-lg flex items-center gap-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708-.708l3 3z"/></svg>
                     Télécharger PDF
                 </button>
+                ` : ''}
             </div>
             <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
                 <div class="flex justify-between items-center">
@@ -48,54 +49,23 @@ export async function render(params = {}) {
                     <div id="currentPeriodDisplay" class="text-center font-semibold text-lg"></div>
                     <button id="nextWeekBtn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg">&gt;</button>
                 </div>
-                <div id="weekTotalsDisplay" class="mt-3 text-center text-xl font-bold text-purple-700"></div>
+                <div id="weekTotalsDisplay" class="mt-3 text-center text-xl font-bold"></div>
             </div>
             <div id="historyList" class="space-y-4"></div>
         </div>
-
         <div id="entryModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-30 p-4">
             <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-lg">
                 <div class="flex justify-between items-center mb-4">
                     <h3 id="modalTitle" class="text-xl font-bold"></h3>
                     <p id="modalStepIndicator" class="text-sm font-semibold text-gray-500"></p>
                 </div>
-                
                 <form id="entryForm" class="space-y-4">
-                    <input type="hidden" id="entryDate">
-                    <input type="hidden" id="entryId">
-                    
-                    <div data-step="1" class="wizard-step">
-                        <label for="entryChantier" class="text-lg font-medium">Quel chantier ?</label>
-                        <select id="entryChantier" class="w-full border p-2 rounded mt-2 text-lg" required></select>
-                    </div>
-
-                    <div data-step="2" class="wizard-step">
-                        <label class="text-lg font-medium">À quelles heures ?</label>
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
-                            <div><label for="entryStartTime" class="text-sm">Début</label><input id="entryStartTime" type="time" class="w-full border p-2 rounded" required /></div>
-                            <div><label for="entryEndTime" class="text-sm">Fin</label><input id="entryEndTime" type="time" class="w-full border p-2 rounded" required /></div>
-                            <div><label for="entryPauseMinutes" class="text-sm">Pause (min)</label><input id="entryPauseMinutes" type="number" min="0" placeholder="ex: 30" class="w-full border p-2 rounded" /></div>
-                        </div>
-                    </div>
-
-                    <div data-step="3" class="wizard-step">
-                        <label class="text-lg font-medium">Qui était présent ?</label>
-                        <div id="entryColleaguesContainer" class="mt-2 p-2 border rounded max-h-40 overflow-y-auto space-y-1"></div>
-                    </div>
-                    
-                    <div data-step="4" class="wizard-step">
-                        <label for="entryNotes" class="text-lg font-medium">Avez-vous des informations à préciser ?</label>
-                        <textarea id="entryNotes" placeholder="(Optionnel)" class="w-full border p-2 rounded mt-2 h-24"></textarea>
-                    </div>
-
-                    <div id="wizard-actions" class="flex justify-between items-center pt-4 border-t">
-                        <button type="button" id="wizardPrevBtn" class="bg-gray-300 hover:bg-gray-400 px-6 py-2 rounded">Précédent</button>
-                        <div>
-                            <button type="button" id="cancelEntryBtn" class="text-gray-600 hover:text-red-600 px-6 py-2 rounded mr-2">Annuler</button>
-                            <button type="button" id="wizardNextBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2 rounded">Suivant</button>
-                            <button type="submit" id="wizardSaveBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-2 rounded">Enregistrer</button>
-                        </div>
-                    </div>
+                    <input type="hidden" id="entryDate"><input type="hidden" id="entryId">
+                    <div data-step="1" class="wizard-step"><label for="entryChantier" class="text-lg font-medium">Quel chantier ?</label><select id="entryChantier" class="w-full border p-2 rounded mt-2 text-lg" required></select></div>
+                    <div data-step="2" class="wizard-step"><label class="text-lg font-medium">À quelles heures ?</label><div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2"><div><label for="entryStartTime" class="text-sm">Début</label><input id="entryStartTime" type="time" class="w-full border p-2 rounded" required /></div><div><label for="entryEndTime" class="text-sm">Fin</label><input id="entryEndTime" type="time" class="w-full border p-2 rounded" required /></div><div><label for="entryPauseMinutes" class="text-sm">Pause (min)</label><input id="entryPauseMinutes" type="number" min="0" placeholder="ex: 30" class="w-full border p-2 rounded" /></div></div></div>
+                    <div data-step="3" class="wizard-step"><label class="text-lg font-medium">Qui était présent ?</label><div id="entryColleaguesContainer" class="mt-2 p-2 border rounded max-h-40 overflow-y-auto space-y-1"></div></div>
+                    <div data-step="4" class="wizard-step"><label for="entryNotes" class="text-lg font-medium">Avez-vous des informations à préciser ?</label><textarea id="entryNotes" placeholder="(Optionnel)" class="w-full border p-2 rounded mt-2 h-24"></textarea></div>
+                    <div id="wizard-actions" class="flex justify-between items-center pt-4 border-t"><button type="button" id="wizardPrevBtn" class="bg-gray-300 hover:bg-gray-400 px-6 py-2 rounded">Précédent</button><div><button type="button" id="cancelEntryBtn" class="text-gray-600 hover:text-red-600 px-6 py-2 rounded mr-2">Annuler</button><button type="button" id="wizardNextBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2 rounded">Suivant</button><button type="submit" id="wizardSaveBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-2 rounded">Enregistrer</button></div></div>
                 </form>
             </div>
         </div>
@@ -105,7 +75,10 @@ export async function render(params = {}) {
         await cacheModalData();
         document.getElementById("prevWeekBtn").onclick = () => { currentWeekOffset--; loadHistoryForWeek(); };
         document.getElementById("nextWeekBtn").onclick = () => { currentWeekOffset++; loadHistoryForWeek(); };
-        document.getElementById("downloadPdfBtn").onclick = generateHistoryPDF;
+        const pdfBtn = document.getElementById("downloadPdfBtn");
+        if (pdfBtn) {
+            pdfBtn.onclick = generateHistoryPDF;
+        }
         currentWeekOffset = 0;
         loadHistoryForWeek();
     }, 0);
@@ -115,13 +88,9 @@ async function cacheModalData() {
     const chantiersQuery = query(collection(db, "chantiers"), where("status", "==", "active"), orderBy("name"));
     const colleaguesQuery = query(collection(db, "colleagues"), orderBy("name"));
     const usersQuery = query(collection(db, "users"), where("status", "==", "approved"), orderBy("displayName"));
-
     const [chantiersSnapshot, colleaguesSnapshot, usersSnapshot] = await Promise.all([
-        getDocs(chantiersQuery),
-        getDocs(colleaguesQuery),
-        getDocs(usersQuery)
+        getDocs(chantiersQuery), getDocs(colleaguesQuery), getDocs(usersQuery)
     ]);
-
     chantiersCache = chantiersSnapshot.docs.map(doc => doc.data().name);
     const colleagueNames = colleaguesSnapshot.docs.map(doc => doc.data().name);
     const userNames = usersSnapshot.docs.map(doc => doc.data().displayName);
@@ -133,6 +102,10 @@ async function loadHistoryForWeek() {
     const weekTotalsDisplay = document.getElementById("weekTotalsDisplay");
     const { startOfWeek, endOfWeek } = getWeekDateRange(currentWeekOffset);
     
+    const userDoc = await getDoc(doc(db, "users", targetUser.uid));
+    const userData = userDoc.exists() ? userDoc.data() : {};
+    const contractHours = userData.contractHours || 0;
+
     document.getElementById("currentPeriodDisplay").textContent = `Semaine du ${startOfWeek.toLocaleDateString('fr-FR', {timeZone: 'UTC', day: 'numeric', month: 'long'})}`;
     historyList.innerHTML = `<p class='text-center p-4'>Chargement...</p>`;
 
@@ -143,9 +116,31 @@ async function loadHistoryForWeek() {
         orderBy("timestamp", "asc")
     );
     const pointagesSnapshot = await getDocs(pointagesQuery);
-    historyDataCache = pointagesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const allPointages = pointagesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    let pointagesToDisplay = allPointages;
+    const isAdminViewingOther = currentUser.role === 'admin' && currentUser.uid !== targetUser.uid;
 
-    const pointagesByDate = historyDataCache.reduce((acc, p) => {
+    if (isAdminViewingOther && !isStealthMode() && contractHours > 0) {
+        const contractMs = contractHours * 3600000;
+        let accumulatedMs = 0;
+        pointagesToDisplay = [];
+        for (const p of allPointages) {
+            if (p.endTime) {
+                const durationMs = (new Date(p.endTime) - new Date(p.timestamp)) - (p.pauseDurationMs || 0);
+                if (accumulatedMs + durationMs <= contractMs) {
+                    pointagesToDisplay.push(p);
+                    accumulatedMs += durationMs;
+                } else {
+                    break; 
+                }
+            }
+        }
+    }
+    
+    pointagesPourPdf = pointagesToDisplay;
+
+    const pointagesByDate = pointagesToDisplay.reduce((acc, p) => {
         const date = new Date(p.timestamp).toISOString().split('T')[0];
         if (!acc[date]) acc[date] = [];
         acc[date].push(p);
@@ -154,8 +149,7 @@ async function loadHistoryForWeek() {
 
     historyList.innerHTML = "";
     const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
-    let totalEffectiveMs = 0;
-
+    
     for (let i = 0; i < 7; i++) {
         const dayDate = new Date(startOfWeek);
         dayDate.setUTCDate(startOfWeek.getUTCDate() + i);
@@ -165,23 +159,15 @@ async function loadHistoryForWeek() {
         let dailyTotalMs = 0;
         dayEntries.forEach(entry => {
             if (entry.endTime) {
-                const duration = new Date(entry.endTime) - new Date(entry.timestamp) - (entry.pauseDurationMs || 0);
-                dailyTotalMs += duration;
+                dailyTotalMs += (new Date(entry.endTime) - new Date(entry.timestamp)) - (entry.pauseDurationMs || 0);
             }
         });
         
         const dayWrapper = document.createElement('div');
         dayWrapper.className = 'bg-white p-4 rounded-lg shadow-sm';
-        
         const dayHeader = document.createElement('div');
         dayHeader.className = 'flex justify-between items-center border-b pb-2 mb-3';
-        
-        dayHeader.innerHTML = `
-            <div class="flex items-center gap-4">
-                <h3 class="font-bold text-lg">${days[i]} ${dayDate.toLocaleDateString('fr-FR', {day: 'numeric', month: 'long'})}</h3>
-                ${dailyTotalMs > 0 ? `<span class="font-bold text-purple-700">${formatMilliseconds(dailyTotalMs)}</span>` : ''}
-            </div>
-        `;
+        dayHeader.innerHTML = `<div class="flex items-center gap-4"><h3 class="font-bold text-lg">${days[i]} ${dayDate.toLocaleDateString('fr-FR', {day: 'numeric', month: 'long'})}</h3>${dailyTotalMs > 0 ? `<span class="font-bold text-purple-700">${formatMilliseconds(dailyTotalMs)}</span>` : ''}</div>`;
         
         if (currentUser.role === 'admin') {
             const addBtn = document.createElement('button');
@@ -192,38 +178,58 @@ async function loadHistoryForWeek() {
         }
         
         dayWrapper.appendChild(dayHeader);
-
         const entriesContainer = document.createElement('div');
         entriesContainer.className = 'space-y-3';
         
-        if (dayEntries.length === 0) {
-            entriesContainer.innerHTML = `<p class="text-gray-500 text-center py-4">Aucun pointage pour ce jour.</p>`;
+        if (dayEntries.length > 0) {
+            dayEntries.forEach(d => entriesContainer.appendChild(createHistoryEntryElement(d)));
         } else {
-            dayEntries.forEach(d => {
-                entriesContainer.appendChild(createHistoryEntryElement(d));
-                if (d.endTime) {
-                    const duration = new Date(d.endTime) - new Date(d.timestamp) - (d.pauseDurationMs || 0);
-                    totalEffectiveMs += duration;
-                }
-            });
+            const hasOriginalData = allPointages.some(p => new Date(p.timestamp).toISOString().split('T')[0] === dateString);
+            if (hasOriginalData) {
+                entriesContainer.innerHTML = `<p class="text-gray-500 text-center py-4">Les pointages de ce jour sont masqués.</p>`;
+            } else {
+                entriesContainer.innerHTML = `<p class="text-gray-500 text-center py-4">Aucun pointage pour ce jour.</p>`;
+            }
         }
         dayWrapper.appendChild(entriesContainer);
         historyList.appendChild(dayWrapper);
     }
     
-    weekTotalsDisplay.textContent = `Total travail effectif : ${formatMilliseconds(totalEffectiveMs)}`;
+    const totalDisplayedMs = pointagesToDisplay.reduce((acc, p) => p.endTime ? acc + ((new Date(p.endTime) - new Date(p.timestamp)) - (p.pauseDurationMs || 0)) : acc, 0);
+    const realTotalMs = allPointages.reduce((acc, p) => p.endTime ? acc + ((new Date(p.endTime) - new Date(p.timestamp)) - (p.pauseDurationMs || 0)) : acc, 0);
+
+    if (isStealthMode()) {
+        weekTotalsDisplay.textContent = `Total travail effectif : ${formatMilliseconds(realTotalMs)}`;
+    } else {
+        if (contractHours === 12 && isAdminViewingOther) {
+            weekTotalsDisplay.textContent = `Total travail effectif : ${formatMilliseconds(totalDisplayedMs)}`;
+        } else if (contractHours > 0) {
+            const contractMs = contractHours * 3600000;
+            if (realTotalMs > contractMs) {
+                const overtimeMs = realTotalMs - contractMs;
+                weekTotalsDisplay.innerHTML = `
+                    <span class="mr-4 text-gray-800">Heures contrat : <strong>${formatMilliseconds(contractMs)}</strong></span>
+                    <span class="text-green-600">Solde à récupérer : <strong>${formatMilliseconds(overtimeMs)}</strong></span>
+                `;
+            } else {
+                weekTotalsDisplay.textContent = `Total travail effectif : ${formatMilliseconds(realTotalMs)}`;
+            }
+        } else {
+            weekTotalsDisplay.textContent = `Total travail effectif : ${formatMilliseconds(realTotalMs)}`;
+        }
+    }
+
     historyList.addEventListener('click', handleHistoryClick);
 }
 
 function handleHistoryClick(e) {
     if (currentUser.role !== 'admin') return;
-
     const target = e.target;
     if (target.closest('.add-pointage-btn')) {
         openEntryModal({ isEditing: false, date: target.closest('.add-pointage-btn').dataset.date });
     } else if (target.closest('.edit-btn')) {
         const pointageId = target.closest('.edit-btn').dataset.id;
-        const pointageData = historyDataCache.find(p => p.id === pointageId);
+        const pointageData = allPointages.find(p => p.id === pointageId);
         openEntryModal({ ...pointageData, isEditing: true });
     } else if (target.closest('.delete-btn')) {
         const pointageId = target.closest('.delete-btn').dataset.id;
@@ -234,10 +240,8 @@ function handleHistoryClick(e) {
 function createHistoryEntryElement(d) {
     const wrapper = document.createElement("div");
     wrapper.className = "p-3 border rounded-lg bg-gray-50 relative";
-    
     const startDate = new Date(d.timestamp);
     const endDate = d.endTime ? new Date(d.endTime) : null;
-
     let timeDisplay = "", durationDisplay = "", pauseDisplay = "";
     if (endDate) {
         const effectiveWorkMs = (endDate - startDate) - (d.pauseDurationMs || 0);
@@ -247,30 +251,15 @@ function createHistoryEntryElement(d) {
             pauseDisplay = `<div class="text-xs text-yellow-600 mt-1">Pause : ${formatMilliseconds(d.pauseDurationMs)}</div>`;
         }
     }
-
-    wrapper.innerHTML = `
-      <div class="pr-20">
-        <div class="font-bold">${d.chantier}</div>
-        <div class="text-sm text-gray-600">${timeDisplay}</div>
-        <div class="text-xs mt-1">Collègues : ${Array.isArray(d.colleagues) && d.colleagues.length > 0 ? d.colleagues.join(", ") : 'Aucun'}</div>
-      </div>
-      ${d.notes ? `<div class="mt-2 pt-2 border-t text-xs text-gray-500"><strong>Notes:</strong> ${d.notes}</div>` : ""}
-    `;
-
+    wrapper.innerHTML = `<div class="pr-20"><div class="font-bold">${d.chantier}</div><div class="text-sm text-gray-600">${timeDisplay}</div><div class="text-xs mt-1">Collègues : ${Array.isArray(d.colleagues) && d.colleagues.length > 0 ? d.colleagues.join(", ") : 'Aucun'}</div></div>${d.notes ? `<div class="mt-2 pt-2 border-t text-xs text-gray-500"><strong>Notes:</strong> ${d.notes}</div>` : ""}`;
     if (currentUser.role === 'admin') {
         const controlsWrapper = document.createElement("div");
         controlsWrapper.className = "absolute top-2 right-3 flex flex-col items-end text-right"; 
-
         const buttonsDiv = document.createElement('div');
         buttonsDiv.className = 'flex gap-2';
-        buttonsDiv.innerHTML = `
-            <button class="edit-btn text-gray-400 hover:text-blue-600 font-bold" title="Modifier" data-id="${d.id}">✏️</button>
-            <button class="delete-btn text-gray-400 hover:text-red-600 font-bold" title="Supprimer" data-id="${d.id}">✖️</button>
-        `;
-        
+        buttonsDiv.innerHTML = `<button class="edit-btn text-gray-400 hover:text-blue-600 font-bold" title="Modifier" data-id="${d.id}">✏️</button><button class="delete-btn text-gray-400 hover:text-red-600 font-bold" title="Supprimer" data-id="${d.id}">✖️</button>`;
         controlsWrapper.appendChild(buttonsDiv);
         controlsWrapper.innerHTML += pauseDisplay + durationDisplay;
-        
         wrapper.appendChild(controlsWrapper);
     } else {
         const durationWrapper = document.createElement("div");
@@ -283,9 +272,7 @@ function createHistoryEntryElement(d) {
 
 async function deletePointage(pointageId) {
     if (currentUser.role !== 'admin') return;
-    
-    const confirmed = await showConfirmationModal("Confirmation", "Supprimer ce pointage ?");
-    if (confirmed) {
+    if (await showConfirmationModal("Confirmation", "Supprimer ce pointage ?")) {
         const pointageRef = doc(db, "pointages", pointageId);
         const pointageSnap = await getDoc(pointageRef);
         if(pointageSnap.exists()) {
@@ -300,12 +287,10 @@ function showWizardStep(step) {
     entryWizardStep = step;
     document.querySelectorAll('.wizard-step').forEach(el => el.classList.add('hidden'));
     document.querySelector(`[data-step="${step}"]`).classList.remove('hidden');
-
     const stepIndicator = document.getElementById('modalStepIndicator');
     const prevBtn = document.getElementById('wizardPrevBtn');
     const nextBtn = document.getElementById('wizardNextBtn');
     const saveBtn = document.getElementById('wizardSaveBtn');
-
     stepIndicator.textContent = `Étape ${step} sur 4`;
     prevBtn.classList.toggle('hidden', step === 1);
     nextBtn.classList.toggle('hidden', step === 4);
@@ -317,19 +302,15 @@ function openEntryModal(data = {}) {
     const modal = document.getElementById('entryModal');
     const form = document.getElementById('entryForm');
     form.reset();
-
     const title = document.getElementById('modalTitle');
     const stepIndicator = document.getElementById('modalStepIndicator');
     const wizardSteps = document.querySelectorAll('.wizard-step');
     const wizardActions = document.getElementById('wizard-actions');
     const saveBtn = document.getElementById('wizardSaveBtn');
-    const nextBtn = document.getElementById('wizardNextBtn');
-
     const chantierSelect = document.getElementById('entryChantier');
     chantierSelect.innerHTML = '<option value="">-- Choisissez --</option>' + chantiersCache.map(name => `<option value="${name}">${name}</option>`).join('');
     const colleaguesContainer = document.getElementById('entryColleaguesContainer');
     colleaguesContainer.innerHTML = colleaguesCache.map(name => `<label class="flex items-center gap-2"><input type="checkbox" value="${name}" name="entryColleagues" /><span>${name}</span></label>`).join('');
-
     if (isEditing) {
         title.textContent = "Modifier le pointage";
         stepIndicator.classList.add('hidden');
@@ -337,37 +318,30 @@ function openEntryModal(data = {}) {
         wizardActions.querySelector('#wizardPrevBtn').classList.add('hidden');
         wizardActions.querySelector('#wizardNextBtn').classList.add('hidden');
         saveBtn.classList.remove('hidden');
-
         document.getElementById('entryId').value = data.id;
         document.getElementById('entryDate').value = new Date(data.timestamp).toISOString().split('T')[0];
         chantierSelect.value = data.chantier;
         document.getElementById('entryStartTime').value = new Date(data.timestamp).toTimeString().substring(0, 5);
         document.getElementById('entryEndTime').value = new Date(data.endTime).toTimeString().substring(0, 5);
-        
         const pauseMinutes = data.pauseDurationMs ? Math.round(data.pauseDurationMs / 60000) : '';
         document.getElementById('entryPauseMinutes').value = pauseMinutes;
-
         document.getElementById('entryNotes').value = data.notes || '';
         (data.colleagues || []).forEach(colleagueName => {
             const checkbox = colleaguesContainer.querySelector(`input[value="${colleagueName}"]`);
             if (checkbox) checkbox.checked = true;
         });
-
     } else {
         title.textContent = "Ajouter un pointage";
         stepIndicator.classList.remove('hidden');
         saveBtn.classList.add('hidden');
         wizardActions.querySelector('#wizardPrevBtn').classList.remove('hidden');
         wizardActions.querySelector('#wizardNextBtn').classList.remove('hidden');
-
         entryWizardData = { date: data.date };
         document.getElementById('entryId').value = '';
-
         document.getElementById('wizardNextBtn').onclick = handleWizardNext;
         document.getElementById('wizardPrevBtn').onclick = () => showWizardStep(entryWizardStep - 1);
         showWizardStep(1);
     }
-    
     document.getElementById('cancelEntryBtn').onclick = () => modal.classList.add('hidden');
     form.onsubmit = saveEntry;
     modal.classList.remove('hidden');
@@ -396,7 +370,6 @@ function handleWizardNext() {
             }
             entryWizardData.startTime = startTime;
             entryWizardData.endTime = endTime;
-
             const pauseMinutes = parseInt(document.getElementById('entryPauseMinutes').value) || 0;
             entryWizardData.pauseDurationMs = pauseMinutes * 60000;
             break;
@@ -407,11 +380,9 @@ function handleWizardNext() {
 async function saveEntry(e) {
     e.preventDefault();
     if (currentUser.role !== 'admin') return;
-
     const entryId = document.getElementById('entryId').value;
     const isEditing = !!entryId;
     let dataToSave;
-
     if (isEditing) {
         const date = document.getElementById('entryDate').value;
         const pauseMinutes = parseInt(document.getElementById('entryPauseMinutes').value) || 0;
@@ -436,14 +407,12 @@ async function saveEntry(e) {
             notes: `(Saisie manuelle) ${notes}`
         };
     }
-
     try {
         if (isEditing) {
             const pointageRef = doc(db, "pointages", entryId);
             const beforeSnap = await getDoc(pointageRef);
             const beforeData = beforeSnap.data();
             await updateDoc(pointageRef, dataToSave);
-            
             const changes = {};
             for(const key in dataToSave) {
                 if(JSON.stringify(beforeData[key]) !== JSON.stringify(dataToSave[key])) {
@@ -453,7 +422,6 @@ async function saveEntry(e) {
             if(Object.keys(changes).length > 0) {
                  await logAction(entryId, "Modification", { changes });
             }
-
             showInfoModal("Succès", "Le pointage a été mis à jour.");
         } else {
             const fullData = { 
@@ -476,7 +444,8 @@ async function saveEntry(e) {
 }
 
 function generateHistoryPDF() {
-    if (historyDataCache.length === 0) {
+    const dataForPdf = pointagesPourPdf;
+    if (dataForPdf.length === 0) {
         showInfoModal("Information", "Il n'y a rien à télécharger pour cette période.");
         return;
     }
@@ -485,65 +454,50 @@ function generateHistoryPDF() {
         showInfoModal("Erreur", "La librairie PDF (jsPDF avec autoTable) n'a pas pu être chargée.");
         return;
     }
-
-    historyDataCache.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-
+    dataForPdf.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
     const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
     const userName = targetUser.name === "Mon" ? currentUser.displayName : targetUser.name;
     const { startOfWeek, endOfWeek } = getWeekDateRange(currentWeekOffset);
-
     doc.setFontSize(18);
     doc.setFont(undefined, 'bold');
     doc.text("Historique des Pointages", 40, 60);
-
     doc.setFontSize(10);
     doc.setFont(undefined, 'normal');
     doc.setTextColor(100);
     doc.text(`Employé : ${userName}`, 40, 75);
     doc.text(`Semaine du ${startOfWeek.toLocaleDateString('fr-FR')} au ${endOfWeek.toLocaleDateString('fr-FR')}`, 40, 85);
-    
-    const pointagesByDay = historyDataCache.reduce((acc, p) => {
+    const pointagesByDay = dataForPdf.reduce((acc, p) => {
         if (!p.endTime) return acc;
         const dayKey = new Date(p.timestamp).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'short' });
-        
         if (!acc[dayKey]) {
             acc[dayKey] = { entries: [], totalMs: 0 };
         }
-        
         const durationMs = (new Date(p.endTime) - new Date(p.timestamp)) - (p.pauseDurationMs || 0);
         acc[dayKey].entries.push(p);
         acc[dayKey].totalMs += durationMs;
-        
         return acc;
     }, {});
-    
     const tableHead = [['Date', 'Chantier', 'Pause', 'Travail Effectif', 'Collègues']];
     const tableBody = [];
     let totalEffectiveMs = 0;
-
     for (const dayKey in pointagesByDay) {
         const dayData = pointagesByDay[dayKey];
         totalEffectiveMs += dayData.totalMs;
-
         tableBody.push([{
             content: `${dayKey} - Total : ${formatMilliseconds(dayData.totalMs)}`,
             colSpan: 5,
             styles: { fillColor: '#f3f4f6', fontStyle: 'bold', textColor: '#374151' }
         }]);
-
         dayData.entries.forEach(d => {
             const startDate = new Date(d.timestamp);
             const effectiveWorkMs = (new Date(d.endTime) - startDate) - (d.pauseDurationMs || 0);
-            
             const dateStr = startDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
             const pauseStr = formatMilliseconds(d.pauseDurationMs || 0);
             const durationStr = formatMilliseconds(effectiveWorkMs);
             const colleaguesStr = Array.isArray(d.colleagues) && d.colleagues.length > 0 ? d.colleagues.join(", ") : 'Aucun';
-            
             tableBody.push([dateStr, d.chantier, pauseStr, durationStr, colleaguesStr]);
         });
     }
-
     doc.autoTable({
         startY: 100,
         head: tableHead,
@@ -556,18 +510,15 @@ function generateHistoryPDF() {
             3: { cellWidth: 60 }, 4: { cellWidth: 'auto' }
         }
     });
-
     const finalY = doc.lastAutoTable.finalY;
     doc.setFontSize(12);
     doc.setFont(undefined, 'bold');
     doc.text(`Total travail effectif de la semaine : ${formatMilliseconds(totalEffectiveMs)}`, 40, finalY + 20);
-
     const now = new Date();
     const hours = String(now.getHours()).padStart(2, '0');
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const seconds = String(now.getSeconds()).padStart(2, '0');
     const timestamp = `${hours}h${minutes}m${seconds}s`;
-
     const fileName = `Historique_${userName.replace(/ /g, '_')}_${startOfWeek.toISOString().split('T')[0]}_${timestamp}.pdf`;
     doc.save(fileName);
 }

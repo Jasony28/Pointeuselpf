@@ -1,8 +1,8 @@
 import { collection, query, where, orderBy, getDocs, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, showConfirmationModal, navigateTo } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
+import { getUsers } from "./data-service.js"; // Assurez-vous que cet import est présent
 
-// --- NOUVEAU : Objets pour gérer l'état complet des filtres ---
 let userStatsFilter = { period: 'week', offset: 0 };
 let chantierStatsFilter = { period: 'week', offset: 0 };
 
@@ -13,11 +13,11 @@ export async function render() {
             
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div id="week-total-card" class="bg-white p-6 rounded-lg shadow-sm text-center">
-                    <h3 class="text-sm font-medium text-gray-500">Heures cette semaine (Total)</h3>
+                    <h3 class="text-sm font-medium text-gray-500">Heures cette semaine (Total Effectif)</h3>
                     <p class="mt-1 text-3xl font-semibold animate-pulse">...</p>
                 </div>
                 <div id="month-total-card" class="bg-white p-6 rounded-lg shadow-sm text-center">
-                    <h3 class="text-sm font-medium text-gray-500">Heures ce mois-ci (Total)</h3>
+                    <h3 class="text-sm font-medium text-gray-500">Heures ce mois-ci (Total Effectif)</h3>
                     <p class="mt-1 text-3xl font-semibold animate-pulse">...</p>
                 </div>
                 <div id="active-projects-card" class="bg-white p-6 rounded-lg shadow-sm text-center">
@@ -61,7 +61,7 @@ export async function render() {
                     <div id="chantier-stats-list" class="space-y-3"></div>
                 </div>
             </div>
-
+            
             <div>
                 <h3 class="text-xl font-semibold mb-2">Activité Récente</h3>
                 <div id="recent-activity-list" class="space-y-3"></div>
@@ -80,7 +80,7 @@ function setupEventListeners() {
     document.querySelectorAll('.user-stats-filter-btn').forEach(btn => {
         btn.onclick = () => {
             userStatsFilter.period = btn.dataset.period;
-            userStatsFilter.offset = 0; // Reset offset when changing period type
+            userStatsFilter.offset = 0;
             loadDetailedStats();
         };
     });
@@ -98,7 +98,6 @@ function setupEventListeners() {
 }
 
 async function loadGlobalStats() {
-    // ... (Cette fonction reste inchangée)
     const now = new Date();
     const { startOfWeek } = getWeekDateRange(0);
     const startOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
@@ -107,14 +106,27 @@ async function loadGlobalStats() {
     const chantiersQuery = query(collection(db, "chantiers"), where("status", "==", "active"));
     try {
         const [weekSnapshot, monthSnapshot, chantiersSnapshot] = await Promise.all([ getDocs(weekQuery), getDocs(monthQuery), getDocs(chantiersQuery) ]);
+        
         let weekMs = 0;
-        weekSnapshot.forEach(doc => { if (doc.data().endTime) weekMs += new Date(doc.data().endTime) - new Date(doc.data().timestamp); });
+        weekSnapshot.forEach(doc => { 
+            const data = doc.data();
+            if (data.endTime) {
+                weekMs += (new Date(data.endTime) - new Date(data.timestamp)) - (data.pauseDurationMs || 0); 
+            }
+        });
         const weekCard = document.querySelector('#week-total-card p');
         if (weekCard) { weekCard.textContent = formatMilliseconds(weekMs); weekCard.classList.remove('animate-pulse'); }
+        
         let monthMs = 0;
-        monthSnapshot.forEach(doc => { if (doc.data().endTime) monthMs += new Date(doc.data().endTime) - new Date(doc.data().timestamp); });
+        monthSnapshot.forEach(doc => { 
+            const data = doc.data();
+            if (data.endTime) {
+                monthMs += (new Date(data.endTime) - new Date(data.timestamp)) - (data.pauseDurationMs || 0); 
+            }
+        });
         const monthCard = document.querySelector('#month-total-card p');
         if (monthCard) { monthCard.textContent = formatMilliseconds(monthMs); monthCard.classList.remove('animate-pulse'); }
+
         const projectsCard = document.querySelector('#active-projects-card p');
         if (projectsCard) { projectsCard.textContent = chantiersSnapshot.size; projectsCard.classList.remove('animate-pulse'); }
     } catch (error) { console.error("Erreur de chargement des statistiques globales:", error); }
@@ -123,7 +135,6 @@ async function loadGlobalStats() {
 function getPeriodInfo(filter) {
     const now = new Date();
     let startDate, endDate, displayText;
-
     switch (filter.period) {
         case 'year':
             const year = now.getFullYear() + filter.offset;
@@ -145,9 +156,8 @@ function getPeriodInfo(filter) {
             displayText = `Semaine du ${startDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`;
             break;
     }
-    return { startDate, endDate, displayText };
+    return { startDate, endDate, displayText, period: filter.period };
 }
-
 async function loadDetailedStats() {
     const userInfo = getPeriodInfo(userStatsFilter);
     const chantierInfo = getPeriodInfo(chantierStatsFilter);
@@ -159,7 +169,8 @@ async function loadDetailedStats() {
     try {
         const q = query(collection(db, "pointages"), where("timestamp", ">=", earliestStartDate.toISOString()));
         const querySnapshot = await getDocs(q);
-
+        
+        const users = await getUsers();
         const userStats = {};
         const chantierStats = {};
 
@@ -167,9 +178,12 @@ async function loadDetailedStats() {
             const data = doc.data();
             const docDate = new Date(data.timestamp);
             if (data.endTime) {
-                const durationMs = new Date(data.endTime) - docDate;
+                const durationMs = (new Date(data.endTime) - docDate) - (data.pauseDurationMs || 0);
                 if (docDate >= userInfo.startDate && docDate <= userInfo.endDate) {
-                    userStats[data.userName] = (userStats[data.userName] || 0) + durationMs;
+                    if (!userStats[data.uid]) {
+                        userStats[data.uid] = { name: data.userName, totalMs: 0 };
+                    }
+                    userStats[data.uid].totalMs += durationMs;
                 }
                 if (docDate >= chantierInfo.startDate && docDate <= chantierInfo.endDate) {
                     chantierStats[data.chantier] = (chantierStats[data.chantier] || 0) + durationMs;
@@ -177,12 +191,34 @@ async function loadDetailedStats() {
             }
         });
 
+        // --- RÈGLE FINALE DE PLAFONNEMENT POUR LE TABLEAU DE BORD ---
+        for (const uid in userStats) {
+            const user = users.find(u => u.uid === uid);
+            if (user && user.contractHours === 12) {
+                let contractLimitMs = 0;
+                if (userInfo.period === 'week') {
+                    contractLimitMs = 12 * 3600000;
+                } else if (userInfo.period === 'month') {
+                    contractLimitMs = 48 * 3600000;
+                } else if (userInfo.period === 'year') {
+                    // Pour l'année, on peut estimer 12h * 52 semaines
+                    contractLimitMs = 12 * 52 * 3600000;
+                }
+                
+                if (contractLimitMs > 0) {
+                    userStats[uid].totalMs = Math.min(userStats[uid].totalMs, contractLimitMs);
+                }
+            }
+        }
+        // --- FIN DE LA RÈGLE FINALE ---
+
         displayStats(userStats, document.getElementById('user-stats-list'), "Aucun pointage pour cette période.");
         displayStats(chantierStats, document.getElementById('chantier-stats-list'), "Aucun chantier pointé pour cette période.", true);
     } catch (error) {
         console.error("Erreur de chargement des statistiques détaillées:", error);
     }
 }
+
 
 function updateFilterUI(type, filter, displayText) {
     document.getElementById(`${type}-stats-period-display`).textContent = displayText;
@@ -195,15 +231,22 @@ function updateFilterUI(type, filter, displayText) {
 }
 
 function displayStats(statsObject, container, emptyMessage, isClickable = false) {
-    // ... (Cette fonction reste inchangée)
     if (!container) return;
     container.innerHTML = "";
-    const sortedEntries = Object.entries(statsObject).sort(([, a], [, b]) => b - a);
+    
+    const isUserStats = !isClickable;
+    let sortedEntries = isUserStats 
+        ? Object.entries(statsObject).sort(([, a], [, b]) => b.totalMs - a.totalMs)
+        : Object.entries(statsObject).sort(([, a], [, b]) => b - a);
+
     if (sortedEntries.length === 0) {
         container.innerHTML = `<p class="text-center text-gray-500">${emptyMessage}</p>`;
         return;
     }
-    sortedEntries.forEach(([name, totalMs]) => {
+
+    sortedEntries.forEach(([key, value]) => {
+        const name = isUserStats ? value.name : key;
+        const totalMs = isUserStats ? value.totalMs : value;
         const div = document.createElement('div');
         div.className = 'flex justify-between items-center text-sm p-2 border-b';
         if (isClickable) {
@@ -217,7 +260,6 @@ function displayStats(statsObject, container, emptyMessage, isClickable = false)
 }
 
 async function loadRecentActivity() {
-    // ... (Cette fonction reste inchangée)
     const container = document.getElementById('recent-activity-list');
     if (!container) return;
     try {
@@ -233,15 +275,14 @@ async function loadRecentActivity() {
 }
 
 function createDetailedActivityElement(docId, d) {
-    // ... (Cette fonction reste inchangée)
     const wrapper = document.createElement("div");
     wrapper.className = "p-4 border rounded-lg bg-white relative shadow-sm space-y-1";
     const startDate = new Date(d.timestamp);
     const endDate = d.endTime ? new Date(d.endTime) : null;
     let timeDisplay = "", durationDisplay = "";
     if (endDate) {
-        timeDisplay = `<div>De ${startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} à ${endDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>`;
-        durationDisplay = `<div class="text-sm text-gray-600">Durée : ${formatMilliseconds(endDate - startDate)}</div>`;
+        timeDisplay = `De ${startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} à ${endDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+        durationDisplay = `<div class="text-sm text-gray-600">Durée effective : ${formatMilliseconds((endDate - startDate) - (d.pauseDurationMs || 0))}</div>`;
     } else {
         timeDisplay = `<div>Débuté à ${startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} (en cours)</div>`;
     }

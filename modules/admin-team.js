@@ -1,20 +1,20 @@
 // modules/admin-team.js
 
 import { collection, query, getDocs, doc, updateDoc, deleteDoc, orderBy, where, limit, addDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, pageContent, navigateTo, currentUser, showConfirmationModal, showInfoModal } from "../app.js";
+import { db, pageContent, navigateTo, currentUser, showConfirmationModal, showInfoModal, isStealthMode } from "../app.js";
+// --- NOUVEL IMPORT ---
+import { getUsers } from "./data-service.js";
 
 export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto space-y-8">
             <h2 class="text-2xl font-bold">👥 Gestion de l'Équipe</h2>
-
             <div class="bg-white p-4 rounded-lg shadow-sm">
                 <h3 class="text-xl font-semibold mb-3 border-b pb-2">Utilisateurs de l'application</h3>
-                <div id="user-list-container">
-                    <p class="text-center text-gray-500">Chargement...</p>
-                </div>
+                <div id="user-list-container"><p class="text-center text-gray-500">Chargement...</p></div>
             </div>
-
+            
+            ${isStealthMode() ? `
             <div class="bg-white p-4 rounded-lg shadow-sm">
                 <h3 class="text-xl font-semibold mb-3 border-b pb-2">Autres Collègues (externes)</h3>
                 <form id="addColleagueForm" class="flex flex-col sm:flex-row gap-3 mb-4">
@@ -23,17 +23,18 @@ export async function render() {
                         Ajouter
                     </button>
                 </form>
-                <div id="colleaguesList" class="space-y-2">
-                    <p>Chargement...</p>
-                </div>
+                <div id="colleaguesList" class="space-y-2"><p>Chargement...</p></div>
             </div>
+            ` : ''}
         </div>
     `;
     
     setTimeout(() => {
         loadUsers();
-        loadColleagues();
-        setupEventListeners();
+        if (isStealthMode()) {
+            loadColleagues();
+            setupEventListeners();
+        }
     }, 0);
 }
 
@@ -55,30 +56,35 @@ function setupEventListeners() {
     };
 }
 
-// --- Fonctions pour les UTILISATEURS ---
-
+// --- FONCTION MODIFIÉE ---
 async function loadUsers() {
     const container = document.getElementById('user-list-container');
-    container.innerHTML = '';
     try {
-        const q = query(collection(db, "users"), orderBy("displayName"));
-        const usersSnapshot = await getDocs(q);
-        if (usersSnapshot.empty) {
-            container.innerHTML = "<p class='text-center text-gray-500'>Aucun utilisateur trouvé.</p>";
+        // On utilise le data-service qui contient la logique de filtrage
+        const users = await getUsers();
+
+        if (users.length === 0) {
+            container.innerHTML = "<p class='text-center text-gray-500'>Aucun utilisateur à afficher.</p>";
             return;
         }
+        
+        container.innerHTML = ''; // Vider le message de chargement
         const userListDiv = document.createElement('div');
         userListDiv.className = 'space-y-3';
-        usersSnapshot.forEach(docSnap => userListDiv.appendChild(createUserElement(docSnap.data())));
+        users.forEach(userData => userListDiv.appendChild(createUserElement(userData)));
         container.appendChild(userListDiv);
     } catch (error) {
+        console.error("Erreur de chargement des utilisateurs:", error);
         container.innerHTML = "<p class='text-red-500'>Erreur de chargement des utilisateurs.</p>";
     }
 }
 
+// Le reste du fichier ne change pas
 function createUserElement(userData) {
     const userElement = document.createElement('div');
-    userElement.className = 'p-3 border rounded flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3';
+    const visibilityClass = userData.visibility === 'hidden' ? 'opacity-50 border-l-4 border-purple-400' : 'border';
+    userElement.className = `p-3 rounded flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 ${visibilityClass}`;
+
     const userInfoDiv = document.createElement('div');
     userInfoDiv.className = 'cursor-pointer hover:opacity-70 flex-grow';
     userInfoDiv.innerHTML = `<p class="font-semibold">${userData.displayName}</p><p class="text-sm text-gray-600">${userData.email}</p>`;
@@ -87,6 +93,22 @@ function createUserElement(userData) {
     
     const controlsDiv = document.createElement('div');
     controlsDiv.className = 'flex items-center gap-2 flex-wrap justify-end w-full sm:w-auto';
+
+    if (isStealthMode() && userData.uid !== currentUser.uid) {
+        const visibilityBtn = document.createElement('button');
+        visibilityBtn.className = 'px-3 py-1 text-sm rounded text-white';
+        if (userData.visibility === 'hidden') {
+            visibilityBtn.textContent = 'Rendre Visible';
+            visibilityBtn.classList.add('bg-blue-500', 'hover:bg-blue-600');
+            visibilityBtn.onclick = () => updateUserVisibility(userData.uid, 'visible');
+        } else {
+            visibilityBtn.textContent = 'Rendre Invisible';
+            visibilityBtn.classList.add('bg-purple-600', 'hover:bg-purple-700');
+            visibilityBtn.onclick = () => updateUserVisibility(userData.uid, 'hidden');
+        }
+        controlsDiv.appendChild(visibilityBtn);
+    }
+
     if (userData.uid !== currentUser.uid) {
         const roleLabel = document.createElement('label');
         roleLabel.className = 'flex items-center cursor-pointer mr-4';
@@ -142,6 +164,15 @@ function createUserElement(userData) {
     return userElement;
 }
 
+async function updateUserVisibility(uid, visibility) {
+    try {
+        await updateDoc(doc(db, "users", uid), { visibility: visibility });
+        await getUsers(true); // Force le rafraîchissement du cache dans le service
+        loadUsers(); 
+    } catch (error) {
+        showInfoModal("Erreur", "La mise à jour de la visibilité a échoué.");
+    }
+}
 async function updateUserRole(uid, role) {
     if (!(await showConfirmationModal("Changement de rôle", `Changer le rôle en "${role}" ?`))) {
         loadUsers();
@@ -149,6 +180,8 @@ async function updateUserRole(uid, role) {
     }
     try {
         await updateDoc(doc(db, "users", uid), { role: role });
+        await getUsers(true);
+        loadUsers();
     } catch (error) {
         showInfoModal("Erreur", "La mise à jour du rôle a échoué.");
         loadUsers();
@@ -157,6 +190,7 @@ async function updateUserRole(uid, role) {
 
 async function updateUserStatus(uid, status) {
     await updateDoc(doc(db, "users", uid), { status: status });
+    await getUsers(true);
     loadUsers();
 }
 
@@ -171,15 +205,13 @@ async function deleteUser(uid, name) {
             }
             await deleteDoc(doc(db, "users", uid));
             showInfoModal("Succès", `L'utilisateur "${name}" a été supprimé.`);
+            await getUsers(true);
             loadUsers();
         } catch (error) {
             showInfoModal("Erreur", "La suppression a échoué.");
         }
     }
 }
-
-
-// --- Fonctions pour les COLLÈGUES ---
 
 async function loadColleagues() {
     const listContainer = document.getElementById("colleaguesList");
