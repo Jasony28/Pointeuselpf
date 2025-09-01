@@ -1,5 +1,5 @@
 import { collection, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc, addDoc, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, currentUser, pageContent, showConfirmationModal, showInfoModal, isEffectiveAdmin } from "../app.js";
+import { db, currentUser, pageContent, showConfirmationModal, showInfoModal } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 
 let currentWeekOffset = 0;
@@ -7,6 +7,9 @@ let targetUser = null;
 let historyDataCache = [];
 let chantiersCache = [];
 let colleaguesCache = [];
+
+let entryWizardStep = 1;
+let entryWizardData = {};
 
 async function logAction(pointageId, action, details = {}) {
     try {
@@ -52,29 +55,46 @@ export async function render(params = {}) {
 
         <div id="entryModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-30 p-4">
             <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-lg">
-                <h3 id="modalTitle" class="text-xl font-bold mb-4"></h3>
+                <div class="flex justify-between items-center mb-4">
+                    <h3 id="modalTitle" class="text-xl font-bold"></h3>
+                    <p id="modalStepIndicator" class="text-sm font-semibold text-gray-500"></p>
+                </div>
+                
                 <form id="entryForm" class="space-y-4">
                     <input type="hidden" id="entryDate">
                     <input type="hidden" id="entryId">
-                    <div>
-                        <label for="entryChantier" class="text-sm font-medium">Chantier</label>
-                        <select id="entryChantier" class="w-full border p-2 rounded mt-1" required></select>
+                    
+                    <div data-step="1" class="wizard-step">
+                        <label for="entryChantier" class="text-lg font-medium">Quel chantier ?</label>
+                        <select id="entryChantier" class="w-full border p-2 rounded mt-2 text-lg" required></select>
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div><label for="entryStartTime" class="text-sm font-medium">Début</label><input id="entryStartTime" type="time" class="w-full border p-2 rounded mt-1" required /></div>
-                        <div><label for="entryEndTime" class="text-sm font-medium">Fin</label><input id="entryEndTime" type="time" class="w-full border p-2 rounded mt-1" required /></div>
+
+                    <div data-step="2" class="wizard-step">
+                        <label class="text-lg font-medium">À quelles heures ?</label>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
+                            <div><label for="entryStartTime" class="text-sm">Début</label><input id="entryStartTime" type="time" class="w-full border p-2 rounded" required /></div>
+                            <div><label for="entryEndTime" class="text-sm">Fin</label><input id="entryEndTime" type="time" class="w-full border p-2 rounded" required /></div>
+                            <div><label for="entryPauseMinutes" class="text-sm">Pause (min)</label><input id="entryPauseMinutes" type="number" min="0" placeholder="ex: 30" class="w-full border p-2 rounded" /></div>
+                        </div>
                     </div>
-                    <div>
-                        <label class="text-sm font-medium">Collègues</label>
-                        <div id="entryColleaguesContainer" class="mt-1 p-2 border rounded max-h-32 overflow-y-auto space-y-1"></div>
+
+                    <div data-step="3" class="wizard-step">
+                        <label class="text-lg font-medium">Qui était présent ?</label>
+                        <div id="entryColleaguesContainer" class="mt-2 p-2 border rounded max-h-40 overflow-y-auto space-y-1"></div>
                     </div>
-                    <div>
-                        <label for="entryNotes" class="text-sm font-medium">Notes</label>
-                        <textarea id="entryNotes" class="w-full border p-2 rounded mt-1"></textarea>
+                    
+                    <div data-step="4" class="wizard-step">
+                        <label for="entryNotes" class="text-lg font-medium">Avez-vous des informations à préciser ?</label>
+                        <textarea id="entryNotes" placeholder="(Optionnel)" class="w-full border p-2 rounded mt-2 h-24"></textarea>
                     </div>
-                    <div class="flex justify-end gap-4 pt-4 border-t">
-                        <button type="button" id="cancelEntryBtn" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">Annuler</button>
-                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded">Enregistrer</button>
+
+                    <div id="wizard-actions" class="flex justify-between items-center pt-4 border-t">
+                        <button type="button" id="wizardPrevBtn" class="bg-gray-300 hover:bg-gray-400 px-6 py-2 rounded">Précédent</button>
+                        <div>
+                            <button type="button" id="cancelEntryBtn" class="text-gray-600 hover:text-red-600 px-6 py-2 rounded mr-2">Annuler</button>
+                            <button type="button" id="wizardNextBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2 rounded">Suivant</button>
+                            <button type="submit" id="wizardSaveBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-2 rounded">Enregistrer</button>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -163,7 +183,6 @@ async function loadHistoryForWeek() {
             </div>
         `;
         
-        // CORRIGÉ : On vérifie simplement si l'utilisateur connecté est un admin
         if (currentUser.role === 'admin') {
             const addBtn = document.createElement('button');
             addBtn.innerHTML = `+ Ajouter`;
@@ -201,11 +220,11 @@ function handleHistoryClick(e) {
 
     const target = e.target;
     if (target.closest('.add-pointage-btn')) {
-        openEntryModal({ date: target.closest('.add-pointage-btn').dataset.date });
+        openEntryModal({ isEditing: false, date: target.closest('.add-pointage-btn').dataset.date });
     } else if (target.closest('.edit-btn')) {
         const pointageId = target.closest('.edit-btn').dataset.id;
         const pointageData = historyDataCache.find(p => p.id === pointageId);
-        openEntryModal(pointageData);
+        openEntryModal({ ...pointageData, isEditing: true });
     } else if (target.closest('.delete-btn')) {
         const pointageId = target.closest('.delete-btn').dataset.id;
         deletePointage(pointageId);
@@ -238,7 +257,6 @@ function createHistoryEntryElement(d) {
       ${d.notes ? `<div class="mt-2 pt-2 border-t text-xs text-gray-500"><strong>Notes:</strong> ${d.notes}</div>` : ""}
     `;
 
-    // CORRIGÉ : On vérifie simplement si l'utilisateur connecté est un admin
     if (currentUser.role === 'admin') {
         const controlsWrapper = document.createElement("div");
         controlsWrapper.className = "absolute top-2 right-3 flex flex-col items-end text-right"; 
@@ -277,75 +295,155 @@ async function deletePointage(pointageId) {
         loadHistoryForWeek();
     }
 }
+
+function showWizardStep(step) {
+    entryWizardStep = step;
+    document.querySelectorAll('.wizard-step').forEach(el => el.classList.add('hidden'));
+    document.querySelector(`[data-step="${step}"]`).classList.remove('hidden');
+
+    const stepIndicator = document.getElementById('modalStepIndicator');
+    const prevBtn = document.getElementById('wizardPrevBtn');
+    const nextBtn = document.getElementById('wizardNextBtn');
+    const saveBtn = document.getElementById('wizardSaveBtn');
+
+    stepIndicator.textContent = `Étape ${step} sur 4`;
+    prevBtn.classList.toggle('hidden', step === 1);
+    nextBtn.classList.toggle('hidden', step === 4);
+    saveBtn.classList.toggle('hidden', step !== 4);
+}
+
 function openEntryModal(data = {}) {
+    const { isEditing } = data;
     const modal = document.getElementById('entryModal');
     const form = document.getElementById('entryForm');
-    const title = document.getElementById('modalTitle');
     form.reset();
 
-    const isEditing = !!data.id;
-    document.getElementById('entryId').value = isEditing ? data.id : '';
-    const dateString = isEditing ? new Date(data.timestamp).toISOString().split('T')[0] : data.date;
-    document.getElementById('entryDate').value = dateString;
-    
-    title.textContent = isEditing ? "Modifier le pointage" : `Ajouter un pointage pour le ${new Date(dateString + 'T12:00:00Z').toLocaleDateString('fr-FR', {day:'numeric', month:'long'})}`;
-    
+    const title = document.getElementById('modalTitle');
+    const stepIndicator = document.getElementById('modalStepIndicator');
+    const wizardSteps = document.querySelectorAll('.wizard-step');
+    const wizardActions = document.getElementById('wizard-actions');
+    const saveBtn = document.getElementById('wizardSaveBtn');
+    const nextBtn = document.getElementById('wizardNextBtn');
+
     const chantierSelect = document.getElementById('entryChantier');
-    chantierSelect.innerHTML = '<option value="">-- Choisissez --</option>' + chantiersCache.map(name => `<option value="${name}" ${isEditing && name === data.chantier ? 'selected' : ''}>${name}</option>`).join('');
+    chantierSelect.innerHTML = '<option value="">-- Choisissez --</option>' + chantiersCache.map(name => `<option value="${name}">${name}</option>`).join('');
+    const colleaguesContainer = document.getElementById('entryColleaguesContainer');
+    colleaguesContainer.innerHTML = colleaguesCache.map(name => `<label class="flex items-center gap-2"><input type="checkbox" value="${name}" name="entryColleagues" /><span>${name}</span></label>`).join('');
 
     if (isEditing) {
-        const startDate = new Date(data.timestamp);
-        const endDate = new Date(data.endTime);
-        document.getElementById('entryStartTime').value = startDate.toTimeString().substring(0, 5);
-        document.getElementById('entryEndTime').value = endDate.toTimeString().substring(0, 5);
+        title.textContent = "Modifier le pointage";
+        stepIndicator.classList.add('hidden');
+        wizardSteps.forEach(step => step.classList.remove('hidden'));
+        wizardActions.querySelector('#wizardPrevBtn').classList.add('hidden');
+        wizardActions.querySelector('#wizardNextBtn').classList.add('hidden');
+        saveBtn.classList.remove('hidden');
+
+        document.getElementById('entryId').value = data.id;
+        document.getElementById('entryDate').value = new Date(data.timestamp).toISOString().split('T')[0];
+        chantierSelect.value = data.chantier;
+        document.getElementById('entryStartTime').value = new Date(data.timestamp).toTimeString().substring(0, 5);
+        document.getElementById('entryEndTime').value = new Date(data.endTime).toTimeString().substring(0, 5);
+        
+        const pauseMinutes = data.pauseDurationMs ? Math.round(data.pauseDurationMs / 60000) : '';
+        document.getElementById('entryPauseMinutes').value = pauseMinutes;
+
         document.getElementById('entryNotes').value = data.notes || '';
+        (data.colleagues || []).forEach(colleagueName => {
+            const checkbox = colleaguesContainer.querySelector(`input[value="${colleagueName}"]`);
+            if (checkbox) checkbox.checked = true;
+        });
+
+    } else {
+        title.textContent = "Ajouter un pointage";
+        stepIndicator.classList.remove('hidden');
+        saveBtn.classList.add('hidden');
+        wizardActions.querySelector('#wizardPrevBtn').classList.remove('hidden');
+        wizardActions.querySelector('#wizardNextBtn').classList.remove('hidden');
+
+        entryWizardData = { date: data.date };
+        document.getElementById('entryId').value = '';
+
+        document.getElementById('wizardNextBtn').onclick = handleWizardNext;
+        document.getElementById('wizardPrevBtn').onclick = () => showWizardStep(entryWizardStep - 1);
+        showWizardStep(1);
     }
     
-    const colleaguesContainer = document.getElementById('entryColleaguesContainer');
-    const checkedColleagues = isEditing ? data.colleagues || [] : [];
-    colleaguesContainer.innerHTML = colleaguesCache.map(name => `
-        <label class="flex items-center gap-2"><input type="checkbox" value="${name}" name="entryColleagues" ${checkedColleagues.includes(name) ? 'checked' : ''} /><span>${name}</span></label>
-    `).join('');
-
-    form.onsubmit = saveEntry;
     document.getElementById('cancelEntryBtn').onclick = () => modal.classList.add('hidden');
+    form.onsubmit = saveEntry;
     modal.classList.remove('hidden');
+}
+
+function handleWizardNext() {
+    switch (entryWizardStep) {
+        case 1:
+            const chantier = document.getElementById('entryChantier').value;
+            if (!chantier) {
+                showInfoModal("Attention", "Veuillez sélectionner un chantier.");
+                return;
+            }
+            entryWizardData.chantier = chantier;
+            break;
+        case 2:
+            const startTime = document.getElementById('entryStartTime').value;
+            const endTime = document.getElementById('entryEndTime').value;
+            if (!startTime || !endTime) {
+                showInfoModal("Attention", "Veuillez renseigner une heure de début et de fin.");
+                return;
+            }
+            if (endTime <= startTime) {
+                showInfoModal("Erreur", "L'heure de fin doit être après l'heure de début.");
+                return;
+            }
+            entryWizardData.startTime = startTime;
+            entryWizardData.endTime = endTime;
+
+            const pauseMinutes = parseInt(document.getElementById('entryPauseMinutes').value) || 0;
+            entryWizardData.pauseDurationMs = pauseMinutes * 60000;
+            break;
+    }
+    showWizardStep(entryWizardStep + 1);
 }
 
 async function saveEntry(e) {
     e.preventDefault();
-    if (!isEffectiveAdmin()) return;
+    if (currentUser.role !== 'admin') return;
 
-    const modal = document.getElementById('entryModal');
     const entryId = document.getElementById('entryId').value;
-    const date = document.getElementById('entryDate').value;
-    const startTime = document.getElementById('entryStartTime').value;
-    const endTime = document.getElementById('entryEndTime').value;
-    
-    if (endTime <= startTime) {
-        showInfoModal("Erreur", "L'heure de fin doit être après l'heure de début.");
-        return;
+    const isEditing = !!entryId;
+    let dataToSave;
+
+    if (isEditing) {
+        const date = document.getElementById('entryDate').value;
+        const pauseMinutes = parseInt(document.getElementById('entryPauseMinutes').value) || 0;
+        dataToSave = {
+            chantier: document.getElementById('entryChantier').value,
+            timestamp: new Date(`${date}T${document.getElementById('entryStartTime').value}`).toISOString(),
+            endTime: new Date(`${date}T${document.getElementById('entryEndTime').value}`).toISOString(),
+            pauseDurationMs: pauseMinutes * 60000,
+            colleagues: Array.from(document.querySelectorAll('input[name="entryColleagues"]:checked')).map(el => el.value),
+            notes: document.getElementById('entryNotes').value.trim()
+        };
+    } else {
+        entryWizardData.colleagues = Array.from(document.querySelectorAll('input[name="entryColleagues"]:checked')).map(el => el.value);
+        entryWizardData.notes = document.getElementById('entryNotes').value.trim();
+        const { date, chantier, startTime, endTime, colleagues, notes, pauseDurationMs } = entryWizardData;
+        dataToSave = { 
+            chantier, 
+            timestamp: new Date(`${date}T${startTime}`).toISOString(), 
+            endTime: new Date(`${date}T${endTime}`).toISOString(), 
+            pauseDurationMs: pauseDurationMs || 0,
+            colleagues, 
+            notes: `(Saisie manuelle) ${notes}`
+        };
     }
 
-    const selectedColleagues = Array.from(document.querySelectorAll('input[name="entryColleagues"]:checked')).map(el => el.value);
-
-    const dataToSave = {
-        chantier: document.getElementById('entryChantier').value,
-        timestamp: new Date(`${date}T${startTime}`).toISOString(),
-        endTime: new Date(`${date}T${endTime}`).toISOString(),
-        colleagues: selectedColleagues,
-        notes: document.getElementById('entryNotes').value.trim()
-    };
-
     try {
-        if (entryId) {
+        if (isEditing) {
             const pointageRef = doc(db, "pointages", entryId);
-            
             const beforeSnap = await getDoc(pointageRef);
             const beforeData = beforeSnap.data();
-
             await updateDoc(pointageRef, dataToSave);
-
+            
             const changes = {};
             for(const key in dataToSave) {
                 if(JSON.stringify(beforeData[key]) !== JSON.stringify(dataToSave[key])) {
@@ -357,29 +455,25 @@ async function saveEntry(e) {
             }
 
             showInfoModal("Succès", "Le pointage a été mis à jour.");
-
         } else {
-            const fullData = {
-                ...dataToSave,
-                uid: targetUser.uid,
-                userName: targetUser.name === "Mon" ? currentUser.displayName : targetUser.name,
-                createdAt: serverTimestamp(),
-                status: 'completed'
+            const fullData = { 
+                ...dataToSave, 
+                uid: targetUser.uid, 
+                userName: targetUser.name === "Mon" ? currentUser.displayName : targetUser.name, 
+                createdAt: serverTimestamp(), 
+                status: 'completed' 
             };
             const newDocRef = await addDoc(collection(db, "pointages"), fullData);
-            
             await logAction(newDocRef.id, "Création Manuelle", { createdData: fullData });
-
             showInfoModal("Succès", "Le pointage a été ajouté.");
         }
-        modal.classList.add('hidden');
+        document.getElementById('entryModal').classList.add('hidden');
         loadHistoryForWeek();
     } catch (error) {
         console.error("Erreur de sauvegarde:", error);
         showInfoModal("Erreur", "L'enregistrement a échoué.");
     }
 }
-
 
 function generateHistoryPDF() {
     if (historyDataCache.length === 0) {
@@ -423,9 +517,7 @@ function generateHistoryPDF() {
         return acc;
     }, {});
     
-    // --- MODIFICATION : AJOUT DE LA COLONNE "PAUSE" ---
     const tableHead = [['Date', 'Chantier', 'Pause', 'Travail Effectif', 'Collègues']];
-    // --- FIN DE LA MODIFICATION ---
     const tableBody = [];
     let totalEffectiveMs = 0;
 
@@ -444,15 +536,11 @@ function generateHistoryPDF() {
             const effectiveWorkMs = (new Date(d.endTime) - startDate) - (d.pauseDurationMs || 0);
             
             const dateStr = startDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
-            // --- MODIFICATION : AJOUT DES DONNÉES DE PAUSE ---
             const pauseStr = formatMilliseconds(d.pauseDurationMs || 0);
             const durationStr = formatMilliseconds(effectiveWorkMs);
-            // --- FIN DE LA MODIFICATION ---
             const colleaguesStr = Array.isArray(d.colleagues) && d.colleagues.length > 0 ? d.colleagues.join(", ") : 'Aucun';
             
-            // --- MODIFICATION : AJOUT DE pauseStr AU TABLEAU ---
             tableBody.push([dateStr, d.chantier, pauseStr, durationStr, colleaguesStr]);
-            // --- FIN DE LA MODIFICATION ---
         });
     }
 

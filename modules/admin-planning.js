@@ -3,7 +3,6 @@ import { db, pageContent, currentUser, showConfirmationModal, showInfoModal } fr
 import { getWeekDateRange } from "./utils.js";
 import { getActiveChantiers, getTeamMembers } from "./data-service.js";
 
-// --- ÉTAT DU MODULE ---
 const state = {
     currentWeekOffset: 0,
     chantiers: [],
@@ -16,7 +15,6 @@ const state = {
     editing: { id: null, date: null }
 };
 
-// --- STRUCTURE HTML ---
 function getPlanningHTML() {
     return `
         <div class="max-w-full mx-auto">
@@ -55,8 +53,8 @@ function getPlanningHTML() {
                 <h3 id="modalTitle" class="text-xl font-bold mb-4"></h3>
                 <form id="planningItemForm" class="space-y-4">
                     <div><label class="text-sm font-medium">Chantier</label><select id="chantierSelect" class="w-full border p-2 rounded" required></select></div>
-                    <div><label class="text-sm font-medium">Heure de début</label><input id="planningStartTime" type="time" class="w-full border p-2 rounded" /></div>
-                    <div><label class="text-sm font-medium">Notes (facultatif)</label><textarea id="planningNotes" placeholder="Instructions spécifiques..." class="w-full border p-2 rounded"></textarea></div>
+                    <div><label for="planningStartTime" class="text-sm font-medium">Heure de début</label><input id="planningStartTime" type="time" class="w-full border p-2 rounded" /></div>
+                    <div><label for="planningNotes" class="text-sm font-medium">Notes (facultatif)</label><textarea id="planningNotes" placeholder="Instructions spécifiques..." class="w-full border p-2 rounded"></textarea></div>
                     <div class="flex justify-end gap-4 pt-4 border-t">
                         <button type="button" id="cancelPlanningItem" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">Annuler</button>
                         <button type="button" id="saveAndAddAnotherBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Enregistrer et Ajouter</button>
@@ -68,7 +66,6 @@ function getPlanningHTML() {
     `;
 }
 
-// --- INITIALISATION ---
 export async function render() {
     pageContent.innerHTML = getPlanningHTML();
     await initialize();
@@ -85,7 +82,6 @@ async function cacheData() {
     state.teamMembers = await getTeamMembers();
 }
 
-// --- GESTION DES ÉVÉNEMENTS ---
 function setupEventListeners() {
     document.getElementById("prevWeekBtn").onclick = () => { state.currentWeekOffset--; display(); };
     document.getElementById("nextWeekBtn").onclick = () => { state.currentWeekOffset++; display(); };
@@ -160,7 +156,6 @@ async function handleGridClick(e) {
     }
 }
 
-// --- AFFICHAGE ET RENDU ---
 function display() {
     updateViewButtons();
     if (state.currentView === 'week') {
@@ -247,16 +242,13 @@ function populateTeamPool() {
 }
 
 function createChantierBlock(planningDoc) {
-    const { id, chantierId, chantierName, teamNames, duration, notes, startTime } = planningDoc;
+    const { id, chantierId, chantierName, teamNames, notes, startTime } = planningDoc;
     const block = document.createElement('div');
     block.className = 'planning-block p-1.5 bg-white rounded shadow cursor-pointer text-xs relative';
     block.dataset.planningId = id;
     
-    const chantierData = state.chantiers.find(c => c.id === chantierId);
-    block.dataset.totalHeures = chantierData?.totalHeuresPrevues || 0;
-
     const noteIndicator = notes ? ` <span class="text-blue-500" title="${notes}">📝</span>` : '';
-    const timeInfo = startTime ? `<strong>${startTime}</strong> (${duration || 0}h)` : `${duration || 0}h prévues`;
+    const timeInfo = startTime ? `<strong>${startTime}</strong>` : '';
     
     block.innerHTML = `
         <div class="flex justify-between items-start">
@@ -295,7 +287,7 @@ async function loadPlanningForWeek(start, end) {
         });
     } catch (error) {
         console.error("Erreur de chargement du planning:", error);
-        document.getElementById("planning-grid").innerHTML = `<p class="text-red-500 text-center col-span-full">Erreur de chargement du planning. Vérifiez les index Firestore.</p>`;
+        document.getElementById("planning-grid").innerHTML = `<p class="text-red-500 text-center col-span-full">Erreur de chargement du planning.</p>`;
     }
 }
 
@@ -356,12 +348,10 @@ async function savePlanningItem(closeAfterSave) {
     if (!select.value) { showInfoModal("Attention", "Veuillez choisir un chantier."); return; }
     
     const [chantierId, chantierName] = select.value.split('|');
-    const chantierData = state.chantiers.find(c => c.id === chantierId);
     
     const dataToSave = {
         chantierId, 
         chantierName,
-        duration: chantierData?.totalHeuresPrevues || 0,
         notes: document.getElementById('planningNotes').value.trim(),
         startTime: document.getElementById('planningStartTime').value
     };
@@ -396,35 +386,20 @@ async function savePlanningItem(closeAfterSave) {
 function updateAssignMode() {
     const selectedCheckboxes = document.querySelectorAll('.team-checkbox:checked');
     state.assignMode = selectedCheckboxes.length > 0;
-    document.body.classList.toggle('assign-mode', state.assignMode);
+    document.body.style.cursor = state.assignMode ? 'copy' : 'default';
 }
 
 async function assignSelectedTeamToBlock(planningBlock, planningDoc) {
     const selectedTeam = Array.from(document.querySelectorAll('.team-checkbox:checked')).map(cb => cb.nextElementSibling.textContent);
-    planningDoc.teamNames = selectedTeam;
+    planningDoc.teamNames = [...new Set([...(planningDoc.teamNames || []), ...selectedTeam])];
     renderTeamInBlock(planningBlock, planningDoc.teamNames);
-    await updateDurationAndSave(planningBlock, planningDoc.id, planningDoc.teamNames);
+    await updateDoc(doc(db, "planning", planningDoc.id), { teamNames: planningDoc.teamNames });
 }
 
 async function handleMemberRemoval(planningBlock, planningDoc, memberNameToRemove) {
     planningDoc.teamNames = planningDoc.teamNames.filter(name => name !== memberNameToRemove);
     renderTeamInBlock(planningBlock, planningDoc.teamNames);
-    await updateDurationAndSave(planningBlock, planningDoc.id, planningDoc.teamNames);
-}
-
-async function updateDurationAndSave(planningBlock, planningId, teamNames) {
-    const totalHeures = parseFloat(planningBlock.dataset.totalHeures);
-    const teamSize = teamNames.length;
-    let newDuration = 0;
-    if (totalHeures > 0) newDuration = (teamSize > 0) ? (totalHeures / teamSize) : totalHeures;
-    const finalDuration = parseFloat(newDuration.toFixed(1));
-    
-    await updateDoc(doc(db, "planning", planningId), { teamNames: teamNames, duration: finalDuration });
-    
-    const timeInfoEl = planningBlock.querySelector('.time-info');
-    const noteIndicator = timeInfoEl.querySelector('span')?.outerHTML || '';
-    const startTime = timeInfoEl.querySelector('strong')?.outerHTML || '';
-    timeInfoEl.innerHTML = startTime ? `${startTime} (${finalDuration}h)${noteIndicator}` : `${finalDuration}h prévues${noteIndicator}`;
+    await updateDoc(doc(db, "planning", planningDoc.id), { teamNames: planningDoc.teamNames });
 }
 
 function toggleSelectionMode() {
@@ -464,6 +439,7 @@ async function checkAndRenderPublishButton(startOfWeek) {
     const weekId = startOfWeek.toISOString().split('T')[0];
     const publishDoc = await getDoc(doc(db, "publishedSchedules", weekId));
     const btn = document.getElementById('publishBtn');
+    if (!btn) return;
     btn.disabled = false;
     if (publishDoc.exists()) {
         btn.textContent = 'Notifier les changements';
@@ -502,39 +478,90 @@ async function sendUpdateNotification() {
 }
 
 async function generatePrintableView() {
+    showInfoModal("Génération du PDF...", "Veuillez patienter, nous préparons votre planning.");
+
     const { startOfWeek } = getWeekDateRange(state.currentWeekOffset);
     const weekString = `Semaine du ${startOfWeek.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}`;
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write('<html><head><title>Planning Imprimable</title><script src="https://cdn.tailwindcss.com"></script></head><body class="p-4">');
-    printWindow.document.write(`<h1 class="text-3xl font-bold mb-4">${weekString}</h1>`);
-    const q = query(collection(db, "planning"), where("date", ">=", startOfWeek.toISOString().split('T')[0]), where("date", "<=", getWeekDateRange(state.currentWeekOffset).endOfWeek.toISOString().split('T')[0]), orderBy("date"), orderBy("order"));
+
+    const q = query(
+        collection(db, "planning"), 
+        where("date", ">=", startOfWeek.toISOString().split('T')[0]), 
+        where("date", "<=", getWeekDateRange(state.currentWeekOffset).endOfWeek.toISOString().split('T')[0]),
+        orderBy("date"), 
+        orderBy("order")
+    );
     const snapshot = await getDocs(q);
-    const planningByDate = {};
-    snapshot.forEach(d => {
-        const data = d.data();
-        if (!planningByDate[data.date]) planningByDate[data.date] = [];
-        planningByDate[data.date].push(data);
+    const planningTasks = snapshot.docs.map(d => d.data());
+
+    const planningGrid = new Map();
+    const daysOfWeek = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+
+    const allTeamMembers = [...new Set(planningTasks.flatMap(task => task.teamNames || []))].sort();
+
+    allTeamMembers.forEach(name => {
+        planningGrid.set(name, {
+            Lundi: [], Mardi: [], Mercredi: [], Jeudi: [], Vendredi: [], Samedi: [], Dimanche: [], totalHours: 0
+        });
     });
-    const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
-    for (let i = 0; i < 7; i++) {
-        const dayDate = new Date(startOfWeek);
-        dayDate.setUTCDate(startOfWeek.getUTCDate() + i);
-        const dateString = dayDate.toISOString().split('T')[0];
-        printWindow.document.write(`<h2 class="text-xl font-bold mt-4 border-b pb-1">${days[i]} ${dayDate.toLocaleDateString('fr-FR', {timeZone:'UTC'})}</h2>`);
-        const tasks = planningByDate[dateString];
-        if (tasks && tasks.length > 0) {
-            printWindow.document.write('<div class="mt-2 space-y-2">');
-            tasks.forEach(task => {
-                printWindow.document.write(`<div class="p-2 border rounded"><p class="font-bold">${task.chantierName}</p><p class="text-sm">Équipe: ${task.teamNames.join(', ') || 'Personne'}</p><p class="text-sm">Durée: ${task.duration}h</p>`);
-                if(task.notes) printWindow.document.write(`<p class="text-sm text-blue-600">Note: ${task.notes}</p>`);
-                printWindow.document.write('</div>');
-            });
-            printWindow.document.write('</div>');
-        } else {
-            printWindow.document.write('<p class="text-gray-500 mt-2">Rien de prévu.</p>');
+
+    planningTasks.forEach(task => {
+        if (!task.teamNames || task.teamNames.length === 0) return;
+
+        const taskDate = new Date(task.date + 'T12:00:00Z');
+        const dayIndex = (taskDate.getUTCDay() + 6) % 7;
+        const dayName = daysOfWeek[dayIndex];
+        
+        const duration = parseFloat(task.duration) || 0; 
+        const taskText = `${task.chantierName}${duration > 0 ? ` (${duration.toFixed(1)}h)` : ''}`;
+
+        task.teamNames.forEach(name => {
+            if (planningGrid.has(name)) {
+                planningGrid.get(name)[dayName].push(taskText);
+                planningGrid.get(name).totalHours += duration;
+            }
+        });
+    });
+
+    const tableHead = [['Employé', ...daysOfWeek, 'Total Semaine']];
+    const tableBody = [];
+
+    planningGrid.forEach((weekData, name) => {
+        const row = [name];
+        daysOfWeek.forEach(day => {
+            row.push(weekData[day].join('\n'));
+        });
+        row.push(`${weekData.totalHours.toFixed(1)}h`);
+        tableBody.push(row);
+    });
+    
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+
+    pdf.setFontSize(18);
+    pdf.text("Planning de la Semaine", 40, 40);
+    pdf.setFontSize(12);
+    pdf.text(weekString, 40, 60);
+
+    pdf.autoTable({
+        head: tableHead,
+        body: tableBody,
+        startY: 80,
+        theme: 'grid',
+        headStyles: {
+            fillColor: [41, 51, 92],
+            textColor: 255,
+            fontStyle: 'bold'
+        },
+        styles: {
+            fontSize: 8,
+            cellPadding: 4,
+            valign: 'middle',
+        },
+        columnStyles: {
+            0: { fontStyle: 'bold', minCellWidth: 80 },
+            7: { fontStyle: 'bold', minCellWidth: 50 },
         }
-    }
-    printWindow.document.write('</body></html>');
-    printWindow.document.close();
-    setTimeout(() => printWindow.print(), 500);
+    });
+
+    pdf.save(`Planning_${weekString.replace(/ /g, '_')}.pdf`);
 }
