@@ -1,71 +1,89 @@
-// sw.js - Version finale et robuste
+// ====================================================================================
+// SERVICE WORKER (sw.js) - Version "Pare-balles"
+// Auteur: Gemini
+// Description: Une gestion agressive du cache et des mises à jour pour éviter les crashs.
+// ====================================================================================
 
 importScripts('https://storage.googleapis.com/workbox-cdn/releases/6.5.4/workbox-sw.js');
 
-if (workbox) {
-  console.log(`[Workbox] Chargement réussi 🎉`);
+// On change la variable 'workbox' pour un nom plus clair, pour éviter toute confusion.
+const { precaching, routing, strategies, core } = workbox;
+core.setCacheNameDetails({ prefix: 'pointeuse-lpf-cache' });
 
-  // --- VERSION DE L'APPLICATION ---
-  // DOIT être exactement le même numéro que dans app.js
-  const APP_VERSION = 'v2.2.0';
+// --- GESTION DE LA VERSION DE L'APPLICATION ---
+// Cette version est cruciale et doit être synchronisée avec app.js
+const APP_VERSION = 'v2.2.1';
 
-  // --- MISE EN CACHE DES FICHIERS DE BASE (PRECACHING) ---
-  const precacheManifest = [
-    // Fichiers de base liés à la version
+// --- MISE EN CACHE DES FICHIERS DE BASE (PRECACHING) ---
+// La liste de tous les fichiers essentiels au fonctionnement de l'application.
+// Workbox s'assurera que ces fichiers sont toujours à jour.
+precaching.precacheAndRoute([
+    // Fichiers principaux
     { url: './', revision: APP_VERSION },
     { url: 'index.html', revision: APP_VERSION },
     { url: 'app.js', revision: APP_VERSION },
     { url: 'manifest.json', revision: APP_VERSION },
     
-    // Tous les modules JavaScript locaux, liés à la version
+    // Tous les modules JavaScript
     { url: 'modules/utils.js', revision: APP_VERSION },
+    { url: 'modules/data-service.js', revision: APP_VERSION },
+    { url: 'modules/add-entry.js', revision: APP_VERSION },
     { url: 'modules/user-dashboard.js', revision: APP_VERSION },
     { url: 'modules/user-history.js', revision: APP_VERSION },
+    { url: 'modules/user-leave.js', revision: APP_VERSION },
     { url: 'modules/user-updates.js', revision: APP_VERSION },
     { url: 'modules/chantiers.js', revision: APP_VERSION },
-    { url: 'modules/admin-dashboard.js', revision: APP_VERSION },
-    { url: 'modules/admin-planning.js', revision: APP_VERSION },
     { url: 'modules/admin-chantiers.js', revision: APP_VERSION },
     { url: 'modules/admin-chantier-details.js', revision: APP_VERSION },
+    { url: 'modules/admin-contracts.js', revision: APP_VERSION },
+    { url: 'modules/admin-dashboard.js', revision: APP_VERSION },
     { url: 'modules/admin-data.js', revision: APP_VERSION },
+    { url: 'modules/admin-hours-report.js', revision: APP_VERSION },
+    { url: 'modules/admin-invoicing.js', revision: APP_VERSION },
+    { url: 'modules/admin-leave.js', revision: APP_VERSION },
+    { url: 'modules/admin-planning.js', revision: APP_VERSION },
     { url: 'modules/admin-tarifs.js', revision: APP_VERSION },
-    { url: 'modules/admin-team.js', revision: APP_VERSION }, // On utilise le nouveau fichier team
+    { url: 'modules/admin-team.js', revision: APP_VERSION },
     { url: 'modules/admin-travel-report.js', revision: APP_VERSION },
-    { url: 'modules/admin-hours-report.js', revision: APP_VERSION }, // Le nouveau rapport
     { url: 'modules/admin-updates.js', revision: APP_VERSION },
     
-    // Les icônes changent rarement, on peut laisser 'null'
+    // Icônes
     { url: 'icons/icon-192x192.png', revision: null },
     { url: 'icons/icon-512x512.png', revision: null },
-  ];
+]);
 
-  workbox.precaching.precacheAndRoute(precacheManifest);
+// --- STRATÉGIES DE CACHE DYNAMIQUES ---
 
-  // --- RÈGLES DE ROUTAGE (pas de changement ici) ---
-  workbox.routing.registerRoute(
+// Pour les pages HTML, on privilégie toujours le réseau.
+routing.registerRoute(
     ({ request }) => request.mode === 'navigate',
-    new workbox.strategies.NetworkFirst({ cacheName: 'pages-cache' })
-  );
+    new strategies.NetworkFirst({ cacheName: 'pages' })
+);
 
-  workbox.routing.registerRoute(
-    ({ request }) => 
-      request.destination === 'script' || request.destination === 'style' ||
-      request.url.startsWith('https://cdn.tailwindcss.com') || request.url.startsWith('https://unpkg.com'),
-    new workbox.strategies.StaleWhileRevalidate({ cacheName: 'assets-cache' })
-  );
-  
-  workbox.routing.registerRoute(
-    ({ url }) => url.hostname === 'api.mapbox.com',
-    new workbox.strategies.NetworkOnly()
-  );
+// Pour les scripts et styles externes (CDN), on sert le cache d'abord pour la vitesse.
+routing.registerRoute(
+    ({ request }) => ['script', 'style'].includes(request.destination) && request.url.includes('cdn'),
+    new strategies.StaleWhileRevalidate({ cacheName: 'cdn-assets' })
+);
 
-  // --- GESTION DES MISES À JOUR (pas de changement ici) ---
-  self.addEventListener('message', (event) => {
-    if (event.data && event.data.type === 'SKIP_WAITING') {
-      self.skipWaiting();
-    }
-  });
+// --- GESTION INTELLIGENTE DES MISES À JOUR ---
 
-} else {
-  console.log(`[Workbox] Le chargement a échoué.`);
-}
+// Cette instruction dit au nouveau Service Worker de s'activer dès qu'il est prêt,
+// sans attendre que l'ancien soit complètement fermé. C'est crucial pour éviter les conflits.
+self.addEventListener('install', () => {
+    self.skipWaiting();
+});
+
+// Cette instruction s'assure que le nouveau Service Worker prend le contrôle de la page
+// immédiatement après son activation.
+self.addEventListener('activate', () => {
+    clients.claim();
+});
+
+// Ce code écoute les messages venant de app.js.
+// C'est comme ça que notre application va pouvoir dire "OK, installe la nouvelle version".
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'GET_VERSION') {
+    event.ports[0].postMessage(APP_VERSION);
+  }
+});

@@ -1,5 +1,5 @@
 // On importe la fonction qui nous permet de savoir si le mode confidentiel est actif
-import { isStealthMode } from "../app.js";
+import { isStealthMode, currentUser } from "../app.js";
 import { collection, query, where, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db } from "../app.js";
 
@@ -39,18 +39,19 @@ export async function getTeamMembers(forceRefresh = false) {
     const colleaguesQuery = query(collection(db, "colleagues"), orderBy("name"));
     
     // --- MODIFIÉ : La requête pour les utilisateurs dépend du Stealth Mode ---
-    let usersQuery;
-    if (isStealthMode()) {
-        // En mode confidentiel, on prend tous les utilisateurs approuvés, même les invisibles
-        usersQuery = query(collection(db, "users"), where("status", "==", "approved"), orderBy("displayName"));
-    } else {
-        // Sinon, on ne prend que les utilisateurs approuvés ET visibles
-        usersQuery = query(collection(db, "users"), 
-            where("status", "==", "approved"), 
-            where("visibility", "!=", "hidden"), 
-            orderBy("displayName")
-        );
-    }
+let usersQuery;
+// NOUVELLE LOGIQUE : On vérifie si l'utilisateur est un admin
+if (currentUser && currentUser.role === 'admin') {
+    // Un admin voit TOUS les utilisateurs approuvés, même les invisibles
+    usersQuery = query(collection(db, "users"), where("status", "==", "approved"), orderBy("displayName"));
+} else {
+    // Un employé normal ne voit que les utilisateurs visibles
+    usersQuery = query(collection(db, "users"), 
+        where("status", "==", "approved"), 
+        where("visibility", "!=", "hidden"), 
+        orderBy("displayName")
+    );
+}
 
     const [colleaguesSnapshot, usersSnapshot] = await Promise.all([
         getDocs(colleaguesQuery),

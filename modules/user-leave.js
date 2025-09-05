@@ -73,13 +73,18 @@ export async function render() {
 
 function setMinimumLeaveDate() {
     const today = new Date();
-    today.setDate(today.getDate() + 7);
-    const minDateString = today.toISOString().split('T')[0];
-    
+    // On ajoute 7 jours à la date d'aujourd'hui
+    today.setDate(today.getDate() + 7); 
+
+    // On formate la date en YYYY-MM-DD, requis pour l'attribut 'min'
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const minDateString = `${year}-${month}-${day}`;
+
     document.getElementById('leave-start-date').min = minDateString;
     document.getElementById('leave-end-date').min = minDateString;
 }
-
 function setupEventListeners() {
     // MODIFIÉ : On utilise les boutons de semaine
     document.getElementById('prevWeekBtn').onclick = () => {
@@ -115,6 +120,8 @@ async function loadAllRequestsAndDisplayList() {
 }
 
 // MODIFIÉ : La fonction affiche maintenant une semaine sous forme de liste
+// MODIFICATION DANS modules/user-leave.js
+
 function displayLeaveList() {
     const listContainer = document.getElementById('leave-list-container');
     const listTitle = document.getElementById('list-title');
@@ -124,27 +131,32 @@ function displayLeaveList() {
     
     listTitle.textContent = `Semaine du ${startOfWeek.toLocaleDateString('fr-FR', {day: 'numeric', month: 'long'})}`;
 
-    // On "explose" les demandes de plusieurs jours en entrées uniques pour chaque jour
     const dailyEntries = [];
     leaveRequestsCache.forEach(req => {
-        const start = new Date(req.startDate + 'T00:00:00');
-        const end = new Date((req.endDate || req.startDate) + 'T00:00:00');
+        // CORRECTION ICI : On crée la date en UTC pour éviter les problèmes de fuseau horaire
+        const start = new Date(req.startDate + 'T12:00:00Z');
+        const end = new Date((req.endDate || req.startDate) + 'T12:00:00Z');
 
         let loopDate = new Date(start);
         while (loopDate <= end) {
-            // On ne garde que les jours qui sont dans la semaine actuellement visible
             if (loopDate >= startOfWeek && loopDate <= endOfWeek) {
                 dailyEntries.push({
                     date: new Date(loopDate),
                     ...req
                 });
             }
-            loopDate.setDate(loopDate.getDate() + 1);
+            // On utilise setUTCDate pour travailler en UTC
+            loopDate.setUTCDate(loopDate.getUTCDate() + 1);
         }
     });
     
     const groupedByDay = dailyEntries.reduce((acc, entry) => {
-        const dateString = entry.date.toISOString().split('T')[0];
+        // CORRECTION ICI : On utilise getUTCDate() pour ne pas avoir de décalage
+        const year = entry.date.getUTCFullYear();
+        const month = String(entry.date.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(entry.date.getUTCDate()).padStart(2, '0');
+        const dateString = `${year}-${month}-${day}`;
+        
         if (!acc[dateString]) acc[dateString] = [];
         acc[dateString].push(entry);
         return acc;
@@ -159,12 +171,13 @@ function displayLeaveList() {
 
     sortedDays.forEach(dateString => {
         const dayEntries = groupedByDay[dateString];
+        // On recrée la date à midi pour être sûr du jour lors de l'affichage
         const dayDate = new Date(dateString + 'T12:00:00');
 
         const dayWrapper = document.createElement('div');
         const dayHeader = `
             <div class="flex justify-between items-center border-b pb-2 mb-3">
-                <h3 class="font-bold text-lg">${dayDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</h3>
+                <h3 class="font-bold text-lg">${dayDate.toLocaleDateString('fr-FR', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' })}</h3>
             </div>
         `;
         
@@ -207,26 +220,42 @@ function displayLeaveList() {
     });
 }
 
+
 async function submitLeaveRequest(e) {
     e.preventDefault();
+    const form = e.target;
+    const submitButton = form.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
+    submitButton.textContent = "Envoi en cours...";
+
     const startDate = document.getElementById('leave-start-date').value;
     const endDate = document.getElementById('leave-end-date').value || startDate;
     const reason = document.getElementById('leave-reason').value;
     const startTime = document.getElementById('leave-start-time').value;
     const endTime = document.getElementById('leave-end-time').value;
 
+    // --- VALIDATION STRICTE DES 7 JOURS ---
     const today = new Date();
-    const requestedDate = new Date(startDate);
-    const timeDiff = requestedDate.getTime() - today.getTime();
-    const dayDiff = timeDiff / (1000 * 3600 * 24);
+    today.setHours(0, 0, 0, 0); // On compare les jours uniquement
 
-    if (dayDiff < 6.5) {
-        showInfoModal("Délai insuffisant", "Vous devez soumettre une demande de congé au moins 7 jours à l'avance.");
-        return;
+    const requestedDate = new Date(startDate);
+
+    const timeDiff = requestedDate.getTime() - today.getTime();
+    const dayDiff = Math.floor(timeDiff / (1000 * 3600 * 24));
+
+    // Si la différence est inférieure à 7 jours, on bloque.
+    if (dayDiff < 7) {
+        showInfoModal("Délai insuffisant", "Vous ne pouvez pas demander de congé moins de 7 jours à l'avance.");
+        submitButton.disabled = false;
+        submitButton.textContent = "Envoyer la demande";
+        return; // On arrête tout
     }
+    // --- FIN DE LA VALIDATION ---
 
     if (new Date(endDate) < new Date(startDate)) {
         showInfoModal("Attention", "La date de fin ne peut pas être antérieure à la date de début.");
+        submitButton.disabled = false;
+        submitButton.textContent = "Envoyer la demande";
         return;
     }
 
@@ -248,11 +277,14 @@ async function submitLeaveRequest(e) {
     try {
         await addDoc(collection(db, "leaveRequests"), requestData);
         showInfoModal("Succès", "Votre demande de congé a bien été envoyée.");
-        e.target.reset();
+        form.reset();
         document.getElementById('medical-times-container').classList.add('hidden');
         loadAllRequestsAndDisplayList();
     } catch (error) {
         console.error("Erreur d'envoi de la demande:", error);
         showInfoModal("Erreur", "L'envoi de la demande a échoué.");
+    } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = "Envoyer la demande";
     }
 }

@@ -1,4 +1,4 @@
-const APP_VERSION = 'v2.2.0';
+const APP_VERSION = 'v2.2.1';
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
@@ -164,30 +164,35 @@ function markNotificationsAsRead() {
 
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialisation des variables pour les modales
     genericModal = document.getElementById('genericModal');
     modalTitle = document.getElementById('modalTitle');
     modalMessage = document.getElementById('modalMessage');
     modalConfirmBtn = document.getElementById('modalConfirmBtn');
     modalCancelBtn = document.getElementById('modalCancelBtn');
 
+    // Récupération des conteneurs principaux de l'UI
     const loader = document.getElementById('app-loader');
     const authContainer = document.getElementById('auth-container');
     const pendingContainer = document.getElementById('pending-approval-container');
     const appContainer = document.getElementById('app-container');
 
+    // Récupération des formulaires
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');
     const resetForm = document.getElementById('reset-form');
 
+    // Gestion de l'affichage des formulaires (liens "créer un compte", etc.)
     document.getElementById('show-register-link').onclick = (e) => { e.preventDefault(); loginForm.classList.add('hidden'); registerForm.classList.remove('hidden'); };
     document.getElementById('show-reset-link').onclick = (e) => { e.preventDefault(); loginForm.classList.add('hidden'); resetForm.classList.remove('hidden'); };
     document.getElementById('show-login-link-from-register').onclick = (e) => { e.preventDefault(); registerForm.classList.add('hidden'); loginForm.classList.remove('hidden'); };
     document.getElementById('show-login-link-from-reset').onclick = (e) => { e.preventDefault(); resetForm.classList.add('hidden'); loginForm.classList.remove('hidden'); };
 
+    // Gestion de la déconnexion
     document.getElementById('logoutBtn').onclick = () => signOut(auth);
     document.getElementById('logoutPendingBtn').onclick = () => signOut(auth);
 
-    // ... La logique de connexion et d'inscription reste la même ...
+    // Logique d'inscription
     registerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const name = document.getElementById('register-name').value;
@@ -206,6 +211,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Logique de connexion
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const email = document.getElementById('login-email').value;
@@ -218,6 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Logique de réinitialisation du mot de passe
     resetForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const email = document.getElementById('reset-email').value;
@@ -232,7 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-
+    // Surveillance de l'état d'authentification de l'utilisateur (la fonction la plus importante)
     onAuthStateChanged(auth, async (user) => {
         authContainer.style.display = 'none';
         pendingContainer.style.display = 'none';
@@ -285,16 +292,15 @@ document.addEventListener('DOMContentLoaded', () => {
         loader.style.display = 'none';
     });
     
-    // --- LOGIQUE DU STEALTH MODE MISE À JOUR ---
+    // Logique du mode confidentiel (Stealth Mode)
     const pinModal = document.getElementById('pinModal');
     const pinForm = document.getElementById('pinForm');
     const pinInput = document.getElementById('pinInput');
-
     const stealthTrigger = document.getElementById('stealth-trigger');
+
     if (stealthTrigger) {
         stealthTrigger.onclick = () => {
             if (isStealthMode()) {
-                // --- MODIFICATION : On utilise localStorage ---
                 localStorage.removeItem('stealthMode');
                 showInfoModal("Mode Confidentiel", "Le mode confidentiel est désactivé. Rechargement...");
                 setTimeout(() => window.location.reload(), 1500);
@@ -313,7 +319,6 @@ document.addEventListener('DOMContentLoaded', () => {
     pinForm.addEventListener('submit', (e) => {
         e.preventDefault();
         if (pinInput.value === STEALTH_PIN) {
-            // --- MODIFICATION : On utilise localStorage ---
             localStorage.setItem('stealthMode', 'true');
             pinModal.classList.add('hidden');
             pinForm.reset();
@@ -325,8 +330,47 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
+    // ===============================================================================
+    // GESTION ROBUSTE DU SERVICE WORKER (NOUVEAU BLOC)
+    // ===============================================================================
     if ('serviceWorker' in navigator) {
-        // ... (le code du service worker reste le même)
+        // Important: Assurez-vous d'avoir importé Workbox-window dans votre index.html
+        const { Workbox } = window;
+        if (Workbox) {
+            const wb = new Workbox('/sw.js');
+
+            // Cette fonction est appelée quand une nouvelle version est détectée.
+            const showUpdateToast = () => {
+                if (document.getElementById('update-toast')) return; // Évite les doublons
+
+                const toast = document.createElement('div');
+                toast.id = 'update-toast';
+                toast.className = 'fixed bottom-4 right-4 bg-gray-800 text-white p-4 rounded-lg shadow-lg flex items-center gap-4 z-50 animate-pulse';
+                toast.innerHTML = `
+                    <span>Une nouvelle version est disponible.</span>
+                    <button id="reload-button" class="bg-blue-600 hover:bg-blue-700 font-bold px-4 py-2 rounded">Rafraîchir</button>
+                `;
+                document.body.appendChild(toast);
+
+                document.getElementById('reload-button').onclick = () => {
+                    // On envoie un message au SW pour qu'il s'active immédiatement
+                    wb.messageSkipWaiting(); 
+                };
+            };
+
+            // Cet événement est déclenché quand un nouveau SW est prêt et en attente.
+            // C'est le signal pour proposer la mise à jour à l'utilisateur.
+            wb.addEventListener('waiting', showUpdateToast);
+
+            // Cet événement est déclenché quand le nouveau SW a pris le contrôle.
+            // On recharge alors la page pour que les changements soient visibles.
+            wb.addEventListener('controlling', () => {
+                window.location.reload();
+            });
+
+            // On enregistre le Service Worker.
+            wb.register();
+        }
     }
 });
 

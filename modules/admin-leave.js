@@ -104,8 +104,13 @@ async function updatePlanningWithLeave(leaveData, newStatus) {
     existingLeaveEntries.forEach(doc => batch.delete(doc.ref));
 
     if (newStatus === 'approved') {
-        for (let d = startDate; d <= endDate; d.setDate(d.getDate() + 1)) {
-            const dateString = d.toISOString().split('T')[0];
+        for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+            // CORRECTION APPLIQUÉE ICI
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const dateString = `${year}-${month}-${day}`;
+            
             const newPlanningEntryRef = doc(planningRef);
             batch.set(newPlanningEntryRef, {
                 chantierName: `Congé (${leaveData.reason})`,
