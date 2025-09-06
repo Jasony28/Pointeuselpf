@@ -1,9 +1,15 @@
-const APP_VERSION = 'v2.2.1';
+const APP_VERSION = 'v2.2.2';
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit, addDoc, initializeFirestore, CACHE_SIZE_UNLIMITED } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-
+function applySavedTheme() {
+    const savedColor = localStorage.getItem('appThemeColor');
+    if (savedColor) {
+        document.body.style.backgroundColor = savedColor;
+    }
+}
+applySavedTheme(); 
 const firebaseConfig = {
   apiKey: "AIzaSyDm-C8VDT1Td85WUBWR7MxlrjDkY78eoHs",
   authDomain: "pointeuse-lpf.firebaseapp.com",
@@ -41,6 +47,7 @@ const userTabs = [
     { id: 'user-updates', name: 'Détails chantier' },
     { id: 'chantiers', name: 'Infos Chantiers' },
     { id: 'user-history', name: 'Mon Historique' },
+    { id: 'settings', name: 'Paramètres' },
 ];
 
 const adminTabs = [
@@ -189,7 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('show-login-link-from-reset').onclick = (e) => { e.preventDefault(); resetForm.classList.add('hidden'); loginForm.classList.remove('hidden'); };
 
     // Gestion de la déconnexion
-    document.getElementById('logoutBtn').onclick = () => signOut(auth);
+    
     document.getElementById('logoutPendingBtn').onclick = () => signOut(auth);
 
     // Logique d'inscription
