@@ -1,7 +1,9 @@
+// Fichier : modules/chantiers.js
+
 import { doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, isAdmin, showInfoModal } from "../app.js";
 import { getGoogleMapsUrl } from "./utils.js";
-import { getActiveChantiers } from "./data-service.js"; // <-- NOUVEAU
+import { getActiveChantiers } from "./data-service.js";
 
 let chantiersCache = [];
 
@@ -17,6 +19,9 @@ export async function render() {
                 <button id="closeDetailsBtn" class="absolute top-2 right-3 text-2xl font-bold text-gray-500 hover:text-gray-800">×</button>
                 <h3 id="modalChantierName" class="text-2xl font-bold border-b pb-2"></h3>
                 <div><h4 class="font-semibold text-sm text-gray-500">ADRESSE</h4><a id="modalChantierAddress" href="#" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline text-lg"></a></div>
+                
+                <div><h4 class="font-semibold text-sm text-gray-500">HEURES PRÉVUES</h4><p id="modalChantierHours" class="text-lg"></p></div>
+
                 <div><h4 class="font-semibold text-sm text-gray-500">CODES & ACCÈS</h4><div id="modalChantierKeybox" class="text-lg"></div></div>
                 <div><h4 class="font-semibold text-sm text-gray-500">INFOS SUPPLÉMENTAIRES</h4><p id="modalChantierInfo" class="text-lg" style="white-space: pre-wrap; overflow-wrap: break-word;"></p></div>
                 ${isAdmin ? `<div class="text-right pt-4 border-t"><button id="editChantierBtn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-5 py-2 rounded">Modifier</button></div>` : ''}
@@ -57,8 +62,7 @@ async function loadChantiersList() {
     listContainer.innerHTML = '<p class="col-span-full text-center">Chargement...</p>';
 
     try {
-        // La logique de requête complexe est remplacée par un simple appel
-        chantiersCache = await getActiveChantiers(); // <-- MODIFIÉ
+        chantiersCache = await getActiveChantiers();
         displayChantierCards();
     } catch (error) {
         console.error("Erreur de chargement des chantiers :", error);
@@ -95,6 +99,16 @@ function showDetailsModal(chantierId) {
     } else {
         addressLink.parentElement.style.display = 'none';
     }
+
+    // MODIFICATION 2 : Logique pour afficher les heures prévues
+    const hoursP = document.getElementById('modalChantierHours');
+    if (chantier.totalHeuresPrevues && chantier.totalHeuresPrevues > 0) {
+        hoursP.textContent = `${chantier.totalHeuresPrevues} heures`;
+        hoursP.parentElement.style.display = 'block';
+    } else {
+        hoursP.parentElement.style.display = 'none';
+    }
+
     const keyboxContainer = document.getElementById('modalChantierKeybox');
     keyboxContainer.innerHTML = '';
     if (Array.isArray(chantier.keyboxCodes) && chantier.keyboxCodes.length > 0) {
@@ -176,8 +190,7 @@ function setupEventListeners() {
             try {
                 await updateDoc(docRef, updatedData);
                 document.getElementById('editModal').classList.add('hidden');
-                // Force le rafraîchissement du cache au prochain chargement
-                await getActiveChantiers(true); // <-- MODIFIÉ
+                await getActiveChantiers(true);
                 showInfoModal("Succès", "Chantier mis à jour.");
                 loadChantiersList();
             } catch(error) {

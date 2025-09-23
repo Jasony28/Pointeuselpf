@@ -12,7 +12,7 @@ core.setCacheNameDetails({ prefix: 'pointeuse-lpf-cache' });
 
 // --- GESTION DE LA VERSION DE L'APPLICATION ---
 // Cette version est cruciale et doit être synchronisée avec app.js
-const APP_VERSION = 'v2.2.2';
+const APP_VERSION = 'v2.2.3';
 
 // --- MISE EN CACHE DES FICHIERS DE BASE (PRECACHING) ---
 // La liste de tous les fichiers essentiels au fonctionnement de l'application.
