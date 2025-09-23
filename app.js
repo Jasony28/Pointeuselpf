@@ -1,15 +1,99 @@
-const APP_VERSION = 'v2.2.4';
+const APP_VERSION = 'v3';
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit, addDoc, initializeFirestore, CACHE_SIZE_UNLIMITED } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-function applySavedTheme() {
-    const savedColor = localStorage.getItem('appThemeColor');
-    if (savedColor) {
-        document.body.style.backgroundColor = savedColor;
+
+// ===============================================================================
+// SYSTÈME DE THÈMES CENTRALISÉ AVEC PALETTES IMMERSIVES
+// ===============================================================================
+const themes = {
+    neutre: {
+        name: 'Neutre',
+        preview: '#ffffff',
+        colors: {
+            '--color-primary': '#4b5563', '--color-primary-hover': '#374151',
+            '--color-background': '#f3f4f6', '--color-surface': '#ffffff',
+            '--color-text-base': '#1f2937', '--color-text-muted': '#6b7280',
+            '--color-border': '#e5e7eb',
+        }
+    },
+    or: {
+        name: 'Or',
+        preview: '#fef9c3',
+        colors: {
+            '--color-primary': '#d0c338', '--color-primary-hover': '#a1921a',
+            '--color-background': '#fefce8', '--color-surface': '#fef9c3',
+            '--color-text-base': '#713f12', '--color-text-muted': '#a16207',
+            '--color-border': '#fde68a',
+        }
+    },
+    emeraude: {
+        name: 'Émeraude',
+        preview: '#dcfce7',
+        colors: {
+            '--color-primary': '#1fbb56', '--color-primary-hover': '#1a9f49',
+            '--color-background': '#f0fdf4', '--color-surface': '#dcfce7',
+            '--color-text-base': '#14532d', '--color-text-muted': '#15803d',
+            '--color-border': '#bbf7d0',
+        }
+    },
+    royal: {
+        name: 'Royal',
+        preview: '#dbeafe',
+        colors: {
+            '--color-primary': '#2262b5', '--color-primary-hover': '#1c5095',
+            '--color-background': '#eff6ff', '--color-surface': '#dbeafe',
+            '--color-text-base': '#1e3a8a', '--color-text-muted': '#2563eb',
+            '--color-border': '#bfdbfe',
+        }
+    },
+    rubis: {
+        name: 'Rubis',
+        preview: '#fee2e2',
+        colors: {
+            '--color-primary': '#b43737', '--color-primary-hover': '#982e2e',
+            '--color-background': '#fef2f2', '--color-surface': '#fee2e2',
+            '--color-text-base': '#991b1b', '--color-text-muted': '#dc2626',
+            '--color-border': '#fecaca',
+        }
+    },
+    magenta: {
+        name: 'Magenta',
+        preview: '#fce7f3',
+        colors: {
+            '--color-primary': '#cd5298', '--color-primary-hover': '#b14682',
+            '--color-background': '#fdf2f8', '--color-surface': '#fce7f3',
+            '--color-text-base': '#86198f', '--color-text-muted': '#c026d3',
+            '--color-border': '#fbcfe8',
+        }
+    },
+ carbone: {
+    name: 'Carbone',
+    preview: '#1f2937',
+    colors: {
+        '--color-primary': '#cd5298', '--color-primary-hover': '#b14682',
+        '--color-background': '#111827', '--color-surface': '#1f1e1e',
+        '--color-text-base': '#e5e7eb', // <-- NOUVELLE COULEUR (GRIS CLAIR)
+        '--color-text-muted': '#9ca3af',
+        '--color-border': '#374151',
     }
+},
+};
+
+function applyTheme(themeName) {
+    const theme = themes[themeName] || themes['neutre'];
+    for (const [key, value] of Object.entries(theme.colors)) {
+        document.documentElement.style.setProperty(key, value);
+    }
+    localStorage.setItem('appTheme', themeName);
 }
-applySavedTheme(); 
+
+// Appliquer le thème sauvegardé dès le chargement du script
+applyTheme(localStorage.getItem('appTheme') || 'neutre');
+// ===============================================================================
+
+
 const firebaseConfig = {
   apiKey: "AIzaSyDm-C8VDT1Td85WUBWR7MxlrjDkY78eoHs",
   authDomain: "pointeuse-lpf.firebaseapp.com",
@@ -32,9 +116,8 @@ export let isAdmin = false;
 export let isMasqueradingAsUser = false;
 let genericModal, modalTitle, modalMessage, modalConfirmBtn, modalCancelBtn;
 
-const STEALTH_PIN = "1801"; 
+const STEALTH_PIN = "1801";
 
-// --- MODIFICATION : On utilise localStorage pour la persistance ---
 export const isStealthMode = () => localStorage.getItem('stealthMode') === 'true';
 
 export function isEffectiveAdmin() {
@@ -44,7 +127,6 @@ export function isEffectiveAdmin() {
 const userTabs = [
     { id: 'user-dashboard', name: 'Planning' },
     { id: 'user-leave', name: 'Mes Congés' },
-  
     { id: 'chantiers', name: 'Infos Chantiers' },
     { id: 'user-history', name: 'Mon Historique' },
     { id: 'settings', name: 'Paramètres' },
@@ -52,14 +134,14 @@ const userTabs = [
 
 const adminTabs = [
     { id: 'admin-dashboard', name: 'Tableau de Bord' },
+    
     { id: 'admin-planning', name: 'Planification' },
+    { id: 'admin-live-view', name: 'Direct' },
     { id: 'admin-invoicing', name: 'Facturation' },
     { id: 'admin-tarifs', name: 'Tarifs' },
     { id: 'admin-contracts', name: 'Types de Contrat' },
     { id: 'admin-chantiers', name: 'Gestion Chantiers' },
     { id: 'admin-leave', name: 'Gestion Congés' },
-    
-    
     { id: 'admin-travel-report', name: 'Rapport Trajets' },
     { id: 'admin-hours-report', name: 'Rapport Horaires' },
     { id: 'admin-team', name: 'Gestion Équipe' },
@@ -74,19 +156,35 @@ function toggleView() {
 
 function setupNavigation() {
     const tabs = isEffectiveAdmin() ? adminTabs : userTabs;
-    const mainNav = document.getElementById('main-nav');
-    const mobileNav = document.getElementById('mobile-nav');
-    [mainNav, mobileNav].forEach(nav => {
-        nav.innerHTML = '';
-        tabs.forEach(tab => {
-            const tabButton = document.createElement('button');
-            tabButton.id = `nav-${tab.id}`;
-            tabButton.textContent = tab.name;
-            tabButton.className = 'px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-200';
-            tabButton.onclick = () => navigateTo(tab.id);
-            nav.appendChild(tabButton);
-        });
+    const mainNavList = document.querySelector('#main-nav-list');
+
+    if (!mainNavList) return;
+
+    mainNavList.innerHTML = '';
+    
+    tabs.forEach(tab => {
+        const listItem = document.createElement('li');
+        const tabLink = document.createElement('a');
+        tabLink.id = `nav-${tab.id}`;
+        tabLink.href = '#';
+        tabLink.textContent = tab.name;
+        tabLink.className = 'block py-2 px-3 rounded md:p-0';
+        
+        tabLink.onclick = (e) => {
+            e.preventDefault();
+            navigateTo(tab.id);
+
+            const mobileMenuButton = document.querySelector('[data-collapse-toggle="navbar-default"]');
+            const mobileMenu = document.getElementById('navbar-default');
+            if (mobileMenu && !mobileMenu.classList.contains('hidden')) {
+                mobileMenuButton.click();
+            }
+        };
+        
+        listItem.appendChild(tabLink);
+        mainNavList.appendChild(listItem);
     });
+
     const switchBtn = document.getElementById('switchViewBtn');
     if (isAdmin) {
         switchBtn.classList.remove('hidden');
@@ -99,9 +197,17 @@ function setupNavigation() {
 
 export async function navigateTo(pageId, params = {}) {
     if (pageId === 'user-details') pageId = 'user-history';
-    document.querySelectorAll('#main-nav button, #mobile-nav button').forEach(btn => {
-        btn.classList.toggle('nav-active', btn.id === `nav-${pageId}`);
+
+    document.querySelectorAll('#main-nav-list a').forEach(link => {
+        if (link.id === `nav-${pageId}`) {
+            link.classList.add('nav-active');
+            link.setAttribute('aria-current', 'page');
+        } else {
+            link.classList.remove('nav-active');
+            link.removeAttribute('aria-current');
+        }
     });
+
     pageContent.innerHTML = `<p class="text-center mt-8 animate-pulse">Chargement...</p>`;
     try {
         const pageModule = await import(`./modules/${pageId}.js`);
@@ -112,35 +218,36 @@ export async function navigateTo(pageId, params = {}) {
     }
 }
 
-// ... Le reste des fonctions (notifications, etc.) ne change pas ...
-
 function setupNotifications() {
     const notificationBell = document.getElementById('notification-bell');
     const notificationPanel = document.getElementById('notification-panel');
-    notificationBell.onclick = (event) => {
-        event.stopPropagation();
-        notificationPanel.classList.toggle('hidden');
-        if (!notificationPanel.classList.contains('hidden')) loadNotifications();
-    };
-    checkForUnreadNotifications();
+    if (notificationBell) {
+        notificationBell.onclick = (event) => {
+            event.stopPropagation();
+            notificationPanel.classList.toggle('hidden');
+            if (!notificationPanel.classList.contains('hidden')) loadNotifications();
+        };
+        checkForUnreadNotifications();
+    }
 }
 
 async function loadNotifications() {
     const notificationList = document.getElementById('notification-list');
-    notificationList.innerHTML = '<p class="p-4 text-sm text-gray-500">Chargement...</p>';
+    notificationList.innerHTML = '<p class="p-4 text-sm">Chargement...</p>';
     try {
         const q = query(collection(db, "notifications"), orderBy("createdAt", "desc"), limit(10));
         const snapshot = await getDocs(q);
         if (snapshot.empty) {
-            notificationList.innerHTML = '<p class="p-4 text-sm text-gray-500">Aucune notification.</p>';
+            notificationList.innerHTML = '<p class="p-4 text-sm">Aucune notification.</p>';
             return;
         }
         notificationList.innerHTML = '';
         snapshot.forEach(docSnap => {
             const notif = docSnap.data();
             const div = document.createElement('div');
-            div.className = 'p-3 border-b hover:bg-gray-50';
-            div.innerHTML = `<p class="font-semibold">${notif.title}</p><p class="text-sm text-gray-600">${notif.body}</p><p class="text-xs text-gray-400 mt-1">${new Date(notif.createdAt.seconds * 1000).toLocaleString('fr-FR')}</p>`;
+            div.className = 'p-3 border-b';
+            div.style.borderColor = 'var(--color-border)';
+            div.innerHTML = `<p class="font-semibold">${notif.title}</p><p class="text-sm">${notif.body}</p><p class="text-xs mt-1" style="color: var(--color-text-muted);">${new Date(notif.createdAt.seconds * 1000).toLocaleString('fr-FR')}</p>`;
             notificationList.appendChild(div);
         });
         markNotificationsAsRead();
@@ -169,37 +276,28 @@ function markNotificationsAsRead() {
     localStorage.setItem('lastNotificationCheck', new Date().toISOString());
 }
 
-
 document.addEventListener('DOMContentLoaded', () => {
-    // Initialisation des variables pour les modales
     genericModal = document.getElementById('genericModal');
     modalTitle = document.getElementById('modalTitle');
     modalMessage = document.getElementById('modalMessage');
     modalConfirmBtn = document.getElementById('modalConfirmBtn');
     modalCancelBtn = document.getElementById('modalCancelBtn');
 
-    // Récupération des conteneurs principaux de l'UI
     const loader = document.getElementById('app-loader');
     const authContainer = document.getElementById('auth-container');
     const pendingContainer = document.getElementById('pending-approval-container');
     const appContainer = document.getElementById('app-container');
 
-    // Récupération des formulaires
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');
     const resetForm = document.getElementById('reset-form');
 
-    // Gestion de l'affichage des formulaires (liens "créer un compte", etc.)
     document.getElementById('show-register-link').onclick = (e) => { e.preventDefault(); loginForm.classList.add('hidden'); registerForm.classList.remove('hidden'); };
     document.getElementById('show-reset-link').onclick = (e) => { e.preventDefault(); loginForm.classList.add('hidden'); resetForm.classList.remove('hidden'); };
     document.getElementById('show-login-link-from-register').onclick = (e) => { e.preventDefault(); registerForm.classList.add('hidden'); loginForm.classList.remove('hidden'); };
     document.getElementById('show-login-link-from-reset').onclick = (e) => { e.preventDefault(); resetForm.classList.add('hidden'); loginForm.classList.remove('hidden'); };
-
-    // Gestion de la déconnexion
-    
     document.getElementById('logoutPendingBtn').onclick = () => signOut(auth);
 
-    // Logique d'inscription
     registerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const name = document.getElementById('register-name').value;
@@ -213,12 +311,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 status: 'pending', role: 'user', createdAt: serverTimestamp()
             });
         } catch (error) {
-            console.error("Erreur d'inscription:", error);
             showInfoModal("Erreur", "Impossible de créer le compte. L'email est peut-être déjà utilisé ou le mot de passe est trop faible.");
         }
     });
 
-    // Logique de connexion
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const email = document.getElementById('login-email').value;
@@ -226,12 +322,10 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             await signInWithEmailAndPassword(auth, email, password);
         } catch (error) {
-            console.error("Erreur de connexion:", error);
             showInfoModal("Erreur", "Email ou mot de passe incorrect.");
         }
     });
 
-    // Logique de réinitialisation du mot de passe
     resetForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const email = document.getElementById('reset-email').value;
@@ -241,12 +335,10 @@ document.addEventListener('DOMContentLoaded', () => {
             resetForm.classList.add('hidden');
             loginForm.classList.remove('hidden');
         } catch (error) {
-            console.error("Erreur de réinitialisation:", error);
             showInfoModal("Erreur", "Impossible d'envoyer l'email. Vérifiez que l'adresse est correcte.");
         }
     });
 
-    // Surveillance de l'état d'authentification de l'utilisateur (la fonction la plus importante)
     onAuthStateChanged(auth, async (user) => {
         authContainer.style.display = 'none';
         pendingContainer.style.display = 'none';
@@ -287,7 +379,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     signOut(auth);
                 }
             } catch (error) {
-                console.error("Erreur de récupération du profil (probablement hors-ligne):", error);
                 authContainer.style.display = 'flex';
             }
         } else {
@@ -299,7 +390,6 @@ document.addEventListener('DOMContentLoaded', () => {
         loader.style.display = 'none';
     });
     
-    // Logique du mode confidentiel (Stealth Mode)
     const pinModal = document.getElementById('pinModal');
     const pinForm = document.getElementById('pinForm');
     const pinInput = document.getElementById('pinInput');
@@ -337,45 +427,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    // ===============================================================================
-    // GESTION ROBUSTE DU SERVICE WORKER (NOUVEAU BLOC)
-    // ===============================================================================
     if ('serviceWorker' in navigator) {
-        // Important: Assurez-vous d'avoir importé Workbox-window dans votre index.html
         const { Workbox } = window;
         if (Workbox) {
             const wb = new Workbox('/sw.js');
-
-            // Cette fonction est appelée quand une nouvelle version est détectée.
             const showUpdateToast = () => {
-                if (document.getElementById('update-toast')) return; // Évite les doublons
-
+                if (document.getElementById('update-toast')) return;
                 const toast = document.createElement('div');
                 toast.id = 'update-toast';
-                toast.className = 'fixed bottom-4 right-4 bg-gray-800 text-white p-4 rounded-lg shadow-lg flex items-center gap-4 z-50 animate-pulse';
-                toast.innerHTML = `
-                    <span>Une nouvelle version est disponible.</span>
-                    <button id="reload-button" class="bg-blue-600 hover:bg-blue-700 font-bold px-4 py-2 rounded">Rafraîchir</button>
-                `;
+                toast.innerHTML = `<span>Une nouvelle version est disponible.</span><button id="reload-button">Rafraîchir</button>`;
                 document.body.appendChild(toast);
-
                 document.getElementById('reload-button').onclick = () => {
-                    // On envoie un message au SW pour qu'il s'active immédiatement
                     wb.messageSkipWaiting(); 
                 };
             };
-
-            // Cet événement est déclenché quand un nouveau SW est prêt et en attente.
-            // C'est le signal pour proposer la mise à jour à l'utilisateur.
             wb.addEventListener('waiting', showUpdateToast);
-
-            // Cet événement est déclenché quand le nouveau SW a pris le contrôle.
-            // On recharge alors la page pour que les changements soient visibles.
             wb.addEventListener('controlling', () => {
                 window.location.reload();
             });
-
-            // On enregistre le Service Worker.
             wb.register();
         }
     }

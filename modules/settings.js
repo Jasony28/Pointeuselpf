@@ -7,52 +7,124 @@ import { db } from "../app.js";
 
 const auth = getAuth();
 
-// ## VOS COULEURS PERSONNALISÉES SONT INTÉGRÉES ICI ##
-const themeColors = [
-    { name: '', value: '#f3f4f6' }, // Gris clair
-    { name: '', value: '#d0c338ff' },
-    { name: '', value: '#1fbb56ff' },
-    { name: '', value: '#2262b5ff' },
-    { name: '', value: '#b43737ff' },
-     { name: '', value: '#1f1e1eff' },
-    { name: '', value: '#cd5298ff' }
-];
+// PALETTES DE THÈMES IMMERSIVES
+const themes = {
+    neutre: {
+        name: 'Neutre',
+        preview: '#ffffff',
+        colors: {
+            '--color-primary': '#4b5563', '--color-primary-hover': '#374151',
+            '--color-background': '#f3f4f6', '--color-surface': '#ffffff',
+            '--color-text-base': '#1f2937', '--color-text-muted': '#6b7280',
+            '--color-border': '#e5e7eb',
+        }
+    },
+    or: {
+        name: 'Or',
+        preview: '#fef9c3',
+        colors: {
+            '--color-primary': '#d0c338', '--color-primary-hover': '#a1921a',
+            '--color-background': '#fefce8', '--color-surface': '#fef9c3',
+            '--color-text-base': '#713f12', '--color-text-muted': '#a16207',
+            '--color-border': '#fde68a',
+        }
+    },
+    emeraude: {
+        name: 'Émeraude',
+        preview: '#dcfce7',
+        colors: {
+            '--color-primary': '#1fbb56', '--color-primary-hover': '#1a9f49',
+            '--color-background': '#f0fdf4', '--color-surface': '#dcfce7',
+            '--color-text-base': '#14532d', '--color-text-muted': '#15803d',
+            '--color-border': '#bbf7d0',
+        }
+    },
+    royal: {
+        name: 'Royal',
+        preview: '#dbeafe',
+        colors: {
+            '--color-primary': '#2262b5', '--color-primary-hover': '#1c5095',
+            '--color-background': '#eff6ff', '--color-surface': '#dbeafe',
+            '--color-text-base': '#1e3a8a', '--color-text-muted': '#2563eb',
+            '--color-border': '#bfdbfe',
+        }
+    },
+    rubis: {
+        name: 'Rubis',
+        preview: '#fee2e2',
+        colors: {
+            '--color-primary': '#b43737', '--color-primary-hover': '#982e2e',
+            '--color-background': '#fef2f2', '--color-surface': '#fee2e2',
+            '--color-text-base': '#991b1b', '--color-text-muted': '#dc2626',
+            '--color-border': '#fecaca',
+        }
+    },
+    magenta: {
+        name: 'Magenta',
+        preview: '#fce7f3',
+        colors: {
+            '--color-primary': '#cd5298', '--color-primary-hover': '#b14682',
+            '--color-background': '#fdf2f8', '--color-surface': '#fce7f3',
+            '--color-text-base': '#86198f', '--color-text-muted': '#c026d3',
+            '--color-border': '#fbcfe8',
+        }
+    },
+    carbone: {
+    name: 'Carbone',
+    preview: '#1f2937',
+    colors: {
+        '--color-primary': '#cd5298', '--color-primary-hover': '#b14682',
+        '--color-background': '#111827', '--color-surface': '#1f1e1e',
+        '--color-text-base': '#e5e7eb', // <-- NOUVELLE COULEUR (GRIS CLAIR)
+        '--color-text-muted': '#9ca3af',
+        '--color-border': '#374151',
+    }
+},
+};
 
+function applyTheme(themeName) {
+    const theme = themes[themeName];
+    if (!theme) return;
+
+    for (const [key, value] of Object.entries(theme.colors)) {
+        document.documentElement.style.setProperty(key, value);
+    }
+    localStorage.setItem('appTheme', themeName);
+}
 export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-3xl mx-auto space-y-8">
-            <div>
-                <h2 class="text-3xl font-bold">⚙️ Paramètres</h2>
-                <p class="text-gray-600">Gérez vos informations de profil et les réglages de l'application.</p>
+             <div>
+                <h2 class="text-3xl font-bold" style="color: var(--color-text-base);">⚙️ Paramètres</h2>
+                <p style="color: var(--color-text-muted);">Gérez vos informations de profil et les réglages de l'application.</p>
             </div>
 
-            <div class="bg-white p-6 rounded-lg shadow-sm">
-                <h3 class="text-xl font-semibold mb-4 border-b pb-2">Mon Profil</h3>
+            <div style="background-color: var(--color-surface); border-color: var(--color-border);" class="border p-6 rounded-lg shadow-sm">
+                <h3 class="text-xl font-semibold mb-4 border-b pb-2" style="color: var(--color-text-base); border-color: var(--color-border);">Mon Profil</h3>
                 <div class="space-y-4">
                     <div>
-                        <label for="displayNameInput" class="text-sm font-medium">Nom d'affichage</label>
-                        <input id="displayNameInput" type="text" value="${currentUser.displayName}" class="w-full border p-2 rounded mt-1">
+                        <label for="displayNameInput" class="text-sm font-medium" style="color: var(--color-text-base);">Nom d'affichage</label>
+                        <input id="displayNameInput" type="text" value="${currentUser.displayName}" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);">
                     </div>
                     <div class="text-right">
-                        <button id="saveProfileBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2 rounded">Enregistrer le nom</button>
+                        <button id="saveProfileBtn" class="text-white font-bold px-6 py-2 rounded" style="background-color: var(--color-primary); transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='var(--color-primary-hover)'" onmouseout="this.style.backgroundColor='var(--color-primary)'">Enregistrer le nom</button>
                     </div>
                 </div>
             </div>
 
-            <div class="bg-white p-6 rounded-lg shadow-sm">
-                <h3 class="text-xl font-semibold mb-4">Thème de l'application</h3>
-                <div id="theme-selector" class="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                    ${themeColors.map(color => `
-                        <div class="color-option p-4 rounded-lg cursor-pointer border-2" style="background-color: ${color.value};" data-color-value="${color.value}">
-                            <p class="font-semibold text-center text-gray-800 mix-blend-difference">${color.name}</p>
+            <div style="background-color: var(--color-surface); border-color: var(--color-border);" class="border p-6 rounded-lg shadow-sm">
+                <h3 class="text-xl font-semibold mb-4" style="color: var(--color-text-base);">Thème de l'application</h3>
+                <div id="theme-selector" class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    ${Object.entries(themes).map(([key, theme]) => `
+                        <div class="color-option p-4 rounded-lg cursor-pointer border-2 flex items-center justify-center h-20" style="background-color: ${theme.preview}; border-color: var(--color-border);" data-theme-key="${key}">
+                            <p class="font-semibold text-center" style="color: ${theme.colors['--color-text-base']}">${theme.name}</p>
                         </div>
                     `).join('')}
                 </div>
             </div>
             
-            <div class="bg-white p-6 rounded-lg shadow-sm">
-                <h3 class="text-xl font-semibold mb-4 border-b pb-2">Sécurité</h3>
-                <div class="text-center">
+            <div style="background-color: var(--color-surface); border-color: var(--color-border);" class="border p-6 rounded-lg shadow-sm">
+                 <div class="text-center">
                     <button id="logoutBtnSettings" class="bg-red-600 hover:bg-red-700 text-white font-bold px-8 py-3 rounded-lg">
                         Se déconnecter
                     </button>
@@ -60,45 +132,40 @@ export async function render() {
             </div>
         </div>
     `;
-
     setTimeout(setupEventListeners, 0);
 }
 
 function setupEventListeners() {
-    // ---- Logique pour sauvegarder le nouveau nom ----
     document.getElementById('saveProfileBtn').onclick = async () => {
         const newName = document.getElementById('displayNameInput').value.trim();
         if (newName && newName !== currentUser.displayName) {
             try {
                 const userRef = doc(db, "users", currentUser.uid);
                 await updateDoc(userRef, { displayName: newName });
-                showInfoModal("Succès", "Votre nom a été mis à jour. La synchronisation dans l'historique peut prendre un instant.");
+                showInfoModal("Succès", "Votre nom a été mis à jour.");
             } catch (error) {
                 showInfoModal("Erreur", "La mise à jour a échoué.");
             }
         }
     };
     
-    // ---- Logique pour la sélection du thème ----
     const themeSelector = document.getElementById('theme-selector');
     const options = themeSelector.querySelectorAll('.color-option');
-    const currentTheme = localStorage.getItem('appThemeColor') || '#f3f4f6';
+    const currentThemeName = localStorage.getItem('appTheme') || 'neutre';
     
     options.forEach(option => {
-        if (option.dataset.colorValue === currentTheme) {
-            option.classList.add('border-purple-600');
+        if (option.dataset.themeKey === currentThemeName) {
+            const primaryColor = themes[currentThemeName].colors['--color-primary'];
+            option.style.borderColor = primaryColor;
+            option.classList.add('ring-2');
+            option.style.ringColor = primaryColor;
         }
         option.addEventListener('click', () => {
-            const selectedColor = option.dataset.colorValue;
-            document.body.style.backgroundColor = selectedColor;
-            localStorage.setItem('appThemeColor', selectedColor);
-            options.forEach(opt => opt.classList.remove('border-purple-600'));
-            option.classList.add('border-purple-600');
+            const selectedThemeName = option.dataset.themeKey;
+            applyTheme(selectedThemeName);
+            render(); // On relance render() pour mettre à jour les styles et la sélection
         });
     });
 
-    // ---- Logique pour la déconnexion ----
-    document.getElementById('logoutBtnSettings').onclick = () => {
-        signOut(auth);
-    };
+    document.getElementById('logoutBtnSettings').onclick = () => signOut(auth);
 }

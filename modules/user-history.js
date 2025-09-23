@@ -7,9 +7,16 @@ let targetUser = null;
 let chantiersCache = [];
 let colleaguesCache = [];
 let pointagesPourPdf = [];
-let allPointages = []; // <-- AJOUTEZ CETTE LIGNE
+let allPointages = [];
 let entryWizardStep = 1;
 let entryWizardData = {};
+
+function formatMinutes(totalMinutes) {
+    if (!totalMinutes || totalMinutes < 0) return "0h 0min";
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = Math.round(totalMinutes % 60);
+    return `${hours}h ${minutes}min`;
+}
 
 async function logAction(pointageId, action, details = {}) {
     try {
@@ -36,36 +43,62 @@ export async function render(params = {}) {
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto">
             <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
-                <h2 id="history-title" class="text-2xl font-bold">🗓️ Historique de ${targetUser.name}</h2>
-                ${(targetUser.uid === currentUser.uid || currentUser.role === 'admin') ? `
-<button id="downloadPdfBtn" ...>
-    Télécharger PDF
-</button>
-` : ''}
-            </div>
-            <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
-                <div class="flex justify-between items-center">
-                    <button id="prevWeekBtn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg">&lt;</button>
-                    <div id="currentPeriodDisplay" class="text-center font-semibold text-lg"></div>
-                    <button id="nextWeekBtn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg">&gt;</button>
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">🗓️</span>
+                    <h2 id="history-title" class="text-2xl font-bold">Historique de ${targetUser.name}</h2>
                 </div>
-                <div id="weekTotalsDisplay" class="mt-3 text-center text-xl font-bold"></div>
+                ${(targetUser.uid === currentUser.uid || currentUser.role === 'admin') ? `
+                <button id="downloadPdfBtn" class="text-white font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition-opacity" style="background-color: var(--color-primary);">
+                    Télécharger PDF
+                </button>
+                ` : ''}
+            </div>
+            <div class="rounded-lg shadow-sm p-4 mb-4" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <div class="flex justify-between items-center">
+                    <button id="prevWeekBtn" class="px-4 py-2 rounded-lg hover:opacity-80" style="background-color: var(--color-background);">&lt;</button>
+                    <div id="currentPeriodDisplay" class="text-center font-semibold text-lg"></div>
+                    <button id="nextWeekBtn" class="px-4 py-2 rounded-lg hover:opacity-80" style="background-color: var(--color-background);">&gt;</button>
+                </div>
+                <div id="weekTotalsDisplay" class="mt-3 text-center text-xl font-bold grid grid-cols-1 md:grid-cols-2 gap-2"></div>
             </div>
             <div id="historyList" class="space-y-4"></div>
         </div>
         <div id="entryModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-30 p-4">
-            <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-lg">
+            <div class="p-6 rounded-lg shadow-xl w-full max-w-lg" style="background-color: var(--color-surface);">
                 <div class="flex justify-between items-center mb-4">
                     <h3 id="modalTitle" class="text-xl font-bold"></h3>
-                    <p id="modalStepIndicator" class="text-sm font-semibold text-gray-500"></p>
+                    <p id="modalStepIndicator" class="text-sm font-semibold" style="color: var(--color-text-muted);"></p>
                 </div>
                 <form id="entryForm" class="space-y-4">
                     <input type="hidden" id="entryDate"><input type="hidden" id="entryId">
-                    <div data-step="1" class="wizard-step"><label for="entryChantier" class="text-lg font-medium">Quel chantier ?</label><select id="entryChantier" class="w-full border p-2 rounded mt-2 text-lg" required></select></div>
-                    <div data-step="2" class="wizard-step"><label class="text-lg font-medium">À quelles heures ?</label><div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2"><div><label for="entryStartTime" class="text-sm">Début</label><input id="entryStartTime" type="time" class="w-full border p-2 rounded" required /></div><div><label for="entryEndTime" class="text-sm">Fin</label><input id="entryEndTime" type="time" class="w-full border p-2 rounded" required /></div><div><label for="entryPauseMinutes" class="text-sm">Pause (min)</label><input id="entryPauseMinutes" type="number" min="0" placeholder="ex: 30" class="w-full border p-2 rounded" /></div></div></div>
-                    <div data-step="3" class="wizard-step"><label class="text-lg font-medium">Qui était présent ?</label><div id="entryColleaguesContainer" class="mt-2 p-2 border rounded max-h-40 overflow-y-auto space-y-1"></div></div>
-                    <div data-step="4" class="wizard-step"><label for="entryNotes" class="text-lg font-medium">Avez-vous des informations à préciser ?</label><textarea id="entryNotes" placeholder="(Optionnel)" class="w-full border p-2 rounded mt-2 h-24"></textarea></div>
-                    <div id="wizard-actions" class="flex justify-between items-center pt-4 border-t"><button type="button" id="wizardPrevBtn" class="bg-gray-300 hover:bg-gray-400 px-6 py-2 rounded">Précédent</button><div><button type="button" id="cancelEntryBtn" class="text-gray-600 hover:text-red-600 px-6 py-2 rounded mr-2">Annuler</button><button type="button" id="wizardNextBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2 rounded">Suivant</button><button type="submit" id="wizardSaveBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-2 rounded">Enregistrer</button></div></div>
+                    <div data-step="1" class="wizard-step">
+                        <label for="entryChantier" class="text-lg font-medium">Quel chantier ?</label>
+                        <select id="entryChantier" class="w-full border p-2 rounded mt-2 text-lg" style="background-color: var(--color-background); border-color: var(--color-border);" required></select>
+                    </div>
+                    <div data-step="2" class="wizard-step">
+                        <label class="text-lg font-medium">À quelles heures ?</label>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
+                            <div><label for="entryStartTime" class="text-sm">Début</label><input id="entryStartTime" type="time" class="w-full border p-2 rounded" style="background-color: var(--color-background); border-color: var(--color-border);" required /></div>
+                            <div><label for="entryEndTime" class="text-sm">Fin</label><input id="entryEndTime" type="time" class="w-full border p-2 rounded" style="background-color: var(--color-background); border-color: var(--color-border);" required /></div>
+                            <div><label for="entryPauseMinutes" class="text-sm">Pause (min)</label><input id="entryPauseMinutes" type="number" min="0" placeholder="ex: 30" class="w-full border p-2 rounded" style="background-color: var(--color-background); border-color: var(--color-border);" /></div>
+                        </div>
+                    </div>
+                    <div data-step="3" class="wizard-step">
+                        <label class="text-lg font-medium">Qui était présent ?</label>
+                        <div id="entryColleaguesContainer" class="mt-2 p-2 border rounded max-h-40 overflow-y-auto space-y-1" style="border-color: var(--color-border);"></div>
+                    </div>
+                    <div data-step="4" class="wizard-step">
+                        <label for="entryNotes" class="text-lg font-medium">Avez-vous des informations à préciser ?</label>
+                        <textarea id="entryNotes" placeholder="(Optionnel)" class="w-full border p-2 rounded mt-2 h-24" style="background-color: var(--color-background); border-color: var(--color-border);"></textarea>
+                    </div>
+                    <div id="wizard-actions" class="flex justify-between items-center pt-4 border-t" style="border-color: var(--color-border);">
+                        <button type="button" id="wizardPrevBtn" class="px-6 py-2 rounded" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Précédent</button>
+                        <div>
+                            <button type="button" id="cancelEntryBtn" class="px-6 py-2 rounded mr-2" style="color: var(--color-text-muted);">Annuler</button>
+                            <button type="button" id="wizardNextBtn" class="text-white font-bold px-6 py-2 rounded" style="background-color: var(--color-primary);">Suivant</button>
+                            <button type="submit" id="wizardSaveBtn" class="text-white font-bold px-6 py-2 rounded" style="background-color: var(--color-primary);">Enregistrer</button>
+                        </div>
+                    </div>
                 </form>
             </div>
         </div>
@@ -89,7 +122,9 @@ async function cacheModalData() {
     const colleaguesQuery = query(collection(db, "colleagues"), orderBy("name"));
     const usersQuery = query(collection(db, "users"), where("status", "==", "approved"), orderBy("displayName"));
     const [chantiersSnapshot, colleaguesSnapshot, usersSnapshot] = await Promise.all([
-        getDocs(chantiersQuery), getDocs(colleaguesQuery), getDocs(usersQuery)
+        getDocs(chantiersQuery),
+        getDocs(colleaguesQuery),
+        getDocs(usersQuery)
     ]);
     chantiersCache = chantiersSnapshot.docs.map(doc => doc.data().name);
     const colleagueNames = colleaguesSnapshot.docs.map(doc => doc.data().name);
@@ -102,12 +137,8 @@ async function loadHistoryForWeek() {
     const weekTotalsDisplay = document.getElementById("weekTotalsDisplay");
     const { startOfWeek, endOfWeek } = getWeekDateRange(currentWeekOffset);
     
-    const userDoc = await getDoc(doc(db, "users", targetUser.uid));
-    const userData = userDoc.exists() ? userDoc.data() : {};
-    const contractHours = userData.contractHours || 0;
-
     document.getElementById("currentPeriodDisplay").textContent = `Semaine du ${startOfWeek.toLocaleDateString('fr-FR', {timeZone: 'UTC', day: 'numeric', month: 'long'})}`;
-    historyList.innerHTML = `<p class='text-center p-4'>Chargement...</p>`;
+    historyList.innerHTML = `<p class='text-center p-4' style='color: var(--color-text-muted);'>Chargement...</p>`;
 
     const pointagesQuery = query(collection(db, "pointages"),
         where("uid", "==", targetUser.uid),
@@ -115,107 +146,130 @@ async function loadHistoryForWeek() {
         where("timestamp", "<=", endOfWeek.toISOString()),
         orderBy("timestamp", "asc")
     );
-    const pointagesSnapshot = await getDocs(pointagesQuery);
+
+    const trajetsQuery = query(collection(db, "trajets"),
+        where("id_utilisateur", "==", targetUser.uid),
+        where("date_creation", ">=", startOfWeek),
+        where("date_creation", "<=", endOfWeek)
+    );
+
+    const [pointagesSnapshot, trajetsSnapshot] = await Promise.all([
+        getDocs(pointagesQuery),
+        getDocs(trajetsQuery)
+    ]);
+
     allPointages = pointagesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    
-    let pointagesToDisplay = allPointages;
-    const isAdminViewingOther = currentUser.role === 'admin' && currentUser.uid !== targetUser.uid;
+    pointagesPourPdf = allPointages; 
 
-    if (isAdminViewingOther && !isStealthMode() && contractHours > 0) {
-        const contractMs = contractHours * 3600000;
-        let accumulatedMs = 0;
-        pointagesToDisplay = [];
-        for (const p of allPointages) {
-            if (p.endTime) {
-                const durationMs = (new Date(p.endTime) - new Date(p.timestamp)) - (p.pauseDurationMs || 0);
-                if (accumulatedMs + durationMs <= contractMs) {
-                    pointagesToDisplay.push(p);
-                    accumulatedMs += durationMs;
-                } else {
-                    break; 
-                }
-            }
-        }
-    }
-    
-    pointagesPourPdf = pointagesToDisplay;
+    const trajetsMap = new Map();
+    trajetsSnapshot.forEach(doc => {
+        const trajet = doc.data();
+        trajetsMap.set(trajet.id_pointage_arrivee, trajet);
+    });
 
-    const pointagesByDate = pointagesToDisplay.reduce((acc, p) => {
-        const date = new Date(p.timestamp).toISOString().split('T')[0];
-        if (!acc[date]) acc[date] = [];
-        acc[date].push(p);
-        return acc;
-    }, {});
-
-    historyList.innerHTML = "";
+    const dataByDate = {};
     const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
-    
+
     for (let i = 0; i < 7; i++) {
         const dayDate = new Date(startOfWeek);
         dayDate.setUTCDate(startOfWeek.getUTCDate() + i);
         const dateString = dayDate.toISOString().split('T')[0];
-        const dayEntries = pointagesByDate[dateString] || [];
-        
-        let dailyTotalMs = 0;
-        dayEntries.forEach(entry => {
-            if (entry.endTime) {
-                dailyTotalMs += (new Date(entry.endTime) - new Date(entry.timestamp)) - (entry.pauseDurationMs || 0);
+        dataByDate[dateString] = {
+            entries: [],
+            dailyTotalMs: 0,
+            dailyTotalKm: 0,
+            dailyTotalMin: 0
+        };
+    }
+
+    allPointages.forEach(p => {
+        const date = new Date(p.timestamp).toISOString().split('T')[0];
+        if (dataByDate[date]) {
+            dataByDate[date].entries.push(p);
+            if (p.endTime) {
+                dataByDate[date].dailyTotalMs += (new Date(p.endTime) - new Date(p.timestamp)) - (p.pauseDurationMs || 0);
             }
-        });
-        
+            if (trajetsMap.has(p.id)) {
+                const trajet = trajetsMap.get(p.id);
+                dataByDate[date].dailyTotalKm += trajet.distance_km || 0;
+                dataByDate[date].dailyTotalMin += trajet.duree_min || 0;
+            }
+        }
+    });
+
+    historyList.innerHTML = "";
+    let weeklyTotalMs = 0;
+    let weeklyTotalKm = 0;
+    let weeklyTotalMin = 0;
+
+    Object.keys(dataByDate).forEach((dateString, i) => {
+        const dayData = dataByDate[dateString];
+        weeklyTotalMs += dayData.dailyTotalMs;
+        weeklyTotalKm += dayData.dailyTotalKm;
+        weeklyTotalMin += dayData.dailyTotalMin;
+
         const dayWrapper = document.createElement('div');
-        dayWrapper.className = 'bg-white p-4 rounded-lg shadow-sm';
+        dayWrapper.className = 'p-4 rounded-lg shadow-sm';
+        dayWrapper.style.backgroundColor = 'var(--color-surface)';
+        
         const dayHeader = document.createElement('div');
         dayHeader.className = 'flex justify-between items-center border-b pb-2 mb-3';
-        dayHeader.innerHTML = `<div class="flex items-center gap-4"><h3 class="font-bold text-lg">${days[i]} ${dayDate.toLocaleDateString('fr-FR', {day: 'numeric', month: 'long'})}</h3>${dailyTotalMs > 0 ? `<span class="font-bold text-purple-700">${formatMilliseconds(dailyTotalMs)}</span>` : ''}</div>`;
+        dayHeader.style.borderColor = 'var(--color-border)';
+        dayHeader.innerHTML = `
+            <div class="flex items-center gap-4">
+                <h3 class="font-bold text-lg">${days[i]} ${new Date(dateString+'T12:00:00Z').toLocaleDateString('fr-FR', {day: 'numeric', month: 'long'})}</h3>
+            </div>
+            <div class="text-right">
+                <div class="font-bold" style="color: var(--color-primary);">${formatMilliseconds(dayData.dailyTotalMs)}</div>
+                ${dayData.dailyTotalKm > 0 ? `<div class="text-xs" style="color: var(--color-text-muted);">${dayData.dailyTotalKm.toFixed(1)} km / ${formatMinutes(dayData.dailyTotalMin)}</div>` : ''}
+            </div>
+        `;
         
         if (currentUser.role === 'admin') {
             const addBtn = document.createElement('button');
             addBtn.innerHTML = `+ Ajouter`;
-            addBtn.className = 'add-pointage-btn text-blue-600 hover:text-blue-800 text-sm font-semibold';
+            addBtn.className = 'add-pointage-btn text-sm font-semibold ml-4';
+            addBtn.style.color = 'var(--color-primary)';
             addBtn.dataset.date = dateString;
-            dayHeader.appendChild(addBtn);
+            dayHeader.querySelector('.flex').appendChild(addBtn);
         }
-        
+
         dayWrapper.appendChild(dayHeader);
         const entriesContainer = document.createElement('div');
         entriesContainer.className = 'space-y-3';
         
-        if (dayEntries.length > 0) {
-            dayEntries.forEach(d => entriesContainer.appendChild(createHistoryEntryElement(d)));
+        if (dayData.entries.length > 0) {
+            dayData.entries.forEach(d => entriesContainer.appendChild(createHistoryEntryElement(d, trajetsMap.get(d.id))));
         } else {
-            const hasOriginalData = allPointages.some(p => new Date(p.timestamp).toISOString().split('T')[0] === dateString);
-            if (hasOriginalData) {
-                entriesContainer.innerHTML = `<p class="text-gray-500 text-center py-4">Les pointages de ce jour sont masqués.</p>`;
-            } else {
-                entriesContainer.innerHTML = `<p class="text-gray-500 text-center py-4">Aucun pointage pour ce jour.</p>`;
-            }
+            entriesContainer.innerHTML = `<p class="text-center py-4" style="color: var(--color-text-muted);">Aucun pointage pour ce jour.</p>`;
         }
         dayWrapper.appendChild(entriesContainer);
         historyList.appendChild(dayWrapper);
-    }
+    });
     
-    const totalDisplayedMs = pointagesToDisplay.reduce((acc, p) => p.endTime ? acc + ((new Date(p.endTime) - new Date(p.timestamp)) - (p.pauseDurationMs || 0)) : acc, 0);
-    const realTotalMs = allPointages.reduce((acc, p) => p.endTime ? acc + ((new Date(p.endTime) - new Date(p.timestamp)) - (p.pauseDurationMs || 0)) : acc, 0);
+    weekTotalsDisplay.innerHTML = `
+        <div>
+            <p class="text-sm font-medium" style="color: var(--color-text-muted);">Total Heures Semaine</p>
+            <p>${formatMilliseconds(weeklyTotalMs)}</p>
+        </div>
+        <div>
+            <p class="text-sm font-medium" style="color: var(--color-text-muted);">Total Trajets Semaine</p>
+            <p>${weeklyTotalKm.toFixed(1)} km / ${formatMinutes(weeklyTotalMin)}</p>
+        </div>
+    `;
 
-    if (isStealthMode()) {
-        weekTotalsDisplay.textContent = `Total travail effectif : ${formatMilliseconds(realTotalMs)}`;
-    } else {
-        if (contractHours === 12 && isAdminViewingOther) {
-            weekTotalsDisplay.textContent = `Total travail effectif : ${formatMilliseconds(totalDisplayedMs)}`;
-        } else if (contractHours > 0) {
-            const contractMs = contractHours * 3600000;
-            if (realTotalMs > contractMs) {
-                const overtimeMs = realTotalMs - contractMs;
-                weekTotalsDisplay.innerHTML = `
-                    <span class="mr-4 text-gray-800">Heures contrat : <strong>${formatMilliseconds(contractMs)}</strong></span>
-                    <span class="text-green-600">Solde à récupérer : <strong>${formatMilliseconds(overtimeMs)}</strong></span>
-                `;
-            } else {
-                weekTotalsDisplay.textContent = `Total travail effectif : ${formatMilliseconds(realTotalMs)}`;
-            }
+    const pdfBtn = document.getElementById("downloadPdfBtn");
+    if (pdfBtn) {
+        if (pointagesPourPdf.length === 0) {
+            pdfBtn.disabled = true;
+            pdfBtn.style.opacity = '0.5';
+            pdfBtn.style.cursor = 'not-allowed';
+            pdfBtn.title = "Aucune donnée à exporter pour cette semaine.";
         } else {
-            weekTotalsDisplay.textContent = `Total travail effectif : ${formatMilliseconds(realTotalMs)}`;
+            pdfBtn.disabled = false;
+            pdfBtn.style.opacity = '1';
+            pdfBtn.style.cursor = 'pointer';
+            pdfBtn.title = "Télécharger l'historique de la semaine en PDF";
         }
     }
 
@@ -237,27 +291,36 @@ function handleHistoryClick(e) {
     }
 }
 
-function createHistoryEntryElement(d) {
+function createHistoryEntryElement(d, trajetData) {
     const wrapper = document.createElement("div");
-    wrapper.className = "p-3 border rounded-lg bg-gray-50 relative";
+    wrapper.className = "p-3 border rounded-lg relative";
+    wrapper.style.backgroundColor = 'var(--color-background)';
+    wrapper.style.borderColor = 'var(--color-border)';
+
+    let trajetDisplay = '';
+    if (trajetData) {
+        trajetDisplay = `<div class="text-xs mt-1" style="color: var(--color-text-muted);">🚗 ${trajetData.distance_km.toFixed(1)} km - ${formatMinutes(trajetData.duree_min)}</div>`;
+    }
+    
     const startDate = new Date(d.timestamp);
     const endDate = d.endTime ? new Date(d.endTime) : null;
     let timeDisplay = "", durationDisplay = "", pauseDisplay = "";
     if (endDate) {
         const effectiveWorkMs = (endDate - startDate) - (d.pauseDurationMs || 0);
         timeDisplay = `De ${startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} à ${endDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
-        durationDisplay = `<div class="text-sm font-bold text-purple-700 mt-1">${formatMilliseconds(effectiveWorkMs)}</div>`;
+        durationDisplay = `<div class="text-sm font-bold mt-1" style="color: var(--color-primary);">${formatMilliseconds(effectiveWorkMs)}</div>`;
         if (d.pauseDurationMs && d.pauseDurationMs > 0) {
             pauseDisplay = `<div class="text-xs text-yellow-600 mt-1">Pause : ${formatMilliseconds(d.pauseDurationMs)}</div>`;
         }
     }
-    wrapper.innerHTML = `<div class="pr-20"><div class="font-bold">${d.chantier}</div><div class="text-sm text-gray-600">${timeDisplay}</div><div class="text-xs mt-1">Collègues : ${Array.isArray(d.colleagues) && d.colleagues.length > 0 ? d.colleagues.join(", ") : 'Aucun'}</div></div>${d.notes ? `<div class="mt-2 pt-2 border-t text-xs text-gray-500"><strong>Notes:</strong> ${d.notes}</div>` : ""}`;
+    wrapper.innerHTML = `<div class="pr-20"><div class="font-bold">${d.chantier}</div><div class="text-sm" style="color: var(--color-text-muted);">${timeDisplay}</div>${trajetDisplay}<div class="text-xs mt-1" style="color: var(--color-text-muted);">Collègues : ${Array.isArray(d.colleagues) && d.colleagues.length > 0 ? d.colleagues.join(", ") : 'Aucun'}</div></div>${d.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-text-muted);"><strong>Notes:</strong> ${d.notes}</div>` : ""}`;
+    
     if (currentUser.role === 'admin') {
         const controlsWrapper = document.createElement("div");
         controlsWrapper.className = "absolute top-2 right-3 flex flex-col items-end text-right"; 
         const buttonsDiv = document.createElement('div');
         buttonsDiv.className = 'flex gap-2';
-        buttonsDiv.innerHTML = `<button class="edit-btn text-gray-400 hover:text-blue-600 font-bold" title="Modifier" data-id="${d.id}">✏️</button><button class="delete-btn text-gray-400 hover:text-red-600 font-bold" title="Supprimer" data-id="${d.id}">✖️</button>`;
+        buttonsDiv.innerHTML = `<button class="edit-btn font-bold" title="Modifier" data-id="${d.id}" style="color: var(--color-text-muted);">✏️</button><button class="delete-btn font-bold" title="Supprimer" data-id="${d.id}" style="color: var(--color-text-muted);">✖️</button>`;
         controlsWrapper.appendChild(buttonsDiv);
         controlsWrapper.innerHTML += pauseDisplay + durationDisplay;
         wrapper.appendChild(controlsWrapper);
@@ -522,3 +585,4 @@ function generateHistoryPDF() {
     const fileName = `Historique_${userName.replace(/ /g, '_')}_${startOfWeek.toISOString().split('T')[0]}_${timestamp}.pdf`;
     doc.save(fileName);
 }
+

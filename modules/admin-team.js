@@ -5,30 +5,24 @@ import { db, pageContent, navigateTo, currentUser, showConfirmationModal, showIn
 // --- NOUVEL IMPORT ---
 import { getUsers } from "./data-service.js";
 
+// Dans : modules/admin-team.js
 export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto space-y-8">
             <h2 class="text-2xl font-bold">👥 Gestion de l'Équipe</h2>
-            <div class="bg-white p-4 rounded-lg shadow-sm">
-                <h3 class="text-xl font-semibold mb-3 border-b pb-2">Utilisateurs de l'application</h3>
-                <div id="user-list-container"><p class="text-center text-gray-500">Chargement...</p></div>
+            <div class="p-4 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="text-xl font-semibold mb-3 border-b pb-2" style="border-color: var(--color-border);">Utilisateurs de l'application</h3>
+                <div id="user-list-container"><p class="text-center" style="color: var(--color-text-muted);">Chargement...</p></div>
             </div>
             
             ${isStealthMode() ? `
-            <div class="bg-white p-4 rounded-lg shadow-sm">
-                <h3 class="text-xl font-semibold mb-3 border-b pb-2">Autres Collègues (externes)</h3>
-                <form id="addColleagueForm" class="flex flex-col sm:flex-row gap-3 mb-4">
-                    <input id="colleagueNameInput" type="text" placeholder="Nom du nouveau collègue" class="flex-grow border p-2 rounded" required />
-                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded">
-                        Ajouter
-                    </button>
-                </form>
-                <div id="colleaguesList" class="space-y-2"><p>Chargement...</p></div>
+            <div class="p-4 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="text-xl font-semibold mb-3 border-b pb-2" style="border-color: var(--color-border);">Autres Collègues (externes)</h3>
+                <!-- ... (contenu du formulaire) ... -->
             </div>
             ` : ''}
         </div>
     `;
-    
     setTimeout(() => {
         loadUsers();
         if (isStealthMode()) {
@@ -37,7 +31,6 @@ export async function render() {
         }
     }, 0);
 }
-
 function setupEventListeners() {
     const addColleagueForm = document.getElementById("addColleagueForm");
     addColleagueForm.onsubmit = async (e) => {

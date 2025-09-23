@@ -1,7 +1,7 @@
 import { collection, query, where, orderBy, getDocs, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, showConfirmationModal, navigateTo } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
-import { getUsers } from "./data-service.js"; // Assurez-vous que cet import est présent
+import { getUsers } from "./data-service.js";
 
 let userStatsFilter = { period: 'week', offset: 0 };
 let chantierStatsFilter = { period: 'week', offset: 0 };
@@ -9,61 +9,61 @@ let chantierStatsFilter = { period: 'week', offset: 0 };
 export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-7xl mx-auto space-y-8">
-            <h2 class="text-2xl font-bold">📊 Tableau de Bord Administrateur</h2>
+            <h2 class="text-2xl font-bold" style="color: var(--color-text-base);">📊 Tableau de Bord Administrateur</h2>
             
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div id="week-total-card" class="bg-white p-6 rounded-lg shadow-sm text-center">
-                    <h3 class="text-sm font-medium text-gray-500">Heures cette semaine (Total Effectif)</h3>
-                    <p class="mt-1 text-3xl font-semibold animate-pulse">...</p>
+                <div id="week-total-card" class="p-6 rounded-lg shadow-sm text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                    <h3 class="text-sm font-medium" style="color: var(--color-text-muted);">Heures cette semaine</h3>
+                    <p class="mt-1 text-3xl font-semibold animate-pulse" style="color: var(--color-text-base);">...</p>
                 </div>
-                <div id="month-total-card" class="bg-white p-6 rounded-lg shadow-sm text-center">
-                    <h3 class="text-sm font-medium text-gray-500">Heures ce mois-ci (Total Effectif)</h3>
-                    <p class="mt-1 text-3xl font-semibold animate-pulse">...</p>
+                <div id="month-total-card" class="p-6 rounded-lg shadow-sm text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                    <h3 class="text-sm font-medium" style="color: var(--color-text-muted);">Heures ce mois-ci</h3>
+                    <p class="mt-1 text-3xl font-semibold animate-pulse" style="color: var(--color-text-base);">...</p>
                 </div>
-                <div id="active-projects-card" class="bg-white p-6 rounded-lg shadow-sm text-center">
-                    <h3 class="text-sm font-medium text-gray-500">Chantiers Actifs</h3>
-                    <p class="mt-1 text-3xl font-semibold animate-pulse">...</p>
+                <div id="active-projects-card" class="p-6 rounded-lg shadow-sm text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                    <h3 class="text-sm font-medium" style="color: var(--color-text-muted);">Chantiers Actifs</h3>
+                    <p class="mt-1 text-3xl font-semibold animate-pulse" style="color: var(--color-text-base);">...</p>
                 </div>
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div class="bg-white p-6 rounded-lg shadow-sm">
+                <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                     <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-3">
-                        <h3 class="text-xl font-semibold">Heures par employé</h3>
-                        <div class="flex items-center gap-1 p-1 bg-gray-100 rounded-lg text-sm">
-                            <button data-period="week" class="user-stats-filter-btn px-3 py-1 rounded-md">Semaine</button>
-                            <button data-period="month" class="user-stats-filter-btn px-3 py-1 rounded-md">Mois</button>
-                            <button data-period="year" class="user-stats-filter-btn px-3 py-1 rounded-md">Année</button>
+                        <h3 class="text-xl font-semibold" style="color: var(--color-text-base);">Heures par employé</h3>
+                        <div class="flex items-center gap-1 p-1 rounded-lg" style="background-color: var(--color-background);">
+                            <button data-period="week" class="user-stats-filter-btn px-3 py-1 rounded-md text-sm">Semaine</button>
+                            <button data-period="month" class="user-stats-filter-btn px-3 py-1 rounded-md text-sm">Mois</button>
+                            <button data-period="year" class="user-stats-filter-btn px-3 py-1 rounded-md text-sm">Année</button>
                         </div>
                     </div>
                     <div class="flex justify-between items-center mb-4">
-                        <button id="user-stats-prev-btn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg">&lt;</button>
-                        <div id="user-stats-period-display" class="text-center font-semibold text-base"></div>
-                        <button id="user-stats-next-btn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg">&gt;</button>
+                        <button id="user-stats-prev-btn" class="px-4 py-2 rounded-lg" style="background-color: var(--color-background);">&lt;</button>
+                        <div id="user-stats-period-display" class="text-center font-semibold text-base" style="color: var(--color-text-base);"></div>
+                        <button id="user-stats-next-btn" class="px-4 py-2 rounded-lg" style="background-color: var(--color-background);">&gt;</button>
                     </div>
                     <div id="user-stats-list" class="space-y-3"></div>
                 </div>
 
-                <div class="bg-white p-6 rounded-lg shadow-sm">
+                <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                     <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-3">
-                        <h3 class="text-xl font-semibold">Heures par chantier</h3>
-                         <div class="flex items-center gap-1 p-1 bg-gray-100 rounded-lg text-sm">
-                            <button data-period="week" class="chantier-stats-filter-btn px-3 py-1 rounded-md">Semaine</button>
-                            <button data-period="month" class="chantier-stats-filter-btn px-3 py-1 rounded-md">Mois</button>
-                            <button data-period="year" class="chantier-stats-filter-btn px-3 py-1 rounded-md">Année</button>
+                        <h3 class="text-xl font-semibold" style="color: var(--color-text-base);">Heures par chantier</h3>
+                         <div class="flex items-center gap-1 p-1 rounded-lg" style="background-color: var(--color-background);">
+                            <button data-period="week" class="chantier-stats-filter-btn px-3 py-1 rounded-md text-sm">Semaine</button>
+                            <button data-period="month" class="chantier-stats-filter-btn px-3 py-1 rounded-md text-sm">Mois</button>
+                            <button data-period="year" class="chantier-stats-filter-btn px-3 py-1 rounded-md text-sm">Année</button>
                         </div>
                     </div>
                      <div class="flex justify-between items-center mb-4">
-                        <button id="chantier-stats-prev-btn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg">&lt;</button>
-                        <div id="chantier-stats-period-display" class="text-center font-semibold text-base"></div>
-                        <button id="chantier-stats-next-btn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg">&gt;</button>
+                        <button id="chantier-stats-prev-btn" class="px-4 py-2 rounded-lg" style="background-color: var(--color-background);">&lt;</button>
+                        <div id="chantier-stats-period-display" class="text-center font-semibold text-base" style="color: var(--color-text-base);"></div>
+                        <button id="chantier-stats-next-btn" class="px-4 py-2 rounded-lg" style="background-color: var(--color-background);">&gt;</button>
                     </div>
                     <div id="chantier-stats-list" class="space-y-3"></div>
                 </div>
             </div>
             
             <div>
-                <h3 class="text-xl font-semibold mb-2">Activité Récente</h3>
+                <h3 class="text-xl font-semibold mb-2" style="color: var(--color-text-base);">Activité Récente</h3>
                 <div id="recent-activity-list" class="space-y-3"></div>
             </div>
         </div>
@@ -158,6 +158,7 @@ function getPeriodInfo(filter) {
     }
     return { startDate, endDate, displayText, period: filter.period };
 }
+
 async function loadDetailedStats() {
     const userInfo = getPeriodInfo(userStatsFilter);
     const chantierInfo = getPeriodInfo(chantierStatsFilter);
@@ -191,7 +192,6 @@ async function loadDetailedStats() {
             }
         });
 
-        // --- RÈGLE FINALE DE PLAFONNEMENT POUR LE TABLEAU DE BORD ---
         for (const uid in userStats) {
             const user = users.find(u => u.uid === uid);
             if (user && user.contractHours === 12) {
@@ -201,7 +201,6 @@ async function loadDetailedStats() {
                 } else if (userInfo.period === 'month') {
                     contractLimitMs = 48 * 3600000;
                 } else if (userInfo.period === 'year') {
-                    // Pour l'année, on peut estimer 12h * 52 semaines
                     contractLimitMs = 12 * 52 * 3600000;
                 }
                 
@@ -210,7 +209,6 @@ async function loadDetailedStats() {
                 }
             }
         }
-        // --- FIN DE LA RÈGLE FINALE ---
 
         displayStats(userStats, document.getElementById('user-stats-list'), "Aucun pointage pour cette période.");
         displayStats(chantierStats, document.getElementById('chantier-stats-list'), "Aucun chantier pointé pour cette période.", true);
@@ -219,14 +217,17 @@ async function loadDetailedStats() {
     }
 }
 
-
 function updateFilterUI(type, filter, displayText) {
     document.getElementById(`${type}-stats-period-display`).textContent = displayText;
     document.querySelectorAll(`.${type}-stats-filter-btn`).forEach(btn => {
         const isSelected = btn.dataset.period === filter.period;
-        btn.classList.toggle('bg-white', isSelected);
-        btn.classList.toggle('shadow', isSelected);
-        btn.classList.toggle('bg-gray-100', !isSelected);
+        if (isSelected) {
+            btn.style.backgroundColor = 'var(--color-surface)';
+            btn.classList.add('shadow');
+        } else {
+            btn.style.backgroundColor = 'transparent';
+            btn.classList.remove('shadow');
+        }
     });
 }
 
@@ -240,7 +241,7 @@ function displayStats(statsObject, container, emptyMessage, isClickable = false)
         : Object.entries(statsObject).sort(([, a], [, b]) => b - a);
 
     if (sortedEntries.length === 0) {
-        container.innerHTML = `<p class="text-center text-gray-500">${emptyMessage}</p>`;
+        container.innerHTML = `<p class="text-center" style="color: var(--color-text-muted);">${emptyMessage}</p>`;
         return;
     }
 
@@ -249,11 +250,12 @@ function displayStats(statsObject, container, emptyMessage, isClickable = false)
         const totalMs = isUserStats ? value.totalMs : value;
         const div = document.createElement('div');
         div.className = 'flex justify-between items-center text-sm p-2 border-b';
+        div.style.borderColor = 'var(--color-border)';
         if (isClickable) {
-            div.innerHTML = `<button class="font-medium text-blue-600 hover:underline text-left">${name}</button><span class="font-bold text-purple-700">${formatMilliseconds(totalMs)}</span>`;
+            div.innerHTML = `<button class="font-medium hover:underline text-left" style="color: var(--color-primary);">${name}</button><span class="font-bold" style="color: var(--color-primary);">${formatMilliseconds(totalMs)}</span>`;
             div.querySelector('button').onclick = () => navigateTo('admin-chantier-details', { chantierName: name });
         } else {
-            div.innerHTML = `<span class="font-medium">${name}</span><span class="font-bold text-purple-700">${formatMilliseconds(totalMs)}</span>`;
+            div.innerHTML = `<span class="font-medium" style="color: var(--color-text-base);">${name}</span><span class="font-bold" style="color: var(--color-primary);">${formatMilliseconds(totalMs)}</span>`;
         }
         container.appendChild(div);
     });
@@ -263,33 +265,48 @@ async function loadRecentActivity() {
     const container = document.getElementById('recent-activity-list');
     if (!container) return;
     try {
-        const q = query(collection(db, "pointages"), orderBy("createdAt", "desc"), where("createdAt", "!=", null));
+        const q = query(collection(db, "pointages"), orderBy("createdAt", "desc"), where("createdAt", "!=", null), limit(5));
         const querySnapshot = await getDocs(q);
         container.innerHTML = "";
-        if (querySnapshot.empty) { container.innerHTML = "<p class='text-center text-gray-500'>Aucune activité récente.</p>"; return; }
-        querySnapshot.docs.slice(0, 5).forEach(doc => container.appendChild(createDetailedActivityElement(doc.id, doc.data())));
+        if (querySnapshot.empty) { 
+            container.innerHTML = `<p class='text-center' style="color: var(--color-text-muted);">Aucune activité récente.</p>`; 
+            return; 
+        }
+        querySnapshot.docs.forEach(doc => container.appendChild(createDetailedActivityElement(doc.id, doc.data())));
     } catch (error) {
         console.error("Erreur de chargement de l'activité récente:", error);
-        container.innerHTML = "<p class='text-red-500 text-center'>Erreur de chargement.</p>";
+        container.innerHTML = `<p class='text-red-500 text-center'>Erreur de chargement.</p>`;
     }
 }
 
 function createDetailedActivityElement(docId, d) {
     const wrapper = document.createElement("div");
-    wrapper.className = "p-4 border rounded-lg bg-white relative shadow-sm space-y-1";
+    wrapper.className = "p-4 border rounded-lg relative shadow-sm space-y-1";
+    wrapper.style.backgroundColor = 'var(--color-surface)';
+    wrapper.style.borderColor = 'var(--color-border)';
+
     const startDate = new Date(d.timestamp);
     const endDate = d.endTime ? new Date(d.endTime) : null;
     let timeDisplay = "", durationDisplay = "";
     if (endDate) {
         timeDisplay = `De ${startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} à ${endDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
-        durationDisplay = `<div class="text-sm text-gray-600">Durée effective : ${formatMilliseconds((endDate - startDate) - (d.pauseDurationMs || 0))}</div>`;
+        durationDisplay = `<div class="text-sm" style="color: var(--color-text-muted);">Durée effective : ${formatMilliseconds((endDate - startDate) - (d.pauseDurationMs || 0))}</div>`;
     } else {
         timeDisplay = `<div>Débuté à ${startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} (en cours)</div>`;
     }
-    wrapper.innerHTML = `<div class="text-xs text-blue-600 font-semibold">${d.userName || 'Utilisateur inconnu'}</div><div class="font-bold text-lg">${d.chantier}</div><div>${startDate.toLocaleDateString('fr-FR')}</div>${timeDisplay}${durationDisplay}<div class="mt-2"><strong>Collègues :</strong> ${(d.colleagues || []).join(", ")}</div>${d.notes ? `<div class="mt-1 pt-2 border-t text-sm"><strong>Notes :</strong> ${d.notes}</div>` : ""}`;
+    wrapper.innerHTML = `
+        <div class="font-semibold" style="color: var(--color-primary);">${d.userName || 'Utilisateur inconnu'}</div>
+        <div class="font-bold text-lg">${d.chantier}</div>
+        <div>${startDate.toLocaleDateString('fr-FR')}</div>
+        ${timeDisplay}
+        ${durationDisplay}
+        <div class="mt-2" style="color: var(--color-text-muted);"><strong>Collègues :</strong> ${(d.colleagues || []).join(", ") || 'Aucun'}</div>
+        ${d.notes ? `<div class="mt-1 pt-2 border-t text-sm" style="border-color: var(--color-border);"><strong>Notes :</strong> ${d.notes}</div>` : ""}
+    `;
     const deleteBtn = document.createElement("button");
     deleteBtn.textContent = "✖";
-    deleteBtn.className = "absolute top-2 right-3 text-gray-400 hover:text-red-600 font-bold";
+    deleteBtn.className = "absolute top-2 right-3 hover:text-red-600 font-bold";
+    deleteBtn.style.color = 'var(--color-text-muted)';
     deleteBtn.onclick = async () => { if (await showConfirmationModal("Confirmation", "Supprimer ce pointage ?")) { await deleteDoc(doc(db, "pointages", docId)); render(); } };
     wrapper.appendChild(deleteBtn);
     return wrapper;

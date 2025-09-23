@@ -14,58 +14,58 @@ let currentWeekOffset = 0;
 export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto space-y-8">
-            <div id="live-tracker-container" class="bg-white p-6 rounded-lg shadow-lg"></div>
+            <div id="live-tracker-container" class="p-6 rounded-lg shadow-lg" style="background-color: var(--color-surface); border: 1px solid var(--color-border);"></div>
             
             <div id="missed-pointage-suggestions" class="space-y-4"></div>
 
             <div>
                 <h2 class="text-xl font-bold mb-2">🗓️ Mon Planning de la Semaine</h2>
-                <div class="bg-white rounded-lg shadow-sm p-4">
+                <div class="rounded-lg shadow-sm p-4" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                     <div class="flex justify-between items-center">
-                        <button id="prevWeekBtn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg">&lt;</button>
-                        <div id="currentPeriodDisplay" class="text-center font-semibold text-lg min-w-[250px]"></div>
-                        <button id="nextWeekBtn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg">&gt;</button>
+                        <button id="prevWeekBtn" class="px-4 py-2 rounded-lg hover:opacity-80" style="background-color: var(--color-background);">&lt;</button>
+                        <div id="currentPeriodDisplay" class="text-center font-semibold text-lg"></div>
+                        <button id="nextWeekBtn" class="px-4 py-2 rounded-lg hover:opacity-80" style="background-color: var(--color-background);">&gt;</button>
                     </div>
                 </div>
                 <div id="schedule-grid" class="grid grid-cols-1 md:grid-cols-7 gap-2 mt-4"></div>
             </div>
         </div>
         <div id="startPointageModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-20 p-4">
-            <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+            <div class="p-6 rounded-lg shadow-xl w-full max-w-md" style="background-color: var(--color-surface);">
                 <h3 class="text-xl font-bold mb-4">Démarrer un pointage</h3>
                 <form id="startPointageForm" class="space-y-4">
                     <div>
                         <label class="text-sm font-medium">Chantier</label>
-                        <select id="startChantierSelect" class="w-full border p-2 rounded mt-1" required></select>
+                        <select id="startChantierSelect" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);" required></select>
                     </div>
                     <div>
                         <label class="text-sm font-medium">Collègues présents</label>
-                        <div id="startColleaguesContainer" class="mt-1 p-2 border rounded max-h-40 overflow-y-auto space-y-1"></div>
+                        <div id="startColleaguesContainer" class="mt-1 p-2 border rounded max-h-40 overflow-y-auto space-y-1" style="border-color: var(--color-border);"></div>
                     </div>
-                    <div class="pt-2 border-t">
-                        <label class="flex items-center gap-3 cursor-pointer p-2 rounded hover:bg-gray-100">
-                            <input type="checkbox" id="isDriverCheckbox" class="h-5 w-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500" />
+                    <div class="pt-2 border-t" style="border-color: var(--color-border);">
+                        <label class="flex items-center gap-3 cursor-pointer p-2 rounded">
+                            <input type="checkbox" id="isDriverCheckbox" class="h-5 w-5 rounded border-gray-300 focus:ring-offset-0" style="color: var(--color-primary);"/>
                             <span class="text-sm font-medium">Je suis le conducteur (pour le calcul des km)</span>
                         </label>
                     </div>
                     <div class="flex justify-end gap-4 pt-4">
-                        <button type="button" id="cancelStartPointage" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">Annuler</button>
-                        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">Démarrer</button>
+                        <button type="button" id="cancelStartPointage" class="px-4 py-2 rounded" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Annuler</button>
+                        <button type="submit" class="text-white px-4 py-2 rounded" style="background-color: var(--color-primary);">Démarrer</button>
                     </div>
                 </form>
             </div>
         </div>
         <div id="stopPointageModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-20 p-4">
-            <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+            <div class="p-6 rounded-lg shadow-xl w-full max-w-md" style="background-color: var(--color-surface);">
                 <h3 class="text-xl font-bold mb-4">Finaliser le pointage</h3>
                 <form id="stopPointageForm">
                     <div class="space-y-4">
                         <div>
                             <label for="pointageNotes" class="text-sm font-medium">Note (facultatif)</label>
-                            <textarea id="pointageNotes" placeholder="Ex: Matériel manquant, travail terminé plus tôt..." class="w-full border p-2 rounded mt-1 h-24"></textarea>
+                            <textarea id="pointageNotes" placeholder="Ex: Matériel manquant..." class="w-full border p-2 rounded mt-1 h-24" style="background-color: var(--color-background); border-color: var(--color-border);"></textarea>
                         </div>
                         <div class="flex justify-end gap-4 pt-4">
-                            <button type="button" id="cancelStopPointage" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">Annuler</button>
+                            <button type="button" id="cancelStopPointage" class="px-4 py-2 rounded" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Annuler</button>
                             <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded">Arrêter et Enregistrer</button>
                         </div>
                     </div>
@@ -93,12 +93,6 @@ export async function render() {
         }
     }, 0);
 }
-
-// Le reste du fichier (cacheDataForModals, initLiveTracker, etc.) est identique
-// et n'a pas besoin d'être montré ici pour ne pas surcharger.
-// Vous pouvez simplement copier le début du code jusqu'à cette ligne
-// et garder la fin de votre fichier existant si vous préférez.
-// Ou remplacer le fichier entier par cette version complète.
 
 async function cacheDataForModals() {
     const chantiersData = await getActiveChantiers();
@@ -131,8 +125,8 @@ function initLiveTracker() {
         const isPaused = activePointage.status === 'paused';
         container.innerHTML = `
             <div class="text-center">
-                <p class="text-gray-500">Pointage en cours sur :</p>
-                <p class="text-2xl font-bold text-purple-700 my-2">${activePointage.chantier}</p>
+                <p style="color: var(--color-text-muted);">Pointage en cours sur :</p>
+                <p class="text-2xl font-bold my-2" style="color: var(--color-primary);">${activePointage.chantier}</p>
                 <div id="timer" class="text-5xl font-mono my-4 tracking-wider ${isPaused ? 'text-yellow-500' : ''}">00:00:00</div>
                 ${isPaused ? '<p class="text-yellow-600 font-semibold mb-4">PAUSE</p>' : ''}
                 <div class="flex flex-col sm:flex-row gap-4 justify-center">
@@ -145,7 +139,11 @@ function initLiveTracker() {
         document.getElementById('pauseResumeBtn').onclick = isPaused ? resumePointage : pausePointage;
         document.getElementById('stopBtn').onclick = openStopModal;
     } else {
-        container.innerHTML = `<div class="text-center"><h3 class="text-xl font-bold mb-2">Prêt à commencer votre journée ?</h3><button id="startBtn" class="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white font-bold px-8 py-4 rounded-lg text-lg shadow-lg">Démarrer un nouveau pointage</button></div>`;
+        container.innerHTML = `
+            <div class="text-center">
+                <h3 class="text-xl font-bold mb-2">Prêt à commencer votre journée ?</h3>
+                <button id="startBtn" class="w-full md:w-auto text-white font-bold px-8 py-4 rounded-lg text-lg shadow-lg" style="background-color: var(--color-primary); transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='var(--color-primary-hover)'" onmouseout="this.style.backgroundColor='var(--color-primary)'">Démarrer un nouveau pointage</button>
+            </div>`;
         document.getElementById('startBtn').onclick = openStartModal;
     }
 }
@@ -314,7 +312,7 @@ async function openStartModal() {
     const colleaguesContainer = document.getElementById('startColleaguesContainer');
 
     chantierSelect.innerHTML = '<option>Chargement du planning...</option>';
-    colleaguesContainer.innerHTML = '<p class="text-gray-500 text-sm">Chargement...</p>';
+    colleaguesContainer.innerHTML = `<p class="text-sm" style="color: var(--color-text-muted);">Chargement...</p>`;
     modal.classList.remove('hidden');
 
     const { weeklyChantiers, todaysColleagues, todaysChantiers } = await getContextualLists();
@@ -346,12 +344,12 @@ async function openStartModal() {
     }
 
     const otherColleagues = colleaguesCache.filter(name => !todaysColleagues.has(name) && name !== currentUser.displayName);
-    const createColleagueElement = (name) => `<label class="flex items-center gap-2 p-1 hover:bg-gray-100 rounded w-full"><input type="checkbox" value="${name}" name="colleagues" /><span>${name}</span></label>`;
+    const createColleagueElement = (name) => `<label class="flex items-center gap-2 p-1 rounded w-full"><input type="checkbox" value="${name}" name="colleagues" /><span>${name}</span></label>`;
     
     let colleaguesHTML = '';
     if (todaysColleagues.size > 0) {
         todaysColleagues.forEach(name => { colleaguesHTML += createColleagueElement(name); });
-        colleaguesHTML += '<div class="w-full border-t my-2"></div>';
+        colleaguesHTML += `<div class="w-full border-t my-2" style="border-color: var(--color-border);"></div>`;
     }
     colleaguesContainer.innerHTML = colleaguesHTML;
 
@@ -359,7 +357,8 @@ async function openStartModal() {
         const showAllButton = document.createElement('button');
         showAllButton.type = 'button';
         showAllButton.textContent = `Afficher les ${otherColleagues.length} autres...`;
-        showAllButton.className = 'text-sm text-blue-600 hover:underline w-full text-center p-1';
+        showAllButton.className = 'text-sm hover:underline w-full text-center p-1';
+        showAllButton.style.color = 'var(--color-primary)';
         showAllButton.onclick = () => {
             showAllButton.remove();
             colleaguesContainer.insertAdjacentHTML('beforeend', otherColleagues.map(createColleagueElement).join(''));
@@ -439,8 +438,9 @@ function displayWeekView() {
             const dayDate = new Date(startOfWeek);
             dayDate.setUTCDate(startOfWeek.getUTCDate() + i);
             const dayColumn = document.createElement('div');
-            dayColumn.className = 'bg-gray-50 rounded-lg p-2 min-h-[100px]';
-            dayColumn.innerHTML = `<h4 class="font-bold text-center border-b pb-1 mb-2">${days[i]} <span class="text-sm font-normal text-gray-500">${dayDate.getUTCDate()}</span></h4><div id="day-col-${i}" class="space-y-2"></div>`;
+            dayColumn.className = 'rounded-lg p-2 min-h-[100px]';
+            dayColumn.style.backgroundColor = 'var(--color-background)';
+            dayColumn.innerHTML = `<h4 class="font-bold text-center border-b pb-1 mb-2" style="border-color: var(--color-border);"><span style="color: var(--color-text-base);">${days[i]}</span> <span class="text-sm font-normal" style="color: var(--color-text-muted);">${dayDate.getUTCDate()}</span></h4><div id="day-col-${i}" class="space-y-2"></div>`;
             scheduleGrid.appendChild(dayColumn);
         }
         
@@ -454,7 +454,7 @@ async function loadUserScheduleForWeek(start, end) {
     const scheduleGrid = document.getElementById("schedule-grid");
 
     if (!publishDoc.exists()) {
-        if(scheduleGrid) scheduleGrid.innerHTML = `<p class='col-span-1 md:col-span-7 text-center text-gray-500 p-4'>Le planning de cette semaine n'a pas encore été publié.</p>`;
+        if(scheduleGrid) scheduleGrid.innerHTML = `<p class='col-span-1 md:col-span-7 text-center p-4' style='color: var(--color-text-muted);'>Le planning de cette semaine n'a pas encore été publié.</p>`;
         return;
     }
 
@@ -481,11 +481,14 @@ async function loadUserScheduleForWeek(start, end) {
 
 function createTaskElement(task) {
     const el = document.createElement('div');
-    el.className = 'bg-white p-3 rounded-lg shadow-sm border-l-4 border-purple-500 text-sm';
+    el.className = 'p-3 rounded-lg shadow-sm border-l-4 text-sm';
+    el.style.backgroundColor = 'var(--color-surface)';
+    el.style.borderColor = 'var(--color-primary)';
+    
     const team = (task.teamNames && task.teamNames.length) ? `Équipe : ${task.teamNames.join(', ')}` : 'Pas d\'équipe';
     const start = task.startTime ? `<strong>${task.startTime}</strong> - ` : '';
-    const note = task.notes ? `<div class="mt-2 pt-2 border-t text-blue-600 text-xs"><strong>Note:</strong> ${task.notes}</div>` : '';
-    el.innerHTML = `<div class="font-semibold">${task.chantierName}</div><div class="text-xs text-gray-700 mt-1">${start}${task.duration || ''}h prévues</div><div class="text-xs text-gray-500 mt-1">${team}</div>${note}`;
+    const note = task.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-primary);"><strong>Note:</strong> ${task.notes}</div>` : '';
+    el.innerHTML = `<div class="font-semibold" style="color: var(--color-text-base);">${task.chantierName}</div><div class="text-xs mt-1" style="color: var(--color-text-base);">${start}${task.duration || ''}h prévues</div><div class="text-xs mt-1" style="color: var(--color-text-muted);">${team}</div>${note}`;
     return el;
 }
 
@@ -543,7 +546,7 @@ async function checkForMissedPointages() {
 
 function renderSuggestions(suggestions) {
     const container = document.getElementById('missed-pointage-suggestions');
-    container.innerHTML = `<h3 class="text-lg font-semibold text-gray-700">Suggestions de pointages manqués :</h3>`;
+    container.innerHTML = `<h3 class="text-lg font-semibold" style="color: var(--color-text-base);">Suggestions de pointages manqués :</h3>`;
 
     suggestions.forEach(sugg => {
         const start = new Date(sugg.timestamp);
@@ -551,14 +554,16 @@ function renderSuggestions(suggestions) {
         const timeFormat = { hour: '2-digit', minute: '2-digit' };
 
         const card = document.createElement('div');
-        card.className = 'bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-lg shadow-sm';
+        card.className = 'border-l-4 p-4 rounded-r-lg shadow-sm';
+        card.style.borderColor = 'orange';
+        card.style.backgroundColor = 'var(--color-surface)';
         card.innerHTML = `
-            <p class="font-semibold">${sugg.userName} a pointé sur le chantier <strong class="text-purple-700">${sugg.chantier}</strong>.</p>
-            <p class="text-sm text-gray-600">Le ${start.toLocaleDateString('fr-FR')} de ${start.toLocaleTimeString('fr-FR', timeFormat)} à ${end.toLocaleTimeString('fr-FR', timeFormat)}.</p>
+            <p class="font-semibold">${sugg.userName} a pointé sur le chantier <strong style="color: var(--color-primary);">${sugg.chantier}</strong>.</p>
+            <p class="text-sm" style="color: var(--color-text-muted);">Le ${start.toLocaleDateString('fr-FR')} de ${start.toLocaleTimeString('fr-FR', timeFormat)} à ${end.toLocaleTimeString('fr-FR', timeFormat)}.</p>
             <p class="mt-2 font-medium">Étiez-vous avec cette personne ?</p>
             <div class="flex gap-4 mt-3">
                 <button class="accept-suggestion-btn bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded-lg" data-sugg-id="${sugg.id}">Oui, accepter</button>
-                <button class="refuse-suggestion-btn bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded-lg" data-sugg-id="${sugg.id}">Non, refuser</button>
+                <button class="refuse-suggestion-btn font-bold px-4 py-2 rounded-lg" data-sugg-id="${sugg.id}" style="background-color: var(--color-background);">Non, refuser</button>
             </div>
         `;
         container.appendChild(card);
@@ -610,5 +615,5 @@ async function handleSuggestionClick(e) {
         }
     }
     
-    button.closest('.bg-yellow-50').remove();
+    button.closest('div.border-l-4').remove();
 }
