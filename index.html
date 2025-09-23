@@ -36,10 +36,38 @@
             color: var(--color-primary) !important;
             font-weight: 600;
         }
-        #main-nav-list a { color: var(--color-text-muted); }
+        #main-nav-list a {
+            color: var(--color-text-muted);
+        }
         #main-nav-list a:hover {
             color: var(--color-text-base);
             background-color: rgba(0,0,0,0.05);
+        }
+        #page-content {
+            transition: opacity 0.2s ease-in-out;
+        }
+        .page-exit {
+            opacity: 0;
+        }
+        #update-toast {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            background-color: var(--color-surface);
+            color: var(--color-text-base);
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+            border: 1px solid var(--color-border);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            transform: translateY(200%);
+            transition: transform 0.5s ease-in-out;
+            z-index: 100;
+        }
+        #update-toast.show {
+            transform: translateY(0);
         }
     </style>
 </head>
@@ -50,58 +78,71 @@
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>
-        <p class="text-lg font-semibold text-gray-700">Chargement de l'application...</p>
+        <p class="text-lg font-semibold" style="color: var(--color-text-muted);">Chargement de l'application...</p>
     </div>
 
-    <div id="auth-container" class="hidden-by-default min-h-screen flex items-center justify-center p-4">
-        <div class="bg-white shadow-xl rounded-xl p-8 w-full max-w-sm space-y-6" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-            <form id="login-form">
-                <h1 class="text-3xl font-bold text-center flex items-center justify-center gap-2 mb-4"><span>🕒</span>Connexion</h1>
-                <div class="space-y-4">
-                    <div>
-                        <label for="login-email" class="text-sm font-medium">Email</label>
-                        <input id="login-email" type="email" autocomplete="email" class="w-full border p-2 rounded mt-1" required />
-                    </div>
-                    <div>
-                        <label for="login-password" class="text-sm font-medium">Mot de passe</label>
-                        <input id="login-password" type="password" autocomplete="current-password" class="w-full border p-2 rounded mt-1" required />
-                    </div>
-                    <button type="submit" class="w-full text-white font-bold px-4 py-3 rounded-lg transition-colors" style="background-color: var(--color-primary);">Se connecter</button>
+    <div id="auth-container" class="hidden-by-default">
+        <div class="flex flex-col items-center justify-center px-6 py-8 mx-auto md:h-screen lg:py-0">
+            <div class="w-full rounded-lg shadow-xl md:mt-0 sm:max-w-md xl:p-0" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <div class="p-6 space-y-4 md:space-y-6 sm:p-8">
+                    <form id="login-form" class="space-y-4 md:space-y-6">
+                        <h1 class="text-xl font-bold leading-tight tracking-tight text-center md:text-2xl">Connectez-vous</h1>
+                        <div>
+                            <label for="login-email" class="block mb-2 text-sm font-medium">Email</label>
+                            <input type="email" id="login-email" class="border sm:text-sm rounded-lg block w-full p-2.5" style="background-color: var(--color-background); border-color: var(--color-border);" placeholder="nom@email.com" required>
+                        </div>
+                        <div>
+                            <label for="login-password" class="block mb-2 text-sm font-medium">Mot de passe</label>
+                            <input type="password" id="login-password" placeholder="••••••••" class="border sm:text-sm rounded-lg block w-full p-2.5" style="background-color: var(--color-background); border-color: var(--color-border);" required>
+                        </div>
+                        <div class="flex items-center justify-end">
+                            <a href="#" id="show-reset-link" class="text-sm font-medium hover:underline" style="color: var(--color-primary);">Mot de passe oublié ?</a>
+                        </div>
+                        <button type="submit" class="w-full text-white font-medium rounded-lg text-sm px-5 py-2.5 text-center" style="background-color: var(--color-primary);">Se connecter</button>
+                        <p class="text-sm font-light" style="color: var(--color-text-muted);">
+                            Pas encore de compte ? <a href="#" id="show-register-link" class="font-medium hover:underline" style="color: var(--color-primary);">Créez-en un</a>
+                        </p>
+                    </form>
+                    <form id="register-form" class="hidden space-y-4 md:space-y-6">
+                         <h1 class="text-xl font-bold leading-tight tracking-tight text-center md:text-2xl">Créer un compte</h1>
+                         <div>
+                            <label for="register-name" class="block mb-2 text-sm font-medium">Nom complet</label>
+                            <input type="text" id="register-name" class="border sm:text-sm rounded-lg block w-full p-2.5" style="background-color: var(--color-background); border-color: var(--color-border);" required>
+                        </div>
+                        <div>
+                            <label for="register-email" class="block mb-2 text-sm font-medium">Email</label>
+                            <input type="email" id="register-email" placeholder="nom@email.com" class="border sm:text-sm rounded-lg block w-full p-2.5" style="background-color: var(--color-background); border-color: var(--color-border);" required>
+                        </div>
+                        <div>
+                            <label for="register-password" class="block mb-2 text-sm font-medium">Mot de passe</label>
+                            <input type="password" id="register-password" placeholder="••••••••" class="border sm:text-sm rounded-lg block w-full p-2.5" style="background-color: var(--color-background); border-color: var(--color-border);" required>
+                        </div>
+                        <button type="submit" class="w-full text-white font-medium rounded-lg text-sm px-5 py-2.5 text-center" style="background-color: var(--color-primary);">Créer le compte</button>
+                        <p class="text-sm font-light" style="color: var(--color-text-muted);">
+                            Déjà un compte ? <a href="#" id="show-login-link-from-register" class="font-medium hover:underline" style="color: var(--color-primary);">Se connecter</a>
+                        </p>
+                    </form>
+                    <form id="reset-form" class="hidden space-y-4 md:space-y-6">
+                         <h1 class="text-xl font-bold leading-tight tracking-tight text-center md:text-2xl">Mot de passe oublié</h1>
+                         <p class="text-sm text-center" style="color: var(--color-text-muted);">Entrez votre email pour recevoir un lien.</p>
+                        <div>
+                            <label for="reset-email" class="block mb-2 text-sm font-medium">Email</label>
+                            <input type="email" id="reset-email" class="border sm:text-sm rounded-lg block w-full p-2.5" style="background-color: var(--color-background); border-color: var(--color-border);" placeholder="nom@email.com" required>
+                        </div>
+                        <button type="submit" class="w-full text-white font-medium rounded-lg text-sm px-5 py-2.5 text-center" style="background-color: var(--color-primary);">Envoyer le lien</button>
+                        <p class="text-sm font-light" style="color: var(--color-text-muted);">
+                            Retour à la <a href="#" id="show-login-link-from-reset" class="font-medium hover:underline" style="color: var(--color-primary);">connexion</a>
+                        </p>
+                    </form>
                 </div>
-                <div class="text-sm text-center mt-4 space-x-1">
-                    <a href="#" id="show-reset-link" class="hover:underline" style="color: var(--color-primary);">Mot de passe oublié ?</a>
-                </div>
-                <div class="text-sm text-center mt-2">
-                    <span>Pas de compte ?</span>
-                    <a href="#" id="show-register-link" class="hover:underline" style="color: var(--color-primary);">Créez-en un</a>
-                </div>
-            </form>
-            <form id="register-form" class="hidden">
-                <h1 class="text-3xl font-bold text-center flex items-center justify-center gap-2 mb-4"><span>📝</span>Inscription</h1>
-                <div class="space-y-4">
-                    <div><label for="register-name" class="text-sm font-medium">Nom complet</label><input id="register-name" type="text" autocomplete="name" class="w-full border p-2 rounded mt-1" required /></div>
-                    <div><label for="register-email" class="text-sm font-medium">Email</label><input id="register-email" type="email" autocomplete="email" class="w-full border p-2 rounded mt-1" required /></div>
-                    <div><label for="register-password" class="text-sm font-medium">Mot de passe</label><input id="register-password" type="password" autocomplete="new-password" class="w-full border p-2 rounded mt-1" required /></div>
-                    <button type="submit" class="w-full text-white font-bold px-4 py-3 rounded-lg transition-colors" style="background-color: var(--color-primary);">Créer le compte</button>
-                </div>
-                <div class="text-sm text-center mt-4"><span>Déjà un compte ?</span> <a href="#" id="show-login-link-from-register" class="hover:underline" style="color: var(--color-primary);">Se connecter</a></div>
-            </form>
-            <form id="reset-form" class="hidden">
-                <h1 class="text-2xl font-bold text-center mb-4">Mot de passe oublié</h1>
-                <p class="text-sm text-center mb-4" style="color: var(--color-text-muted);">Entrez votre email pour recevoir un lien de réinitialisation.</p>
-                <div class="space-y-4">
-                    <div><label for="reset-email" class="text-sm font-medium">Email</label><input id="reset-email" type="email" autocomplete="email" class="w-full border p-2 rounded mt-1" required /></div>
-                    <button type="submit" class="w-full text-white font-bold px-4 py-3 rounded-lg transition-colors bg-gray-600 hover:bg-gray-700">Envoyer le lien</button>
-                </div>
-                <div class="text-sm text-center mt-4"><a href="#" id="show-login-link-from-reset" class="hover:underline" style="color: var(--color-primary);">Retour à la connexion</a></div>
-            </form>
+            </div>
         </div>
     </div>
 
     <div id="pending-approval-container" class="hidden-by-default min-h-screen flex items-center justify-center p-4">
-        <div class="bg-white shadow-xl rounded-xl p-8 w-full max-w-sm space-y-4 text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+        <div class="shadow-xl rounded-xl p-8 w-full max-w-sm space-y-4 text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
             <h1 class="text-2xl font-bold">⌛ En attente d'approbation</h1>
-            <p style="color: var(--color-text-muted);">Votre compte a bien été créé. Un administrateur doit maintenant valider votre accès. Veuillez réessayer plus tard.</p>
+            <p style="color: var(--color-text-muted);">Votre compte a bien été créé. Un administrateur doit maintenant valider votre accès.</p>
             <button id="logoutPendingBtn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold px-4 py-2 rounded-lg w-full transition-colors">Se déconnecter</button>
         </div>
     </div>
@@ -110,7 +151,7 @@
         <nav class="shadow-md sticky top-0 z-20" style="background-color: var(--color-surface); border-bottom: 1px solid var(--color-border);">
             <div class="max-w-screen-xl flex flex-wrap items-center justify-between mx-auto p-4">
                 <a href="#" class="flex items-center space-x-3">
-                    <span class="self-center text-2xl font-semibold whitespace-nowrap" style="color: var(--color-text-base);">Pointe<span id="stealth-trigger" class="cursor-pointer">u</span>se Lpf</span>
+                    <span class="self-center text-2xl font-semibold whitespace-nowrap">Pointe<span id="stealth-trigger" class="cursor-pointer">u</span>se Lpf</span>
                 </a>
                 <div class="flex items-center md:order-2 space-x-2 md:space-x-4">
                     <button id="switchViewBtn" class="hidden text-sm px-3 py-1.5 rounded-md text-white" style="background-color: var(--color-primary);">Vue Admin</button>
@@ -136,7 +177,7 @@
             <p id="modalMessage" class="mb-6" style="color: var(--color-text-muted);"></p>
             <div id="modalActions" class="flex justify-center gap-4">
                 <button id="modalConfirmBtn" class="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2 rounded transition-colors">Confirmer</button>
-                <button id="modalCancelBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold px-6 py-2 rounded transition-colors">Annuler</button>
+                <button id="modalCancelBtn" class="font-bold px-6 py-2 rounded transition-colors" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Annuler</button>
             </div>
         </div>
     </div>
@@ -146,9 +187,9 @@
             <h3 class="text-lg font-bold mb-4">Mode Confidentiel</h3>
             <p class="mb-4" style="color: var(--color-text-muted);">Veuillez entrer le code PIN.</p>
             <form id="pinForm">
-                <input type="password" id="pinInput" inputmode="numeric" pattern="[0-9]*" class="w-full border p-3 rounded text-center text-2xl tracking-[1em]" maxlength="4" required />
+                <input type="password" id="pinInput" inputmode="numeric" pattern="[0-9]*" class="w-full border p-3 rounded text-center text-2xl tracking-[1em]" maxlength="4" required style="background-color: var(--color-background); border-color: var(--color-border);" />
                 <div class="flex justify-center gap-4 mt-6">
-                    <button type="button" id="pinCancelBtn" class="bg-gray-300 hover:bg-gray-400 font-bold px-6 py-2 rounded transition-colors">Annuler</button>
+                    <button type="button" id="pinCancelBtn" class="font-bold px-6 py-2 rounded transition-colors" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Annuler</button>
                     <button type="submit" class="text-white font-bold px-6 py-2 rounded transition-colors" style="background-color: var(--color-primary);">Valider</button>
                 </div>
             </form>
@@ -164,4 +205,3 @@
     <script type="module" src="./app.js"></script>
 </body>
 </html>
-
