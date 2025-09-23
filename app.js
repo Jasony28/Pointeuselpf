@@ -1,4 +1,4 @@
-const APP_VERSION = 'v2.2.3';
+const APP_VERSION = 'v2.2.4';
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
@@ -44,7 +44,7 @@ export function isEffectiveAdmin() {
 const userTabs = [
     { id: 'user-dashboard', name: 'Planning' },
     { id: 'user-leave', name: 'Mes Congés' },
-    { id: 'user-updates', name: 'Détails chantier' },
+  
     { id: 'chantiers', name: 'Infos Chantiers' },
     { id: 'user-history', name: 'Mon Historique' },
     { id: 'settings', name: 'Paramètres' },
