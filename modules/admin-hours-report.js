@@ -11,17 +11,17 @@ export async function render() {
         <div class="max-w-4xl mx-auto">
             <h2 class="text-2xl font-bold mb-4">📄 Rapport d'Heures Global</h2>
             
-            <div class="bg-white p-4 rounded-lg shadow-sm">
+            <div class="p-4 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                 <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
-                    <div class="flex items-center gap-1 p-1 bg-gray-100 rounded-lg text-sm">
+                    <div class="flex items-center gap-1 p-1 rounded-lg text-sm" style="background-color: var(--color-background);">
                         <button data-period="week" class="filter-btn px-4 py-2 rounded-md">Semaine</button>
                         <button data-period="month" class="filter-btn px-4 py-2 rounded-md">Mois</button>
                         <button data-period="year" class="filter-btn px-4 py-2 rounded-md">Année</button>
                     </div>
                     <div class="flex items-center gap-2">
-                        <button id="prev-btn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg">&lt;</button>
+                        <button id="prev-btn" class="px-4 py-2 rounded-lg" style="background-color: var(--color-background);">&lt;</button>
                         <div id="period-display" class="text-center font-semibold text-lg min-w-[250px]"></div>
-                        <button id="next-btn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg">&gt;</button>
+                        <button id="next-btn" class="px-4 py-2 rounded-lg" style="background-color: var(--color-background);">&gt;</button>
                     </div>
                 </div>
 

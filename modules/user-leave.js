@@ -11,25 +11,25 @@ export async function render() {
         <div class="max-w-4xl mx-auto space-y-6">
             <div>
                 <h2 class="text-2xl font-bold">📅 Congés de l'Équipe</h2>
-                <p class="text-gray-600">Consultez les congés de l'équipe et soumettez vos propres demandes.</p>
+                <p style="color: var(--color-text-muted);">Consultez les congés de l'équipe et soumettez vos propres demandes.</p>
             </div>
             
-            <div class="bg-white p-6 rounded-lg shadow-sm">
+            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                 <h3 class="text-xl font-semibold mb-4">Nouvelle demande de congé</h3>
                 <form id="leaveRequestForm" class="space-y-4">
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label for="leave-start-date" class="text-sm font-medium">Date de début</label>
-                            <input type="date" id="leave-start-date" class="w-full border p-2 rounded mt-1" required>
+                            <input type="date" id="leave-start-date" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);" required>
                         </div>
                         <div>
                             <label for="leave-end-date" class="text-sm font-medium">Date de fin (optionnel)</label>
-                            <input type="date" id="leave-end-date" class="w-full border p-2 rounded mt-1">
+                            <input type="date" id="leave-end-date" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);">
                         </div>
                     </div>
                     <div>
                         <label for="leave-reason" class="text-sm font-medium">Raison</label>
-                        <select id="leave-reason" class="w-full border p-2 rounded mt-1" required>
+                        <select id="leave-reason" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);" required>
                             <option value="Vacances">Vacances</option>
                             <option value="Médical">Médical</option>
                             <option value="Familial">Familial</option>
@@ -39,26 +39,26 @@ export async function render() {
                     <div id="medical-times-container" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label for="leave-start-time" class="text-sm font-medium">Heure de début</label>
-                            <input type="time" id="leave-start-time" class="w-full border p-2 rounded mt-1">
+                            <input type="time" id="leave-start-time" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);">
                         </div>
                         <div>
                             <label for="leave-end-time" class="text-sm font-medium">Heure de fin</label>
-                            <input type="time" id="leave-end-time" class="w-full border p-2 rounded mt-1">
+                            <input type="time" id="leave-end-time" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);">
                         </div>
                     </div>
                     <div class="text-right pt-2">
-                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2 rounded">
+                        <button type="submit" class="text-white font-bold px-6 py-2 rounded" style="background-color: var(--color-primary);">
                             Envoyer la demande
                         </button>
                     </div>
                 </form>
             </div>
 
-            <div class="bg-white p-6 rounded-lg shadow-sm">
+            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                 <div class="flex justify-between items-center mb-4">
-                    <button id="prevWeekBtn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg">&lt;</button>
+                    <button id="prevWeekBtn" class="px-4 py-2 rounded-lg" style="background-color: var(--color-background);">&lt;</button>
                     <h3 id="list-title" class="text-xl font-semibold text-center"></h3>
-                    <button id="nextWeekBtn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg">&gt;</button>
+                    <button id="nextWeekBtn" class="px-4 py-2 rounded-lg" style="background-color: var(--color-background);">&gt;</button>
                 </div>
                 <div id="leave-list-container" class="space-y-4"></div>
             </div>

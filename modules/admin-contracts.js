@@ -9,12 +9,12 @@ export async function render() {
         <div class="max-w-3xl mx-auto space-y-8">
             <div>
                 <h2 class="text-2xl font-bold mb-2">📄 Gestion des Contrats</h2>
-                <p class="text-gray-600">Définissez ici le nombre d'heures hebdomadaires prévues pour chaque employé. Ceci sert de base pour le mode confidentiel.</p>
+                <p style="color: var(--color-text-muted);">Définissez le nombre d'heures hebdomadaires prévues pour chaque employé.</p>
             </div>
-            <div class="bg-white p-6 rounded-lg shadow-sm">
+            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                 <h3 class="text-xl font-semibold mb-4">Heures contractuelles par semaine</h3>
                 <div id="user-contracts-list" class="space-y-3">
-                    <p class="text-center text-gray-500">Chargement...</p>
+                    <p class="text-center" style="color: var(--color-text-muted);">Chargement...</p>
                 </div>
             </div>
         </div>

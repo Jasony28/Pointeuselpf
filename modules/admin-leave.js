@@ -6,9 +6,9 @@ export async function render() {
         <div class="max-w-4xl mx-auto space-y-6">
             <div>
                 <h2 class="text-2xl font-bold">📬 Gestion des Demandes de Congés</h2>
-                <p class="text-gray-600">Approuvez ou refusez les demandes de congé de votre équipe.</p>
+                <p style="color: var(--color-text-muted);">Approuvez ou refusez les demandes de congé de votre équipe.</p>
             </div>
-            <div class="bg-white p-6 rounded-lg shadow-sm">
+            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                 <div id="leave-requests-list" class="space-y-4">
                     <p class="text-center">Chargement des demandes...</p>
                 </div>
@@ -17,7 +17,6 @@ export async function render() {
     `;
     setTimeout(loadAllRequests, 0);
 }
-
 async function loadAllRequests() {
     const listContainer = document.getElementById('leave-requests-list');
     try {

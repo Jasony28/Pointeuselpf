@@ -15,61 +15,57 @@ const state = {
     editing: { id: null, date: null }
 };
 
-function getPlanningHTML() {
-    return `
+export async function render() {
+    pageContent.innerHTML = `
         <div class="max-w-full mx-auto">
             <h2 class="text-2xl font-bold mb-4">🗓️ Planification de la semaine</h2>
-            <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+            <div class="p-4 rounded-lg shadow-sm mb-4" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                 <div class="flex flex-wrap justify-between items-center gap-4">
                     <div class="flex items-center gap-4">
                         <div class="flex items-center gap-2">
-                            <button id="prevWeekBtn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg">&lt;</button>
+                            <button id="prevWeekBtn" class="px-4 py-2 rounded-lg" style="background-color: var(--color-background);">&lt;</button>
                             <div id="currentPeriodDisplay" class="text-center font-semibold text-lg min-w-[280px]"></div>
-                            <button id="nextWeekBtn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg">&gt;</button>
+                            <button id="nextWeekBtn" class="px-4 py-2 rounded-lg" style="background-color: var(--color-background);">&gt;</button>
                         </div>
-                        <div class="flex items-center border rounded-lg p-1 bg-gray-100">
+                        <div class="flex items-center border rounded-lg p-1" style="background-color: var(--color-background); border-color: var(--color-border);">
                             <button data-view="week" class="view-btn px-3 py-1 text-sm rounded-md">Vue Semaine</button>
                             <button data-view="day" class="view-btn px-3 py-1 text-sm rounded-md">Vue Jour</button>
                         </div>
                     </div>
                     <div class="flex items-center gap-2">
                         <button id="selectionModeBtn" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold px-4 py-2 rounded-lg">Sélectionner</button>
-                        <button id="deleteSelectionBtn" class="hidden bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded-lg">Supprimer la sélection</button>
-                        <button id="downloadPdfBtn" title="Imprimer ou Enregistrer le planning en PDF" class="bg-green-600 hover:bg-green-700 text-white p-2 rounded-lg"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708-.708l3 3z"/></svg></button>
-                        <button id="publishBtn" class="font-bold px-4 py-2 rounded-lg disabled:bg-gray-400"></button>
+                        <button id="deleteSelectionBtn" class="hidden bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded-lg">Supprimer</button>
+                        <button id="publishBtn" class="font-bold px-4 py-2 rounded-lg text-white"></button>
                     </div>
                 </div>
             </div>
             <div class="flex flex-col md:flex-row gap-4">
-                <div class="md:w-1/4 lg:w-1/5 bg-white p-4 rounded-lg shadow-sm flex flex-col">
-                    <h3 class="font-bold text-lg border-b pb-2 mb-2">Équipe</h3>
+                <div class="md:w-1/4 lg:w-1/5 p-4 rounded-lg shadow-sm flex flex-col" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                    <h3 class="font-bold text-lg border-b pb-2 mb-2" style="border-color: var(--color-border);">Équipe</h3>
                     <div id="team-pool" class="space-y-2 min-h-[100px] overflow-y-auto"></div>
                 </div>
                 <div class="flex-grow" id="planning-grid"></div>
             </div>
         </div>
         <div id="planningItemModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-20 p-4">
-            <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
+            <div class="p-6 rounded-lg shadow-xl w-full max-w-sm" style="background-color: var(--color-surface);">
                 <h3 id="modalTitle" class="text-xl font-bold mb-4"></h3>
                 <form id="planningItemForm" class="space-y-4">
-                    <div><label class="text-sm font-medium">Chantier</label><select id="chantierSelect" class="w-full border p-2 rounded" required></select></div>
-                    <div><label for="planningStartTime" class="text-sm font-medium">Heure de début</label><input id="planningStartTime" type="time" class="w-full border p-2 rounded" /></div>
-                    <div><label for="planningNotes" class="text-sm font-medium">Notes (facultatif)</label><textarea id="planningNotes" placeholder="Instructions spécifiques..." class="w-full border p-2 rounded"></textarea></div>
-                    <div class="flex justify-end gap-4 pt-4 border-t">
-                        <button type="button" id="cancelPlanningItem" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">Annuler</button>
-                        <button type="button" id="saveAndAddAnotherBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Enregistrer et Ajouter</button>
-                        <button type="button" id="saveAndCloseBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded">Enregistrer et Fermer</button>
+                    <div><label class="text-sm font-medium">Chantier</label><select id="chantierSelect" class="w-full border p-2 rounded" style="background-color: var(--color-background); border-color: var(--color-border);" required></select></div>
+                    <div><label for="planningStartTime" class="text-sm font-medium">Heure de début</label><input id="planningStartTime" type="time" class="w-full border p-2 rounded" style="background-color: var(--color-background); border-color: var(--color-border);" /></div>
+                    <div><label for="planningNotes" class="text-sm font-medium">Notes (facultatif)</label><textarea id="planningNotes" placeholder="Instructions..." class="w-full border p-2 rounded" style="background-color: var(--color-background); border-color: var(--color-border);"></textarea></div>
+                    <div class="flex justify-end gap-4 pt-4 border-t" style="border-color: var(--color-border);">
+                        <button type="button" id="cancelPlanningItem" class="px-4 py-2 rounded" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Annuler</button>
+                        <button type="button" id="saveAndAddAnotherBtn" class="text-white px-4 py-2 rounded" style="background-color: var(--color-primary);">Enregistrer et Ajouter</button>
+                        <button type="button" id="saveAndCloseBtn" class="text-white font-bold px-4 py-2 rounded" style="background-color: var(--color-primary);">Enregistrer et Fermer</button>
                     </div>
                 </form>
             </div>
         </div>
     `;
-}
-
-export async function render() {
-    pageContent.innerHTML = getPlanningHTML();
     await initialize();
 }
+
 async function initialize() {
     setupEventListeners();
     await cacheData();
@@ -85,7 +81,6 @@ async function cacheData() {
 function setupEventListeners() {
     document.getElementById("prevWeekBtn").onclick = () => { state.currentWeekOffset--; display(); };
     document.getElementById("nextWeekBtn").onclick = () => { state.currentWeekOffset++; display(); };
-    document.getElementById("downloadPdfBtn").onclick = generatePrintableView;
     document.getElementById("selectionModeBtn").onclick = toggleSelectionMode;
     document.getElementById("deleteSelectionBtn").onclick = deleteSelectedItems;
 
@@ -168,8 +163,13 @@ function display() {
 function updateViewButtons() {
     document.querySelectorAll('.view-btn').forEach(btn => {
         const isSelected = btn.dataset.view === state.currentView;
-        btn.classList.toggle('bg-white', isSelected);
-        btn.classList.toggle('shadow', isSelected);
+        if (isSelected) {
+            btn.style.backgroundColor = 'var(--color-surface)';
+            btn.classList.add('shadow');
+        } else {
+            btn.style.backgroundColor = 'transparent';
+            btn.classList.remove('shadow');
+        }
     });
 }
 
@@ -188,15 +188,17 @@ async function displayWeekView() {
         const dayDate = new Date(startOfWeek);
         dayDate.setUTCDate(startOfWeek.getUTCDate() + i);
         const dateString = dayDate.toISOString().split('T')[0];
-        const dayColHTML = `
-            <div class="bg-gray-50 rounded-lg p-2 flex flex-col">
-                <div class="flex justify-between items-center mb-2">
-                    <h4 class="font-bold text-center">${days[i]} <span class="text-sm font-normal text-gray-500">${dayDate.getUTCDate()}</span></h4>
-                    <button data-date="${dateString}" class="add-chantier-btn text-lg font-bold text-purple-600 hover:text-purple-800">+</button>
-                </div>
-                <div class="day-tasks-container space-y-2 flex-grow" id="day-col-${dateString}"></div>
-            </div>`;
-        planningGrid.innerHTML += dayColHTML;
+        const dayCol = document.createElement('div');
+        dayCol.className = 'p-2 rounded-lg flex flex-col';
+        dayCol.style.backgroundColor = 'var(--color-background)';
+        dayCol.innerHTML = `
+            <div class="flex justify-between items-center mb-2">
+                <h4 class="font-bold text-center">${days[i]} <span class="text-sm font-normal" style="color: var(--color-text-muted);">${dayDate.getUTCDate()}</span></h4>
+                <button data-date="${dateString}" class="add-chantier-btn text-lg font-bold hover:opacity-70" style="color: var(--color-primary);">+</button>
+            </div>
+            <div class="day-tasks-container space-y-2 flex-grow" id="day-col-${dateString}"></div>
+        `;
+        planningGrid.appendChild(dayCol);
     }
     
     loadPlanningForWeek(startOfWeek, endOfWeek);
@@ -214,12 +216,12 @@ function displayDayView() {
     const planningGrid = document.getElementById("planning-grid");
     planningGrid.className = 'flex';
     planningGrid.innerHTML = `
-        <div class="bg-gray-100 rounded-lg p-2 flex flex-col w-full">
+        <div class="p-2 rounded-lg flex flex-col w-full" style="background-color: var(--color-background);">
             <div class="flex justify-between items-center mb-2">
                 <div class="flex items-center gap-2 flex-wrap">
-                    ${days.map((day, index) => `<button data-day-index="${index}" class="day-selector-btn px-3 py-1 text-sm rounded-md ${index === state.selectedDayIndex ? 'bg-purple-600 text-white' : 'bg-gray-200'}">${day}</button>`).join('')}
+                    ${days.map((day, index) => `<button data-day-index="${index}" class="day-selector-btn px-3 py-1 text-sm rounded-md ${index === state.selectedDayIndex ? 'text-white shadow' : ''}" style="background-color: ${index === state.selectedDayIndex ? 'var(--color-primary)' : 'var(--color-surface)'};">${day}</button>`).join('')}
                 </div>
-                <button data-date="${dateString}" class="add-chantier-btn text-2xl font-bold text-purple-600 hover:text-purple-800">+</button>
+                <button data-date="${dateString}" class="add-chantier-btn text-2xl font-bold hover:opacity-70" style="color: var(--color-primary);">+</button>
             </div>
             <div class="day-tasks-container grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2 flex-grow overflow-y-auto" style="grid-auto-flow: column; grid-template-rows: repeat(9, auto);" id="day-col-${dateString}"></div>
         </div>`;
@@ -231,10 +233,11 @@ function populateTeamPool() {
     const pool = document.getElementById('team-pool');
     pool.innerHTML = '';
     state.teamMembers.forEach(name => {
-        const item = document.createElement('div');
-        item.className = 'flex items-center gap-2 p-2 bg-gray-100 rounded cursor-pointer hover:bg-gray-200';
+        const item = document.createElement('label');
+        item.className = 'flex items-center gap-2 p-2 rounded cursor-pointer';
+        item.style.backgroundColor = 'var(--color-background)';
         item.innerHTML = `
-            <input type="checkbox" class="team-checkbox h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500">
+            <input type="checkbox" class="team-checkbox h-4 w-4 rounded border-gray-300 focus:ring-offset-0" style="color: var(--color-primary);">
             <span class="text-sm">${name}</span>
         `;
         pool.appendChild(item);
@@ -242,20 +245,21 @@ function populateTeamPool() {
 }
 
 function createChantierBlock(planningDoc) {
-    const { id, chantierId, chantierName, teamNames, notes, startTime } = planningDoc;
+    const { id, chantierName, teamNames, notes, startTime } = planningDoc;
     const block = document.createElement('div');
-    block.className = 'planning-block p-1.5 bg-white rounded shadow cursor-pointer text-xs relative';
+    block.className = 'planning-block p-1.5 rounded shadow cursor-pointer text-xs relative';
+    block.style.backgroundColor = 'var(--color-surface)';
     block.dataset.planningId = id;
     
-    const noteIndicator = notes ? ` <span class="text-blue-500" title="${notes}">📝</span>` : '';
+    const noteIndicator = notes ? ` <span style="color: var(--color-primary);" title="${notes}">📝</span>` : '';
     const timeInfo = startTime ? `<strong>${startTime}</strong>` : '';
     
     block.innerHTML = `
         <div class="flex justify-between items-start">
-            <p class="font-bold text-purple-800 leading-tight pointer-events-none">${chantierName}</p>
+            <p class="font-bold leading-tight pointer-events-none" style="color: var(--color-primary);">${chantierName}</p>
             <button class="delete-planning-btn text-red-400 hover:text-red-700 font-bold -mt-1 -mr-1">✖</button>
         </div>
-        <p class="text-gray-600 my-0.5 time-info pointer-events-none">${timeInfo}${noteIndicator}</p>
+        <p class="my-0.5 time-info pointer-events-none" style="color: var(--color-text-muted);">${timeInfo}${noteIndicator}</p>
         <div class="team-display-zone mt-1 space-y-0.5"></div>
         <input type="checkbox" class="selection-checkbox hidden absolute top-1 right-1 h-4 w-4">
     `;
@@ -268,7 +272,7 @@ function renderTeamInBlock(planningBlock, teamNames) {
     const teamZone = planningBlock.querySelector('.team-display-zone');
     if (teamNames && teamNames.length > 0) {
         teamZone.innerHTML = teamNames.map(name => `
-            <div class="team-member-tag p-0.5 bg-blue-100 text-blue-800 rounded text-[10px] leading-tight flex items-center gap-1" data-name="${name}" title="Cliquer pour retirer">
+            <div class="team-member-tag p-0.5 rounded text-[10px] leading-tight flex items-center gap-1" data-name="${name}" title="Cliquer pour retirer" style="background-color: var(--color-background);">
                 <span>${name}</span>
                 <span class="font-bold text-red-500 hover:text-red-700 pointer-events-none">&times;</span>
             </div>
@@ -475,93 +479,4 @@ async function sendUpdateNotification() {
             showInfoModal("Succès", "Notification de mise à jour envoyée !");
         } catch (error) { showInfoModal("Erreur", "L'envoi a échoué."); }
     }
-}
-
-async function generatePrintableView() {
-    showInfoModal("Génération du PDF...", "Veuillez patienter, nous préparons votre planning.");
-
-    const { startOfWeek } = getWeekDateRange(state.currentWeekOffset);
-    const weekString = `Semaine du ${startOfWeek.toLocaleDateString('fr-FR', { timeZone: 'UTC' })}`;
-
-    const q = query(
-        collection(db, "planning"), 
-        where("date", ">=", startOfWeek.toISOString().split('T')[0]), 
-        where("date", "<=", getWeekDateRange(state.currentWeekOffset).endOfWeek.toISOString().split('T')[0]),
-        orderBy("date"), 
-        orderBy("order")
-    );
-    const snapshot = await getDocs(q);
-    const planningTasks = snapshot.docs.map(d => d.data());
-
-    const planningGrid = new Map();
-    const daysOfWeek = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
-
-    const allTeamMembers = [...new Set(planningTasks.flatMap(task => task.teamNames || []))].sort();
-
-    allTeamMembers.forEach(name => {
-        planningGrid.set(name, {
-            Lundi: [], Mardi: [], Mercredi: [], Jeudi: [], Vendredi: [], Samedi: [], Dimanche: [], totalHours: 0
-        });
-    });
-
-    planningTasks.forEach(task => {
-        if (!task.teamNames || task.teamNames.length === 0) return;
-
-        const taskDate = new Date(task.date + 'T12:00:00Z');
-        const dayIndex = (taskDate.getUTCDay() + 6) % 7;
-        const dayName = daysOfWeek[dayIndex];
-        
-        const duration = parseFloat(task.duration) || 0; 
-        const taskText = `${task.chantierName}${duration > 0 ? ` (${duration.toFixed(1)}h)` : ''}`;
-
-        task.teamNames.forEach(name => {
-            if (planningGrid.has(name)) {
-                planningGrid.get(name)[dayName].push(taskText);
-                planningGrid.get(name).totalHours += duration;
-            }
-        });
-    });
-
-    const tableHead = [['Employé', ...daysOfWeek, 'Total Semaine']];
-    const tableBody = [];
-
-    planningGrid.forEach((weekData, name) => {
-        const row = [name];
-        daysOfWeek.forEach(day => {
-            row.push(weekData[day].join('\n'));
-        });
-        row.push(`${weekData.totalHours.toFixed(1)}h`);
-        tableBody.push(row);
-    });
-    
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
-
-    pdf.setFontSize(18);
-    pdf.text("Planning de la Semaine", 40, 40);
-    pdf.setFontSize(12);
-    pdf.text(weekString, 40, 60);
-
-    pdf.autoTable({
-        head: tableHead,
-        body: tableBody,
-        startY: 80,
-        theme: 'grid',
-        headStyles: {
-            fillColor: [41, 51, 92],
-            textColor: 255,
-            fontStyle: 'bold'
-        },
-        styles: {
-            fontSize: 8,
-            cellPadding: 4,
-            valign: 'middle',
-        },
-        columnStyles: {
-            0: { fontStyle: 'bold', minCellWidth: 80 },
-            7: { fontStyle: 'bold', minCellWidth: 50 },
-        }
-    });
-
-    pdf.save(`Planning_${weekString.replace(/ /g, '_')}.pdf`);
 }

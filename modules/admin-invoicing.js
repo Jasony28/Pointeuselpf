@@ -18,19 +18,19 @@ export async function render() {
         <div class="max-w-3xl mx-auto space-y-6">
             <h2 class="text-2xl font-bold">🧾 Facturation Client</h2>
             
-            <div class="bg-white p-6 rounded-lg shadow-sm space-y-4">
+            <div class="p-6 rounded-lg shadow-sm space-y-4" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                 <div>
                     <label for="chantier-select" class="text-sm font-medium">1. Sélectionnez un client (chantier)</label>
-                    <select id="chantier-select" class="w-full border p-2 rounded mt-1"></select>
+                    <select id="chantier-select" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);"></select>
                 </div>
                 <div>
                     <label class="text-sm font-medium">2. Choisissez une période à facturer</label>
                     <div class="flex flex-col sm:flex-row gap-4 mt-1">
-                        <input type="date" id="start-date" class="w-full border p-2 rounded">
-                        <input type="date" id="end-date" class="w-full border p-2 rounded">
+                        <input type="date" id="start-date" class="w-full border p-2 rounded" style="background-color: var(--color-background); border-color: var(--color-border);">
+                        <input type="date" id="end-date" class="w-full border p-2 rounded" style="background-color: var(--color-background); border-color: var(--color-border);">
                     </div>
                 </div>
-                <div class="text-right pt-4 border-t">
+                <div class="text-right pt-4 border-t" style="border-color: var(--color-border);">
                     <button id="generate-invoice-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-2 rounded-lg">
                         Générer la Facture
                     </button>
@@ -44,7 +44,6 @@ export async function render() {
         document.getElementById('generate-invoice-btn').onclick = generateInvoicePDF;
     }, 0);
 }
-
 async function populateChantierSelect() {
     const select = document.getElementById('chantier-select');
     select.innerHTML = '<option value="">Chargement...</option>';

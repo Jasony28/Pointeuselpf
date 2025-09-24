@@ -11,7 +11,7 @@ const themes = {
     royal: { name: 'Royal', preview: '#dbeafe', colors: { '--color-primary': '#2262b5', '--color-primary-hover': '#1c5095', '--color-background': '#eff6ff', '--color-surface': '#dbeafe', '--color-text-base': '#1e3a8a', '--color-text-muted': '#2563eb', '--color-border': '#bfdbfe', } },
     rubis: { name: 'Rubis', preview: '#fee2e2', colors: { '--color-primary': '#b43737', '--color-primary-hover': '#982e2e', '--color-background': '#fef2f2', '--color-surface': '#fee2e2', '--color-text-base': '#991b1b', '--color-text-muted': '#dc2626', '--color-border': '#fecaca', } },
     magenta: { name: 'Magenta', preview: '#fce7f3', colors: { '--color-primary': '#cd5298', '--color-primary-hover': '#b14682', '--color-background': '#fdf2f8', '--color-surface': '#fce7f3', '--color-text-base': '#86198f', '--color-text-muted': '#c026d3', '--color-border': '#fbcfe8', } },
-    carbone: { name: 'Carbone', preview: '#1f2937', colors: { '--color-primary': '#cd5298', '--color-primary-hover': '#b14682', '--color-background': '#111827', '--color-surface': '#1f1e1e', '--color-text-base': '#e5e7eb', '--color-text-muted': '#9ca3af', '--color-border': '#374151', } }
+    carbone: { name: 'Carbone', preview: '#1f2937', colors: { '--color-primary': '#00d0ffff', '--color-primary-hover': '#b14682', '--color-background': '#111827', '--color-surface': '#1f1e1e', '--color-text-base': '#e5e7eb', '--color-text-muted': '#9ca3af', '--color-border': '#374151', } }
 };
 
 function applyTheme(themeName) {
@@ -63,7 +63,6 @@ const adminTabs = [
     { id: 'admin-live-view', name: 'Direct' },
     { id: 'admin-planning', name: 'Planification' },
     { id: 'admin-invoicing', name: 'Facturation' },
-    { id: 'admin-tarifs', name: 'Tarifs' },
     { id: 'admin-contracts', name: 'Contrats' },
     { id: 'admin-chantiers', name: 'Chantiers' },
     { id: 'admin-leave', name: 'Congés' },
