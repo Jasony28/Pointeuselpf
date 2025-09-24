@@ -3,7 +3,7 @@ importScripts('https://storage.googleapis.com/workbox-cdn/releases/6.5.4/workbox
 const { precaching, routing, strategies, core } = workbox;
 core.setCacheNameDetails({ prefix: 'pointeuse-lpf-cache' });
 
-const APP_VERSION = 'v3.1';
+const APP_VERSION = 'v3.1.1';
 
 precaching.precacheAndRoute([
     { url: './', revision: APP_VERSION },
