@@ -1,104 +1,45 @@
-// On importe la fonction qui nous permet de savoir si le mode confidentiel est actif
-import { isStealthMode, currentUser } from "../app.js";
+import { isStealthMode } from "../app.js";
 import { collection, query, where, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db } from "../app.js";
 
-// Les variables de cache restent les mêmes
 let chantiersCache = null;
 let teamMembersCache = null;
 let usersCache = null;
 
-/**
- * Récupère la liste des chantiers actifs.
- * Utilise un cache pour éviter les lectures répétées sur Firestore.
- * @param {boolean} forceRefresh - Si true, ignore le cache et recharge depuis Firestore.
- * @returns {Promise<Array>}
- */
 export async function getActiveChantiers(forceRefresh = false) {
     if (chantiersCache && !forceRefresh) {
         return chantiersCache;
     }
-    console.log("DataService: Chargement des chantiers depuis Firestore...");
     const q = query(collection(db, "chantiers"), where("status", "==", "active"), orderBy("name"));
     const snapshot = await getDocs(q);
     chantiersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     return chantiersCache;
 }
 
-/**
- * Récupère la liste de tous les membres d'équipe (utilisateurs approuvés + collègues).
- * La liste est filtrée en fonction du Stealth Mode.
- * @param {boolean} forceRefresh - Si true, ignore le cache.
- * @returns {Promise<Array>}
- */
 export async function getTeamMembers(forceRefresh = false) {
-    if (teamMembersCache && !forceRefresh) {
-        return teamMembersCache;
+    if (!teamMembersCache || forceRefresh) {
+        const users = await getUsers(forceRefresh);
+        teamMembersCache = users
+            // La ligne ci-dessous est celle qui a été modifiée
+            .filter(user => user.status === 'approved' && (user.role === 'user' || user.role === 'admin'))
+            .map(user => ({ id: user.id, name: user.displayName }));
     }
-    console.log("DataService: Chargement des membres d'équipe depuis Firestore...");
-    const colleaguesQuery = query(collection(db, "colleagues"), orderBy("name"));
-    
-    // --- MODIFIÉ : La requête pour les utilisateurs dépend du Stealth Mode ---
-let usersQuery;
-// NOUVELLE LOGIQUE : On vérifie si l'utilisateur est un admin
-if (currentUser && currentUser.role === 'admin') {
-    // Un admin voit TOUS les utilisateurs approuvés, même les invisibles
-    usersQuery = query(collection(db, "users"), where("status", "==", "approved"), orderBy("displayName"));
-} else {
-    // Un employé normal ne voit que les utilisateurs visibles
-    usersQuery = query(collection(db, "users"), 
-        where("status", "==", "approved"), 
-        where("visibility", "!=", "hidden"), 
-        orderBy("displayName")
-    );
-}
-
-    const [colleaguesSnapshot, usersSnapshot] = await Promise.all([
-        getDocs(colleaguesQuery),
-        getDocs(usersQuery)
-    ]);
-
-    const colleagueNames = colleaguesSnapshot.docs.map(doc => doc.data().name);
-    const userNames = usersSnapshot.docs.map(doc => doc.data().displayName);
-    
-    let combinedNames;
-
-    // --- MODIFIÉ : On n'ajoute les collègues externes que si on n'est PAS en mode confidentiel ---
-    if (isStealthMode()) {
-        combinedNames = [...new Set(userNames)].sort((a, b) => a.localeCompare(b));
-    } else {
-        combinedNames = [...new Set([...colleagueNames, ...userNames])].sort((a, b) => a.localeCompare(b));
-    }
-    
-    teamMembersCache = combinedNames;
     return teamMembersCache;
 }
-
-/**
- * Récupère la liste de tous les utilisateurs (pour la gestion admin).
- * La liste est filtrée en fonction du Stealth Mode.
- * @param {boolean} forceRefresh - Si true, ignore le cache.
- * @returns {Promise<Array>}
- */
 export async function getUsers(forceRefresh = false) {
     if (usersCache && !forceRefresh) {
-        // --- MODIFIÉ : On filtre aussi les données déjà en cache ---
         if (isStealthMode()) {
-            return usersCache; // En mode confidentiel, on retourne tout
+            return usersCache;
         }
-        // Sinon, on retourne uniquement les utilisateurs visibles
         return usersCache.filter(user => user.visibility !== 'hidden');
     }
 
-    console.log("DataService: Chargement des utilisateurs depuis Firestore...");
     const q = query(collection(db, "users"), orderBy("displayName"));
     const snapshot = await getDocs(q);
     usersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    // --- MODIFIÉ : On filtre les nouvelles données avant de les retourner ---
     if (isStealthMode()) {
-        return usersCache; // En mode confidentiel, on retourne tout
+        return usersCache;
     }
-    // Sinon, on retourne uniquement les utilisateurs visibles
     return usersCache.filter(user => user.visibility !== 'hidden');
 }

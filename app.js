@@ -1,24 +1,27 @@
-const APP_VERSION = 'v3.1.1';
+import { updatesLog } from './modules/updates-data.js';
+const APP_VERSION = 'v3.3.1';
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit, addDoc, initializeFirestore, CACHE_SIZE_UNLIMITED } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, serverTimestamp, updateDoc, deleteField, collection, query, where, getDocs, orderBy, limit, addDoc, initializeFirestore, CACHE_SIZE_UNLIMITED } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 
-const themes = {
-    neutre: { name: 'Neutre', preview: '#ffffff', colors: { '--color-primary': '#4b5563', '--color-primary-hover': '#374151', '--color-background': '#f3f4f6', '--color-surface': '#ffffff', '--color-text-base': '#1f2937', '--color-text-muted': '#6b7280', '--color-border': '#e5e7eb', } },
-    or: { name: 'Or', preview: '#fef9c3', colors: { '--color-primary': '#d0c338', '--color-primary-hover': '#a1921a', '--color-background': '#fefce8', '--color-surface': '#fef9c3', '--color-text-base': '#713f12', '--color-text-muted': '#a16207', '--color-border': '#fde68a', } },
-    emeraude: { name: 'Émeraude', preview: '#dcfce7', colors: { '--color-primary': '#1fbb56', '--color-primary-hover': '#1a9f49', '--color-background': '#f0fdf4', '--color-surface': '#dcfce7', '--color-text-base': '#14532d', '--color-text-muted': '#15803d', '--color-border': '#bbf7d0', } },
-    royal: { name: 'Royal', preview: '#dbeafe', colors: { '--color-primary': '#2262b5', '--color-primary-hover': '#1c5095', '--color-background': '#eff6ff', '--color-surface': '#dbeafe', '--color-text-base': '#1e3a8a', '--color-text-muted': '#2563eb', '--color-border': '#bfdbfe', } },
-    rubis: { name: 'Rubis', preview: '#fee2e2', colors: { '--color-primary': '#b43737', '--color-primary-hover': '#982e2e', '--color-background': '#fef2f2', '--color-surface': '#fee2e2', '--color-text-base': '#991b1b', '--color-text-muted': '#dc2626', '--color-border': '#fecaca', } },
-    magenta: { name: 'Magenta', preview: '#fce7f3', colors: { '--color-primary': '#cd5298', '--color-primary-hover': '#b14682', '--color-background': '#fdf2f8', '--color-surface': '#fce7f3', '--color-text-base': '#86198f', '--color-text-muted': '#c026d3', '--color-border': '#fbcfe8', } },
-    carbone: { name: 'Carbone', preview: '#1f2937', colors: { '--color-primary': '#00d0ffff', '--color-primary-hover': '#b14682', '--color-background': '#111827', '--color-surface': '#1f1e1e', '--color-text-base': '#e5e7eb', '--color-text-muted': '#9ca3af', '--color-border': '#374151', } }
+export const themes = {
+    neutre: { name: 'Neutre', preview: '#e2e8f0', colors: { '--color-primary': '#475569', '--color-primary-hover': '#334155', '--color-background': '#f1f5f9', '--color-surface': '#ffffff', '--color-text-base': '#0f172a', '--color-text-muted': '#475569', '--color-border': '#e2e8f0', } },
+    magenta: { name: 'Magenta', preview: '#f5d0fe', colors: { '--color-primary': '#d946ef', '--color-primary-hover': '#c026d3', '--color-background': '#fdf4ff', '--color-surface': '#fae8ff', '--color-text-base': '#581c87', '--color-text-muted': '#86198f', '--color-border': '#f5d0fe', } },
+    rubis: { name: 'Rubis', preview: '#fecaca', colors: { '--color-primary': '#ef4444', '--color-primary-hover': '#dc2626', '--color-background': '#fef2f2', '--color-surface': '#fee2e2', '--color-text-base': '#7f1d1d', '--color-text-muted': '#991b1b', '--color-border': '#fecaca', } },
+    carbone: { name: 'Carbone', preview: '#1f2937', colors: { '--color-primary': '#f59e0b', '--color-primary-hover': '#d97706', '--color-background': '#111827', '--color-surface': '#1f2937', '--color-text-base': '#f9fafb', '--color-text-muted': '#9ca3af', '--color-border': '#374151', } },
+    ocean: { name: 'Océan', preview: '#67e8f9', colors: { '--color-primary': '#06b6d4', '--color-primary-hover': '#0891b2', '--color-background': '#ecfeff', '--color-surface': '#cffafe', '--color-text-base': '#0e7490', '--color-text-muted': '#155e75', '--color-border': '#a5f3fc', } },
+    soleil: { name: 'Soleil', preview: '#fdba74', colors: { '--color-primary': '#f97316', '--color-primary-hover': '#ea580c', '--color-background': '#fff7ed', '--color-surface': '#ffedd5', '--color-text-base': '#7c2d12', '--color-text-muted': '#9a3412', '--color-border': '#fed7aa', } },
+    violette: { name: 'Violette', preview: '#c4b5fd', colors: { '--color-primary': '#8b5cf6', '--color-primary-hover': '#7c3aed', '--color-background': '#f5f3ff', '--color-surface': '#ede9fe', '--color-text-base': '#4c1d95', '--color-text-muted': '#6d28d9', '--color-border': '#ddd6fe', } },
+    limonade: { name: 'Limonade', preview: '#bef264', colors: { '--color-primary': '#84cc16', '--color-primary-hover': '#65a30d', '--color-background': '#f7fee7', '--color-surface': '#ecfccb', '--color-text-base': '#365314', '--color-text-muted': '#4d7c0f', '--color-border': '#d9f99d', } }
 };
 
-function applyTheme(themeName) {
+export function applyTheme(themeName) {
     const theme = themes[themeName] || themes['neutre'];
     for (const [key, value] of Object.entries(theme.colors)) {
         document.documentElement.style.setProperty(key, value);
     }
+    localStorage.setItem('appTheme', themeName);
 }
 applyTheme(localStorage.getItem('appTheme') || 'neutre');
 
@@ -63,7 +66,7 @@ const adminTabs = [
     { id: 'admin-live-view', name: 'Direct' },
     { id: 'admin-planning', name: 'Planification' },
     { id: 'admin-invoicing', name: 'Facturation' },
-    { id: 'admin-contracts', name: 'Contrats' },
+    { id: 'admin-contracts', name: 'Équipe' },
     { id: 'admin-chantiers', name: 'Chantiers' },
     { id: 'admin-leave', name: 'Congés' },
     { id: 'admin-travel-report', name: 'Rapports Trajets' },
@@ -219,6 +222,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             document.getElementById('currentUserDisplay').textContent = userData.displayName || user.email;
                             document.getElementById('app-version-display').textContent = APP_VERSION;
                             setupNavigation();
+
+                            await checkPersonalNotifications(userRef, userData);
+                            
+                            // MODIFIÉ : On passe les informations utilisateur à la fonction
+                            checkForUpdates(userData, userRef);
+
                             navigateTo('user-dashboard');
                             appContainer.style.display = 'block';
                             break;
@@ -303,6 +312,72 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+async function checkPersonalNotifications(userRef, userData) {
+    if (userData.pendingChanges && userData.pendingChanges.length > 0) {
+        const changesByDay = userData.pendingChanges.reduce((acc, change) => {
+            const date = new Date(change.date + 'T12:00:00Z').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+            if (!acc[date]) {
+                acc[date] = [];
+            }
+            const action = change.type === 'ajout' ? '✅ Ajouté à' :
+                           change.type === 'retrait' ? '❌ Retiré de' :
+                           '🗑️ Annulé';
+            acc[date].push(`${action} : ${change.chantier}`);
+            return acc;
+        }, {});
+
+        const textMessage = Object.entries(changesByDay)
+            .map(([day, actions]) => `${day}:\n${actions.join('\n')}`)
+            .join('\n\n');
+
+        showInfoModal("🔔 Changements dans votre planning", textMessage);
+
+        await updateDoc(userRef, {
+            pendingChanges: deleteField()
+        });
+    }
+}
+
+// MODIFIÉ : La fonction est entièrement remplacée
+function checkForUpdates(userData, userRef) {
+    // On lit la version depuis la base de données de l'utilisateur
+    const lastSeenVersion = userData.lastSeenAppVersion; 
+    const currentVersion = APP_VERSION;
+
+    if (lastSeenVersion !== currentVersion) {
+        // La logique pour trouver les mises à jour à afficher est un peu plus simple,
+        // on montre juste la dernière si l'utilisateur est nouveau.
+        const updatesToShow = lastSeenVersion ? updatesLog.filter(u => u.version > lastSeenVersion) : [updatesLog[0]];
+
+        if (updatesToShow && updatesToShow.length > 0) {
+            const updatesModal = document.getElementById('updatesModal');
+            const updatesContent = document.getElementById('updates-content');
+            const closeUpdatesBtn = document.getElementById('closeUpdatesBtn');
+
+            updatesContent.innerHTML = updatesToShow.map(update => `
+                <div>
+                    <h4 class="font-bold text-lg">${update.version} <span class="text-sm font-normal" style="color: var(--color-text-muted);">- ${update.date}</span></h4>
+                    <ul class="list-disc list-inside mt-2 space-y-1 pl-2">
+                        ${update.changes.map(change => `<li class="text-sm">${change.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')}</li>`).join('')}
+                    </ul>
+                </div>
+            `).join('<hr class="my-4" style="border-color: var(--color-border);">');
+            
+            updatesModal.classList.remove('hidden');
+
+            // Le bouton met à jour la base de données au lieu du localStorage
+            closeUpdatesBtn.onclick = async () => {
+                updatesModal.classList.add('hidden');
+                try {
+                    await updateDoc(userRef, { lastSeenAppVersion: currentVersion });
+                } catch (error) {
+                    console.error("Impossible de mettre à jour la version vue par l'utilisateur:", error);
+                }
+            };
+        }
+    }
+}
+
 export function showConfirmationModal(title, message) {
     return new Promise((resolve) => {
         modalTitle.textContent = title;
@@ -316,10 +391,12 @@ export function showConfirmationModal(title, message) {
 }
 
 export function showInfoModal(title, message) {
-    modalTitle.textContent = title;
+    const modalMessage = document.getElementById('modalMessage');
+    document.getElementById('modalTitle').textContent = title;
     modalMessage.textContent = message;
-    modalConfirmBtn.style.display = 'none';
-    modalCancelBtn.textContent = 'OK';
-    genericModal.classList.remove('hidden');
-    modalCancelBtn.onclick = () => { genericModal.classList.add('hidden'); };
+    modalMessage.style.whiteSpace = 'pre-wrap';
+    document.getElementById('modalConfirmBtn').style.display = 'none';
+    document.getElementById('modalCancelBtn').textContent = 'OK';
+    document.getElementById('genericModal').classList.remove('hidden');
+    document.getElementById('modalCancelBtn').onclick = () => { document.getElementById('genericModal').classList.add('hidden'); };
 }

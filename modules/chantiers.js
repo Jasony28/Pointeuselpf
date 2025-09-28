@@ -1,6 +1,5 @@
 import { doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, isAdmin, showInfoModal } from "../app.js";
-import { getGoogleMapsUrl } from "./utils.js";
 import { getActiveChantiers } from "./data-service.js";
 
 let chantiersCache = [];
@@ -14,9 +13,12 @@ export async function render() {
         
         <div id="detailsModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-20 p-4">
             <div class="p-6 rounded-lg shadow-xl w-full max-w-lg space-y-4 relative" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <button id="closeDetailsBtn" class="absolute top-2 right-3 text-2xl font-bold" style="color: var(--color-text-muted);">&times;</button>
+                <button id="closeDetailsBtn" class="absolute top-2 right-3 text-2xl font-bold" style="color: var(--color-text-muted);">×</button>
                 <h3 id="modalChantierName" class="text-2xl font-bold border-b pb-2" style="border-color: var(--color-border);"></h3>
-                <div><h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">ADRESSE</h4><a id="modalChantierAddress" href="#" target="_blank" rel="noopener noreferrer" class="hover:underline text-lg" style="color: var(--color-primary);"></a></div>
+                <div>
+                    <h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">ADRESSE</h4>
+                    <p id="modalChantierAddress" class="hover:underline text-lg cursor-pointer" style="color: var(--color-primary);"></p>
+                </div>
                 <div><h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">HEURES PRÉVUES</h4><p id="modalChantierHours" class="text-lg"></p></div>
                 <div><h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">CODES & ACCÈS</h4><div id="modalChantierKeybox" class="text-lg"></div></div>
                 <div><h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">INFOS SUPPLÉMENTAIRES</h4><p id="modalChantierInfo" class="text-lg" style="white-space: pre-wrap; overflow-wrap: break-word;"></p></div>
@@ -44,6 +46,17 @@ export async function render() {
                     <button type="submit" class="text-white px-4 py-2 rounded" style="background-color: var(--color-primary);">Enregistrer</button>
                 </div>
             </form>
+        </div>
+        
+        <div id="navigationModal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-40 p-4">
+            <div class="p-6 rounded-lg shadow-xl w-full max-w-xs text-center" style="background-color: var(--color-surface);">
+                <h3 class="text-xl font-bold mb-5">Ouvrir l'itinéraire</h3>
+                <div class="space-y-3">
+                    <a id="navGoogleMaps" href="#" target="_blank" rel="noopener noreferrer" class="block w-full text-white font-semibold py-3 px-4 rounded-lg" style="background-color: #4285F4;">Google Maps</a>
+                    <a id="navWaze" href="#" target="_blank" rel="noopener noreferrer" class="block w-full text-white font-semibold py-3 px-4 rounded-lg" style="background-color: #33CCFF;">Waze</a>
+                </div>
+                <button id="closeNavModalBtn" class="mt-6 w-full font-semibold py-2 px-4 rounded-lg" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Annuler</button>
+            </div>
         </div>
     `;
 
@@ -88,15 +101,16 @@ function showDetailsModal(chantierId) {
     if (!chantier) return;
 
     document.getElementById('modalChantierName').textContent = chantier.name;
-    const addressLink = document.getElementById('modalChantierAddress');
+    
+    const addressTrigger = document.getElementById('modalChantierAddress');
     if (chantier.address) {
-        addressLink.textContent = chantier.address;
-        addressLink.href = getGoogleMapsUrl(chantier.address);
-        addressLink.parentElement.style.display = 'block';
+        addressTrigger.textContent = chantier.address;
+        addressTrigger.onclick = () => showNavigationChoice(chantier.address);
+        addressTrigger.parentElement.style.display = 'block';
     } else {
-        addressLink.parentElement.style.display = 'none';
+        addressTrigger.parentElement.style.display = 'none';
     }
-
+    
     const hoursP = document.getElementById('modalChantierHours');
     if (chantier.totalHeuresPrevues && chantier.totalHeuresPrevues > 0) {
         hoursP.textContent = `${chantier.totalHeuresPrevues} heures`;
@@ -125,6 +139,17 @@ function showDetailsModal(chantierId) {
         if(editBtn) editBtn.onclick = () => showEditModal(chantier);
     }
     document.getElementById('detailsModal').classList.remove('hidden');
+}
+
+function showNavigationChoice(address) {
+    const encodedAddress = encodeURIComponent(address);
+    const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodedAddress}`;
+    const wazeUrl = `https://waze.com/ul?q=${encodedAddress}&navigate=yes`;
+
+    document.getElementById('navGoogleMaps').href = mapsUrl;
+    document.getElementById('navWaze').href = wazeUrl;
+
+    document.getElementById('navigationModal').classList.remove('hidden');
 }
 
 function showEditModal(chantier) {
@@ -174,6 +199,13 @@ function setupKeyCodeHandlers(inputId, addButtonId, listId) {
 function setupEventListeners() {
     const closeBtn = document.getElementById('closeDetailsBtn');
     if(closeBtn) closeBtn.onclick = () => document.getElementById('detailsModal').classList.add('hidden');
+    
+    const navModal = document.getElementById('navigationModal');
+    const closeNavModalBtn = document.getElementById('closeNavModalBtn');
+    if(navModal && closeNavModalBtn) {
+        closeNavModalBtn.onclick = () => navModal.classList.add('hidden');
+        navModal.querySelectorAll('a').forEach(a => a.addEventListener('click', () => navModal.classList.add('hidden')));
+    }
     
     if (isAdmin) {
         const cancelEditBtn = document.getElementById('cancelEditBtn');
