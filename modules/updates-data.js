@@ -1,5 +1,13 @@
 export const updatesLog = [
     {
+        version: 'v3.3.2',
+        date: '28 septembre 2025',
+        changes: [
+            "### Pour l'Administrateur",
+            "✨ **Sélection d'équipe persistante** : Dans la planification, vous pouvez maintenant sélectionner une équipe et l'assigner à plusieurs chantiers sans devoir la resélectionner à chaque fois. Un bouton 'Tout vider' a été ajouté pour quitter ce mode.",
+        ]
+    },
+    {
         version: 'v3.3.1',
         date: '28 septembre 2025',
         changes: [
