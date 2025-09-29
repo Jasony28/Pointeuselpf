@@ -1,4 +1,4 @@
-import { collection, query, where, orderBy, getDocs, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { collection, query, where, orderBy, getDocs, doc, deleteDoc, limit } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, showConfirmationModal, navigateTo } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 import { getUsers } from "./data-service.js";
@@ -68,11 +68,25 @@ export async function render() {
             </div>
         </div>
     `;
+    // MODIFICATION CI-DESSOUS POUR UN CHARGEMENT EN DEUX TEMPS
     setTimeout(() => {
+        // --- CHARGEMENT PRIORITAIRE (rapide) ---
         loadGlobalStats();
-        setupEventListeners();
-        loadDetailedStats();
         loadRecentActivity();
+        setupEventListeners();
+
+        // On affiche un message de chargement pour les stats détaillées
+        const loadingMessage = `<p class="text-center p-4" style="color: var(--color-text-muted);">Chargement...</p>`;
+        document.getElementById('user-stats-list').innerHTML = loadingMessage;
+        document.getElementById('chantier-stats-list').innerHTML = loadingMessage;
+
+        // --- CHARGEMENT DIFFÉRÉ (plus lent) ---
+        // On attend un court instant avant de lancer les requêtes plus lourdes
+        setTimeout(() => {
+            loadUserStats();
+            loadChantierStats();
+        }, 200); // Un délai de 200ms est imperceptible mais efficace
+
     }, 0);
 }
 
@@ -81,20 +95,20 @@ function setupEventListeners() {
         btn.onclick = () => {
             userStatsFilter.period = btn.dataset.period;
             userStatsFilter.offset = 0;
-            loadDetailedStats();
+            loadUserStats();
         };
     });
     document.querySelectorAll('.chantier-stats-filter-btn').forEach(btn => {
         btn.onclick = () => {
             chantierStatsFilter.period = btn.dataset.period;
             chantierStatsFilter.offset = 0;
-            loadDetailedStats();
+            loadChantierStats();
         };
     });
-    document.getElementById('user-stats-prev-btn').onclick = () => { userStatsFilter.offset--; loadDetailedStats(); };
-    document.getElementById('user-stats-next-btn').onclick = () => { userStatsFilter.offset++; loadDetailedStats(); };
-    document.getElementById('chantier-stats-prev-btn').onclick = () => { chantierStatsFilter.offset--; loadDetailedStats(); };
-    document.getElementById('chantier-stats-next-btn').onclick = () => { chantierStatsFilter.offset++; loadDetailedStats(); };
+    document.getElementById('user-stats-prev-btn').onclick = () => { userStatsFilter.offset--; loadUserStats(); };
+    document.getElementById('user-stats-next-btn').onclick = () => { userStatsFilter.offset++; loadUserStats(); };
+    document.getElementById('chantier-stats-prev-btn').onclick = () => { chantierStatsFilter.offset--; loadChantierStats(); };
+    document.getElementById('chantier-stats-next-btn').onclick = () => { chantierStatsFilter.offset++; loadChantierStats(); };
 }
 
 async function loadGlobalStats() {
@@ -159,36 +173,29 @@ function getPeriodInfo(filter) {
     return { startDate, endDate, displayText, period: filter.period };
 }
 
-async function loadDetailedStats() {
+async function loadUserStats() {
     const userInfo = getPeriodInfo(userStatsFilter);
-    const chantierInfo = getPeriodInfo(chantierStatsFilter);
-    const earliestStartDate = userInfo.startDate < chantierInfo.startDate ? userInfo.startDate : chantierInfo.startDate;
-
     updateFilterUI('user', userStatsFilter, userInfo.displayText);
-    updateFilterUI('chantier', chantierStatsFilter, chantierInfo.displayText);
 
     try {
-        const q = query(collection(db, "pointages"), where("timestamp", ">=", earliestStartDate.toISOString()));
+        const q = query(
+            collection(db, "pointages"),
+            where("timestamp", ">=", userInfo.startDate.toISOString()),
+            where("timestamp", "<=", userInfo.endDate.toISOString())
+        );
         const querySnapshot = await getDocs(q);
         
         const users = await getUsers();
         const userStats = {};
-        const chantierStats = {};
 
         querySnapshot.forEach(doc => {
             const data = doc.data();
-            const docDate = new Date(data.timestamp);
             if (data.endTime) {
-                const durationMs = (new Date(data.endTime) - docDate) - (data.pauseDurationMs || 0);
-                if (docDate >= userInfo.startDate && docDate <= userInfo.endDate) {
-                    if (!userStats[data.uid]) {
-                        userStats[data.uid] = { name: data.userName, totalMs: 0 };
-                    }
-                    userStats[data.uid].totalMs += durationMs;
+                const durationMs = (new Date(data.endTime) - new Date(data.timestamp)) - (data.pauseDurationMs || 0);
+                if (!userStats[data.uid]) {
+                    userStats[data.uid] = { name: data.userName, totalMs: 0 };
                 }
-                if (docDate >= chantierInfo.startDate && docDate <= chantierInfo.endDate) {
-                    chantierStats[data.chantier] = (chantierStats[data.chantier] || 0) + durationMs;
-                }
+                userStats[data.uid].totalMs += durationMs;
             }
         });
 
@@ -196,26 +203,47 @@ async function loadDetailedStats() {
             const user = users.find(u => u.uid === uid);
             if (user && user.contractHours === 12) {
                 let contractLimitMs = 0;
-                if (userInfo.period === 'week') {
-                    contractLimitMs = 12 * 3600000;
-                } else if (userInfo.period === 'month') {
-                    contractLimitMs = 48 * 3600000;
-                } else if (userInfo.period === 'year') {
-                    contractLimitMs = 12 * 52 * 3600000;
-                }
+                if (userInfo.period === 'week') contractLimitMs = 12 * 3600000;
+                else if (userInfo.period === 'month') contractLimitMs = 48 * 3600000;
+                else if (userInfo.period === 'year') contractLimitMs = 12 * 52 * 3600000;
                 
-                if (contractLimitMs > 0) {
-                    userStats[uid].totalMs = Math.min(userStats[uid].totalMs, contractLimitMs);
-                }
+                if (contractLimitMs > 0) userStats[uid].totalMs = Math.min(userStats[uid].totalMs, contractLimitMs);
             }
         }
 
         displayStats(userStats, document.getElementById('user-stats-list'), "Aucun pointage pour cette période.");
-        displayStats(chantierStats, document.getElementById('chantier-stats-list'), "Aucun chantier pointé pour cette période.", true);
     } catch (error) {
-        console.error("Erreur de chargement des statistiques détaillées:", error);
+        console.error("Erreur de chargement des statistiques par employé:", error);
     }
 }
+
+async function loadChantierStats() {
+    const chantierInfo = getPeriodInfo(chantierStatsFilter);
+    updateFilterUI('chantier', chantierStatsFilter, chantierInfo.displayText);
+
+    try {
+        const q = query(
+            collection(db, "pointages"),
+            where("timestamp", ">=", chantierInfo.startDate.toISOString()),
+            where("timestamp", "<=", chantierInfo.endDate.toISOString())
+        );
+        const querySnapshot = await getDocs(q);
+        
+        const chantierStats = {};
+        querySnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.endTime) {
+                const durationMs = (new Date(data.endTime) - new Date(data.timestamp)) - (data.pauseDurationMs || 0);
+                chantierStats[data.chantier] = (chantierStats[data.chantier] || 0) + durationMs;
+            }
+        });
+
+        displayStats(chantierStats, document.getElementById('chantier-stats-list'), "Aucun chantier pointé pour cette période.", true);
+    } catch (error) {
+        console.error("Erreur de chargement des statistiques par chantier:", error);
+    }
+}
+
 
 function updateFilterUI(type, filter, displayText) {
     document.getElementById(`${type}-stats-period-display`).textContent = displayText;

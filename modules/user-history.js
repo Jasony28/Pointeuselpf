@@ -63,8 +63,9 @@ export async function render(params = {}) {
             </div>
             <div id="historyList" class="space-y-4"></div>
         </div>
-        <div id="entryModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-30 p-4">
-            <div class="p-6 rounded-lg shadow-xl w-full max-w-lg" style="background-color: var(--color-surface);">
+        
+        <div id="entryModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-start overflow-y-auto z-30 p-4">
+            <div class="p-6 rounded-lg shadow-xl w-full max-w-lg my-8" style="background-color: var(--color-surface);">
                 <div class="flex justify-between items-center mb-4">
                     <h3 id="modalTitle" class="text-xl font-bold"></h3>
                     <p id="modalStepIndicator" class="text-sm font-semibold" style="color: var(--color-text-muted);"></p>

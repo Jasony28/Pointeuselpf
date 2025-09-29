@@ -1,8 +1,9 @@
 // DANS : modules/settings.js
 
-import { pageContent, currentUser, showInfoModal, db, themes, applyTheme } from "../app.js";
+import { pageContent, currentUser, showInfoModal, db, themes, applyTheme, showUpdatesModal } from "../app.js";
 import { getAuth, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { updatesLog } from "./updates-data.js";
 
 const auth = getAuth();
 
@@ -39,6 +40,16 @@ export async function render() {
             </div>
             
             <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="text-xl font-semibold mb-4 border-b pb-2" style="color: var(--color-text-base); border-color: var(--color-border);">À propos de l'application</h3>
+                <div class="flex justify-between items-center">
+                    <p class="text-sm" style="color: var(--color-text-muted);">Consultez les dernières améliorations et corrections.</p>
+                    <button id="showUpdatesBtn" class="font-bold px-6 py-2 rounded transition-colors" style="background-color: var(--color-background); border: 1px solid var(--color-primary); color: var(--color-primary);">
+                        Voir les nouveautés
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                  <div class="text-center">
                     <button id="logoutBtnSettings" class="bg-red-600 hover:bg-red-700 text-white font-bold px-8 py-3 rounded-lg">
                         Se déconnecter
@@ -73,6 +84,11 @@ function setupEventListeners() {
             updateThemeSelectionUI(selectedThemeKey);
         });
     });
+
+    // ÉCOUTEUR POUR LE NOUVEAU BOUTON
+    document.getElementById('showUpdatesBtn').onclick = () => {
+        showUpdatesModal(updatesLog); // Affiche toutes les mises à jour
+    };
 
     document.getElementById('logoutBtnSettings').onclick = () => signOut(auth);
 }

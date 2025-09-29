@@ -1,5 +1,5 @@
 import { updatesLog } from './modules/updates-data.js';
-const APP_VERSION = 'v3.3.2';
+const APP_VERSION ='v3.4.1';
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
@@ -66,7 +66,7 @@ const adminTabs = [
     { id: 'admin-live-view', name: 'Direct' },
     { id: 'admin-planning', name: 'Planification' },
     { id: 'admin-invoicing', name: 'Facturation' },
-    { id: 'admin-contracts', name: 'Équipe' },
+    { id: 'admin-contracts', name: 'Cartes' },
     { id: 'admin-chantiers', name: 'Chantiers' },
     { id: 'admin-leave', name: 'Congés' },
     { id: 'admin-travel-report', name: 'Rapports Trajets' },
@@ -225,7 +225,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                             await checkPersonalNotifications(userRef, userData);
                             
-                            // MODIFIÉ : On passe les informations utilisateur à la fonction
                             checkForUpdates(userData, userRef);
 
                             navigateTo('user-dashboard');
@@ -338,45 +337,66 @@ async function checkPersonalNotifications(userRef, userData) {
     }
 }
 
-// MODIFIÉ : La fonction est entièrement remplacée
+/**
+ * Affiche la fenêtre modale avec une liste de mises à jour.
+ * @param {Array} updatesToShow - Le tableau des mises à jour à afficher.
+ * @param {Function|null} [callbackOnClose=null] - Une fonction à exécuter lors de la fermeture de la modale.
+ */
+export function showUpdatesModal(updatesToShow, callbackOnClose = null) {
+    const updatesModal = document.getElementById('updatesModal');
+    const updatesContent = document.getElementById('updates-content');
+    const closeUpdatesBtn = document.getElementById('closeUpdatesBtn');
+
+    if (!updatesModal || !updatesContent || !closeUpdatesBtn) {
+        console.error("Éléments de la modale de mise à jour non trouvés.");
+        return;
+    }
+
+    if (!updatesToShow || updatesToShow.length === 0) {
+        return;
+    }
+
+    updatesContent.innerHTML = updatesToShow.map(update => `
+        <div>
+            <h4 class="font-bold text-lg">${update.version} <span class="text-sm font-normal" style="color: var(--color-text-muted);">- ${update.date}</span></h4>
+            <ul class="list-disc list-inside mt-2 space-y-1 pl-2">
+                ${update.changes.map(change => `<li class="text-sm">${change.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')}</li>`).join('')}
+            </ul>
+        </div>
+    `).join('<hr class="my-4" style="border-color: var(--color-border);">');
+    
+    updatesModal.classList.remove('hidden');
+
+    closeUpdatesBtn.onclick = () => {
+        updatesModal.classList.add('hidden');
+        if (callbackOnClose) {
+            callbackOnClose();
+        }
+    };
+}
+
 function checkForUpdates(userData, userRef) {
-    // On lit la version depuis la base de données de l'utilisateur
     const lastSeenVersion = userData.lastSeenAppVersion; 
     const currentVersion = APP_VERSION;
 
     if (lastSeenVersion !== currentVersion) {
-        // La logique pour trouver les mises à jour à afficher est un peu plus simple,
-        // on montre juste la dernière si l'utilisateur est nouveau.
-        const updatesToShow = lastSeenVersion ? updatesLog.filter(u => u.version > lastSeenVersion) : [updatesLog[0]];
+        const updatesToShow = lastSeenVersion 
+            ? updatesLog.filter(u => u.version > lastSeenVersion) 
+            : [updatesLog[0]]; // Montre la dernière nouveauté si c'est la 1ère visite
 
-        if (updatesToShow && updatesToShow.length > 0) {
-            const updatesModal = document.getElementById('updatesModal');
-            const updatesContent = document.getElementById('updates-content');
-            const closeUpdatesBtn = document.getElementById('closeUpdatesBtn');
-
-            updatesContent.innerHTML = updatesToShow.map(update => `
-                <div>
-                    <h4 class="font-bold text-lg">${update.version} <span class="text-sm font-normal" style="color: var(--color-text-muted);">- ${update.date}</span></h4>
-                    <ul class="list-disc list-inside mt-2 space-y-1 pl-2">
-                        ${update.changes.map(change => `<li class="text-sm">${change.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')}</li>`).join('')}
-                    </ul>
-                </div>
-            `).join('<hr class="my-4" style="border-color: var(--color-border);">');
-            
-            updatesModal.classList.remove('hidden');
-
-            // Le bouton met à jour la base de données au lieu du localStorage
-            closeUpdatesBtn.onclick = async () => {
-                updatesModal.classList.add('hidden');
+        if (updatesToShow.length > 0) {
+            const markVersionAsSeen = async () => {
                 try {
                     await updateDoc(userRef, { lastSeenAppVersion: currentVersion });
                 } catch (error) {
                     console.error("Impossible de mettre à jour la version vue par l'utilisateur:", error);
                 }
             };
+            showUpdatesModal(updatesToShow, markVersionAsSeen);
         }
     }
 }
+
 
 export function showConfirmationModal(title, message) {
     return new Promise((resolve) => {

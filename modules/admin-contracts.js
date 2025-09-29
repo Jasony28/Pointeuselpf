@@ -62,12 +62,11 @@ async function displayUserCards() {
 // Affiche la carte en mode "consultation"
 function renderCardView(cardElement, user) {
     const address = user.address || '';
-    const googleMapsUrl = `https://www.google.com/maps?q=${encodeURIComponent(address)}`;
+    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
     const gsm = user.gsm || '';
 
     let gsmHtml;
     if (gsm) {
-        // La ligne GSM est maintenant un conteneur cliquable
         gsmHtml = `
             <div id="gsm-container-${user.id}" class="gsm-trigger rounded-md -mx-2 px-2 py-1 transition-colors cursor-pointer">
                 <strong>📞 GSM :</strong> ${gsm}
@@ -82,6 +81,7 @@ function renderCardView(cardElement, user) {
             ${gsmHtml}
             <p><strong>🏠 Adresse :</strong> ${address ? `<a href="${googleMapsUrl}" target="_blank" class="hover:underline" style="color: var(--color-primary);">${address}</a>` : '<span style="color: var(--color-text-muted);">Non définie</span>'}</p>
             <p><strong>💳 Registre Nat. :</strong> ${user.nationalRegistryNumber || '<span style="color: var(--color-text-muted);">Non défini</span>'}</p>
+            <p><strong>🏦 IBAN :</strong> ${user.iban || '<span style="color: var(--color-text-muted);">Non défini</span>'}</p>
             <p><strong>🕒 Contrat :</strong> ${user.contractHours || 0} heures/semaine</p>
         </div>
         <div class="mt-6">
@@ -95,11 +95,9 @@ function renderCardView(cardElement, user) {
         </style>
     `;
 
-    // Ajout de l'écouteur de clic pour le conteneur GSM
     const gsmContainer = cardElement.querySelector(`#gsm-container-${user.id}`);
     if (gsmContainer) {
         gsmContainer.addEventListener('click', () => {
-            // Remplace le texte par les boutons d'action
             gsmContainer.classList.remove('gsm-trigger', 'cursor-pointer');
             gsmContainer.innerHTML = `
                 <div class="flex items-center justify-between">
@@ -111,12 +109,11 @@ function renderCardView(cardElement, user) {
                     </div>
                 </div>
             `;
-            // Ajoute un écouteur pour le nouveau bouton "Annuler"
             gsmContainer.querySelector('.gsm-cancel-btn').addEventListener('click', (e) => {
-                e.stopPropagation(); // Empêche le clic de se propager au conteneur
-                renderCardView(cardElement, user); // Réinitialise la vue de la carte
+                e.stopPropagation(); 
+                renderCardView(cardElement, user);
             });
-        }, { once: true }); // L'écouteur ne s'exécute qu'une fois pour éviter les bugs
+        }, { once: true });
     }
 
     cardElement.querySelector('.edit-btn').addEventListener('click', () => {
@@ -145,6 +142,10 @@ function renderCardEdit(cardElement, user) {
                 <label class="block text-xs font-medium mb-1">N° Registre National</label>
                 <input id="nationalRegistryNumber-${user.id}" type="text" value="${user.nationalRegistryNumber || ''}" class="input-field">
             </div>
+             <div>
+                <label class="block text-xs font-medium mb-1">N° de compte (IBAN)</label>
+                <input id="iban-${user.id}" type="text" value="${user.iban || ''}" class="input-field" placeholder="BE00 0000 0000 0000">
+            </div> // AJOUTÉ : Champ d'édition pour l'IBAN
             <div>
                 <label class="block text-xs font-medium mb-1">Heures/semaine</label>
                 <input id="contractHours-${user.id}" type="number" value="${user.contractHours || 0}" class="input-field">
@@ -171,6 +172,7 @@ function renderCardEdit(cardElement, user) {
             gsm: document.getElementById(`gsm-${user.id}`).value,
             address: document.getElementById(`address-${user.id}`).value,
             nationalRegistryNumber: document.getElementById(`nationalRegistryNumber-${user.id}`).value,
+            iban: document.getElementById(`iban-${user.id}`).value, // AJOUTÉ : Récupération de l'IBAN pour la sauvegarde
             contractHours: Number(document.getElementById(`contractHours-${user.id}`).value)
         };
 

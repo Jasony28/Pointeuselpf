@@ -1,136 +1,133 @@
-import { collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { collection, query, where, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, navigateTo } from "../app.js";
-// CORRECTION: Import des fonctions utilitaires centralisées.
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 
-let currentChantierName = null;
-let currentFilter = 'month'; // Filtre par défaut au chargement
+let chantierName = '';
+let currentFilter = 'week';
+let allPointages = [];
 
-/**
- * Affiche la page de détails pour un chantier spécifique.
- */
 export async function render(params = {}) {
     if (!params.chantierName) {
-        pageContent.innerHTML = `<p class="text-red-500 text-center">Erreur: Nom du chantier non spécifié.</p>`;
+        navigateTo('admin-dashboard');
         return;
     }
-    currentChantierName = params.chantierName;
+    chantierName = params.chantierName;
 
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto">
-            <button id="back-to-dashboard" class="text-blue-600 hover:underline mb-4">&larr; Retour au tableau de bord</button>
-            <h2 class="text-2xl font-bold mb-4">Détails pour le chantier : <span class="text-purple-700">${currentChantierName}</span></h2>
-            
-            <div class="bg-white p-4 rounded-lg shadow-sm mb-4">
-                <div class="flex items-center justify-center gap-2" id="filter-buttons">
-                    <button data-filter="week" class="px-4 py-2 text-sm font-medium rounded-md">Cette Semaine</button>
-                    <button data-filter="month" class="px-4 py-2 text-sm font-medium rounded-md">Ce Mois</button>
-                    <button data-filter="year" class="px-4 py-2 text-sm font-medium rounded-md">Cette Année</button>
+            <div class="mb-6">
+                <a href="#" id="back-to-dashboard" class="text-sm hover:underline" style="color: var(--color-primary);">&larr; Retour au tableau de bord</a>
+                <h2 class="text-3xl font-bold mt-2">Détails pour le chantier : <span style="color: var(--color-primary);">${chantierName}</span></h2>
+            </div>
+
+            <div class="flex justify-center mb-6">
+                <div class="flex items-center gap-1 p-1 rounded-lg" style="background-color: var(--color-surface);">
+                    <button data-period="week" class="period-filter-btn px-4 py-2 rounded-md text-sm font-semibold">Cette Semaine</button>
+                    <button data-period="month" class="period-filter-btn px-4 py-2 rounded-md text-sm font-semibold">Ce Mois</button>
+                    <button data-period="year" class="period-filter-btn px-4 py-2 rounded-md text-sm font-semibold">Cette Année</button>
                 </div>
             </div>
 
-            <div class="bg-white p-6 rounded-lg shadow-sm">
-                <div id="total-hours-display" class="text-center mb-4"></div>
-                <div id="details-list" class="space-y-3">
-                    <p class="text-center text-gray-500">Chargement des détails...</p>
-                </div>
+            <div id="results-card" class="p-6 rounded-lg shadow-sm animate-pulse" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                 <div class="h-8 w-1/2 mx-auto rounded" style="background-color: var(--color-background);"></div>
+                 <div class="mt-8 space-y-4">
+                    <div class="h-6 w-full rounded" style="background-color: var(--color-background);"></div>
+                    <div class="h-6 w-full rounded" style="background-color: var(--color-background);"></div>
+                 </div>
             </div>
         </div>
     `;
-setTimeout(() => {
-    document.getElementById('back-to-dashboard').onclick = () => navigateTo('admin-dashboard');
-    document.getElementById('filter-buttons').addEventListener('click', (e) => {
-        if (e.target.tagName === 'BUTTON') {
-            currentFilter = e.target.dataset.filter;
-            loadChantierDetails();
-        }
+
+    document.getElementById('back-to-dashboard').onclick = (e) => {
+        e.preventDefault();
+        navigateTo('admin-dashboard');
+    };
+
+    document.querySelectorAll('.period-filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            currentFilter = btn.dataset.period;
+            updateFilterButtons();
+            displayResults();
+        });
     });
 
-    loadChantierDetails();
-     }, 0);
+    await fetchData();
+    updateFilterButtons();
+    displayResults();
 }
 
-/**
- * Charge et affiche les heures pointées sur le chantier pour la période sélectionnée.
- */
-async function loadChantierDetails() {
-    const listContainer = document.getElementById('details-list');
-    const totalContainer = document.getElementById('total-hours-display');
-    const filterButtons = document.getElementById('filter-buttons');
-    listContainer.innerHTML = `<p class="text-center text-gray-500">Chargement des détails...</p>`;
-    totalContainer.innerHTML = '';
+async function fetchData() {
+    const q = query(collection(db, "pointages"), where("chantier", "==", chantierName), orderBy("timestamp", "desc"));
+    const querySnapshot = await getDocs(q);
+    allPointages = querySnapshot.docs.map(doc => doc.data());
+}
 
-    // Met à jour le style du bouton de filtre actif
-    filterButtons.querySelectorAll('button').forEach(btn => {
-        btn.classList.toggle('bg-purple-600', btn.dataset.filter === currentFilter);
-        btn.classList.toggle('text-white', btn.dataset.filter === currentFilter);
-        btn.classList.toggle('bg-gray-200', btn.dataset.filter !== currentFilter);
+function updateFilterButtons() {
+    document.querySelectorAll('.period-filter-btn').forEach(btn => {
+        if (btn.dataset.period === currentFilter) {
+            btn.style.backgroundColor = 'var(--color-primary)';
+            btn.style.color = 'white';
+            btn.classList.add('shadow-md');
+        } else {
+            btn.style.backgroundColor = 'transparent';
+            btn.style.color = 'var(--color-text-base)';
+            btn.classList.remove('shadow-md');
+        }
     });
+}
 
+function displayResults() {
     const now = new Date();
     let startDate;
-    let periodText = "";
 
-    // CORRECTION: Utilisation de méthodes UTC fiables pour définir la plage de dates.
-    switch (currentFilter) {
-        case 'week':
-            startDate = getWeekDateRange(0).startOfWeek;
-            periodText = "cette semaine";
-            break;
-        case 'year':
-            startDate = new Date(Date.UTC(now.getFullYear(), 0, 1));
-            periodText = "cette année";
-            break;
-        case 'month':
-        default:
-            startDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
-            periodText = "ce mois-ci";
-            break;
+    if (currentFilter === 'week') {
+        startDate = getWeekDateRange(0).startOfWeek;
+    } else if (currentFilter === 'month') {
+        startDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
+    } else { // year
+        startDate = new Date(Date.UTC(now.getFullYear(), 0, 1));
     }
 
-    try {
-        const q = query(
-            collection(db, "pointages"),
-            where("chantier", "==", currentChantierName),
-            where("timestamp", ">=", startDate.toISOString())
-        );
+    const filteredPointages = allPointages.filter(p => new Date(p.timestamp) >= startDate);
+    
+    const userHours = {};
+    let totalMs = 0;
 
-        const querySnapshot = await getDocs(q);
-        const userHours = {};
-        let totalMs = 0;
-
-        querySnapshot.forEach(doc => {
-            const data = doc.data();
-            if (data.endTime) {
-                const durationMs = new Date(data.endTime) - new Date(data.timestamp);
-                userHours[data.userName] = (userHours[data.userName] || 0) + durationMs;
-                totalMs += durationMs;
+    filteredPointages.forEach(p => {
+        if (p.endTime) {
+            const durationMs = (new Date(p.endTime) - new Date(p.timestamp)) - (p.pauseDurationMs || 0);
+            if (!userHours[p.userName]) {
+                userHours[p.userName] = { totalMs: 0 };
             }
-        });
-
-        totalContainer.innerHTML = `<h3 class="text-xl font-bold">Total ${periodText} : <span class="text-purple-700">${formatMilliseconds(totalMs)}</span></h3>`;
-
-        listContainer.innerHTML = "";
-        const sortedUsers = Object.entries(userHours).sort(([, a], [, b]) => b - a);
-
-        if (sortedUsers.length === 0) {
-            listContainer.innerHTML = `<p class="text-center text-gray-500">Aucun pointage pour ce chantier sur la période sélectionnée.</p>`;
-            return;
+            userHours[p.userName].totalMs += durationMs;
+            totalMs += durationMs;
         }
+    });
 
-        sortedUsers.forEach(([name, ms]) => {
-            const div = document.createElement('div');
-            div.className = 'flex justify-between items-center text-sm p-2 border-b';
-            div.innerHTML = `
-                <span class="font-medium">${name}</span>
-                <span class="font-bold">${formatMilliseconds(ms)}</span>
-            `;
-            listContainer.appendChild(div);
-        });
-    } catch (error) {
-        console.error("Erreur de chargement des détails du chantier:", error);
-        listContainer.innerHTML = `<p class="text-center text-red-500">Erreur de chargement.</p>`;
+    const sortedUsers = Object.entries(userHours).sort(([, a], [, b]) => b.totalMs - a.totalMs);
+
+    const resultsCard = document.getElementById('results-card');
+    resultsCard.classList.remove('animate-pulse');
+
+    let userListHtml = '';
+    if (sortedUsers.length > 0) {
+        userListHtml = sortedUsers.map(([userName, data]) => `
+            <div class="flex justify-between items-center py-3" style="border-bottom: 1px solid var(--color-border);">
+                <span class="font-medium" style="color: var(--color-text-base);">${userName}</span>
+                <span class="font-bold" style="color: var(--color-text-base);">${formatMilliseconds(data.totalMs)}</span>
+            </div>
+        `).join('');
+    } else {
+        userListHtml = `<p class="text-center py-8" style="color: var(--color-text-muted);">Aucun pointage pour cette période.</p>`;
     }
-}
 
-// CORRECTION: La fonction locale a été supprimée car elle est maintenant importée depuis utils.js
+    resultsCard.innerHTML = `
+        <div class="text-center">
+            <h4 class="font-medium" style="color: var(--color-text-muted);">Total ${currentFilter === 'week' ? 'cette semaine' : (currentFilter === 'month' ? 'ce mois' : 'cette année')}</h4>
+            <p class="text-4xl font-bold mt-1" style="color: var(--color-primary);">${formatMilliseconds(totalMs)}</p>
+        </div>
+        <div class="mt-6">
+            ${userListHtml}
+        </div>
+    `;
+}
