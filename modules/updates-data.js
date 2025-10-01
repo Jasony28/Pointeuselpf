@@ -1,5 +1,14 @@
 export const updatesLog = [
     {
+        version: 'v3.4.2',
+        date: '1 octobre 2025',
+        changes: [
+            "### Améliorations Générales",
+            "✨ **Vue Calendrier dans l'Historique** : Un nouveau bouton permet de basculer entre la liste et une vue calendrier mensuel. Les journées sont colorées en fonction des heures prestées pour une vision globale et rapide de l'activité.",
+            "🔍 **Filtres Avancés dans l'Historique** : Filtrez les pointages par plage de dates personnalisée et/ou par chantier. Il est désormais possible de rechercher toutes les prestations d'un chantier spécifique sur l'ensemble de l'historique, sans limite de date."
+        ]
+    },
+    {
         version: 'v3.4.1',
         date: '29 septembre 2025',
         changes: [

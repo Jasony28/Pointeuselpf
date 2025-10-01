@@ -1,10 +1,10 @@
-import { collection, query, getDocs, addDoc, serverTimestamp, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, currentUser, pageContent, showInfoModal } from "../app.js";
+import { collection, query, getDocs, addDoc, serverTimestamp, orderBy, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { db, currentUser, pageContent, showInfoModal, showConfirmationModal } from "../app.js";
 import { getWeekDateRange } from "./utils.js";
 
-// MODIFIÉ : On revient à un offset de semaine
 let currentWeekOffset = 0;
 let leaveRequestsCache = [];
+const CUSTOM_REASON_MAX_LENGTH = 100;
 
 export async function render() {
     pageContent.innerHTML = `
@@ -23,9 +23,13 @@ export async function render() {
                             <input type="date" id="leave-start-date" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);" required>
                         </div>
                         <div>
-                            <label for="leave-end-date" class="text-sm font-medium">Date de fin (optionnel)</label>
+                            <label for="leave-end-date" class="text-sm font-medium">Date de fin</label>
                             <input type="date" id="leave-end-date" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);">
                         </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="single-day-leave" class="h-4 w-4 rounded">
+                        <label for="single-day-leave" class="text-sm">Absence d'une seule journée</label>
                     </div>
                     <div>
                         <label for="leave-reason" class="text-sm font-medium">Raison</label>
@@ -33,16 +37,23 @@ export async function render() {
                             <option value="Vacances">Vacances</option>
                             <option value="Médical">Médical</option>
                             <option value="Familial">Familial</option>
-                            <option value="Autre">Autre</option>
+                            <option value="Autre">Autre (préciser)</option>
                         </select>
                     </div>
-                    <div id="medical-times-container" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div id="custom-reason-container" class="hidden">
+                        <label for="leave-reason-custom" class="text-sm font-medium">Précisez la raison</label>
+                        <textarea id="leave-reason-custom" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);" rows="2"></textarea>
+                        <div class="text-right text-sm" style="color: var(--color-text-muted);">
+                           <span id="char-counter">0</span> / ${CUSTOM_REASON_MAX_LENGTH}
+                        </div>
+                    </div>
+                    <div id="leave-times-container" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label for="leave-start-time" class="text-sm font-medium">Heure de début</label>
+                            <label for="leave-start-time" class="text-sm font-medium">Heure de début (optionnel)</label>
                             <input type="time" id="leave-start-time" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);">
                         </div>
                         <div>
-                            <label for="leave-end-time" class="text-sm font-medium">Heure de fin</label>
+                            <label for="leave-end-time" class="text-sm font-medium">Heure de fin (optionnel)</label>
                             <input type="time" id="leave-end-time" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);">
                         </div>
                     </div>
@@ -73,54 +84,83 @@ export async function render() {
 
 function setMinimumLeaveDate() {
     const today = new Date();
-    // On ajoute 7 jours à la date d'aujourd'hui
     today.setDate(today.getDate() + 7); 
-
-    // On formate la date en YYYY-MM-DD, requis pour l'attribut 'min'
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    const minDateString = `${year}-${month}-${day}`;
-
+    const minDateString = today.toISOString().split('T')[0];
     document.getElementById('leave-start-date').min = minDateString;
     document.getElementById('leave-end-date').min = minDateString;
 }
+
 function setupEventListeners() {
-    // MODIFIÉ : On utilise les boutons de semaine
-    document.getElementById('prevWeekBtn').onclick = () => {
-        currentWeekOffset--;
-        displayLeaveList();
-    };
-    document.getElementById('nextWeekBtn').onclick = () => {
-        currentWeekOffset++;
-        displayLeaveList();
-    };
+    document.getElementById('prevWeekBtn').onclick = () => { currentWeekOffset--; displayLeaveList(); };
+    document.getElementById('nextWeekBtn').onclick = () => { currentWeekOffset++; displayLeaveList(); };
     document.getElementById('leaveRequestForm').onsubmit = submitLeaveRequest;
 
-    document.getElementById('leave-reason').addEventListener('change', (e) => {
-        const medicalContainer = document.getElementById('medical-times-container');
-        if (e.target.value === 'Médical') {
-            medicalContainer.classList.remove('hidden');
+    const startDateInput = document.getElementById('leave-start-date');
+    const endDateInput = document.getElementById('leave-end-date');
+    const singleDayCheckbox = document.getElementById('single-day-leave');
+
+    singleDayCheckbox.addEventListener('change', () => {
+        if (singleDayCheckbox.checked) {
+            endDateInput.value = startDateInput.value;
+            endDateInput.disabled = true;
         } else {
-            medicalContainer.classList.add('hidden');
+            endDateInput.disabled = false;
+        }
+    });
+     startDateInput.addEventListener('change', () => {
+        if (singleDayCheckbox.checked) {
+            endDateInput.value = startDateInput.value;
+        }
+    });
+
+    const reasonSelect = document.getElementById('leave-reason');
+    const customReasonContainer = document.getElementById('custom-reason-container');
+    const customReasonInput = document.getElementById('leave-reason-custom');
+    
+    reasonSelect.addEventListener('change', (e) => {
+        if (e.target.value === 'Autre') {
+            customReasonContainer.classList.remove('hidden');
+            customReasonInput.required = true;
+        } else {
+            customReasonContainer.classList.add('hidden');
+            customReasonInput.required = false;
+            customReasonInput.value = '';
+        }
+    });
+
+    const charCounter = document.getElementById('char-counter');
+    customReasonInput.addEventListener('input', () => {
+        const count = customReasonInput.value.length;
+        charCounter.textContent = count;
+        charCounter.style.color = count > CUSTOM_REASON_MAX_LENGTH ? 'red' : 'var(--color-text-muted)';
+    });
+
+    document.getElementById('leave-list-container').addEventListener('click', async (e) => {
+        if (e.target.classList.contains('cancel-leave-btn')) {
+            const docId = e.target.dataset.id;
+            const confirmed = await showConfirmationModal("Confirmation", "Êtes-vous sûr de vouloir annuler cette demande de congé ?");
+            if (confirmed) {
+                try {
+                    await deleteDoc(doc(db, "leaveRequests", docId));
+                    showInfoModal("Succès", "La demande a été annulée.");
+                    loadAllRequestsAndDisplayList(); // Recharger la liste
+                } catch (error) {
+                    showInfoModal("Erreur", "Impossible d'annuler la demande.");
+                }
+            }
         }
     });
 }
 
 async function loadAllRequestsAndDisplayList() {
     try {
-        // La requête reste la même, on charge tout une seule fois
         const q = query(collection(db, "leaveRequests"), orderBy("startDate", "desc"));
         const snapshot = await getDocs(q);
         leaveRequestsCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         displayLeaveList();
-    } catch (error) {
-        console.error("Erreur de chargement des congés:", error);
-    }
+    } catch (error) { console.error("Erreur de chargement des congés:", error); }
 }
 
-// MODIFIÉ : La fonction affiche maintenant une semaine sous forme de liste
-// MODIFICATION DANS modules/user-leave.js
 
 function displayLeaveList() {
     const listContainer = document.getElementById('leave-list-container');
@@ -128,35 +168,23 @@ function displayLeaveList() {
     listContainer.innerHTML = '';
 
     const { startOfWeek, endOfWeek } = getWeekDateRange(currentWeekOffset);
-    
     listTitle.textContent = `Semaine du ${startOfWeek.toLocaleDateString('fr-FR', {day: 'numeric', month: 'long'})}`;
 
     const dailyEntries = [];
     leaveRequestsCache.forEach(req => {
-        // CORRECTION ICI : On crée la date en UTC pour éviter les problèmes de fuseau horaire
         const start = new Date(req.startDate + 'T12:00:00Z');
         const end = new Date((req.endDate || req.startDate) + 'T12:00:00Z');
-
         let loopDate = new Date(start);
         while (loopDate <= end) {
             if (loopDate >= startOfWeek && loopDate <= endOfWeek) {
-                dailyEntries.push({
-                    date: new Date(loopDate),
-                    ...req
-                });
+                dailyEntries.push({ date: new Date(loopDate), ...req });
             }
-            // On utilise setUTCDate pour travailler en UTC
             loopDate.setUTCDate(loopDate.getUTCDate() + 1);
         }
     });
     
     const groupedByDay = dailyEntries.reduce((acc, entry) => {
-        // CORRECTION ICI : On utilise getUTCDate() pour ne pas avoir de décalage
-        const year = entry.date.getUTCFullYear();
-        const month = String(entry.date.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(entry.date.getUTCDate()).padStart(2, '0');
-        const dateString = `${year}-${month}-${day}`;
-        
+        const dateString = entry.date.toISOString().split('T')[0];
         if (!acc[dateString]) acc[dateString] = [];
         acc[dateString].push(entry);
         return acc;
@@ -165,55 +193,53 @@ function displayLeaveList() {
     const sortedDays = Object.keys(groupedByDay).sort();
 
     if (sortedDays.length === 0) {
-        listContainer.innerHTML = '<p class="text-center text-gray-500 py-4">Aucun congé cette semaine.</p>';
+        listContainer.innerHTML = `<p class="text-center py-4" style="color: var(--color-text-muted);">Aucun congé cette semaine.</p>`;
         return;
     }
 
     sortedDays.forEach(dateString => {
         const dayEntries = groupedByDay[dateString];
-        // On recrée la date à midi pour être sûr du jour lors de l'affichage
         const dayDate = new Date(dateString + 'T12:00:00');
-
         const dayWrapper = document.createElement('div');
-        const dayHeader = `
-            <div class="flex justify-between items-center border-b pb-2 mb-3">
-                <h3 class="font-bold text-lg">${dayDate.toLocaleDateString('fr-FR', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' })}</h3>
-            </div>
-        `;
+        dayWrapper.innerHTML = `<div class="border-b pb-2 mb-3"><h3 class="font-bold text-lg">${dayDate.toLocaleDateString('fr-FR', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' })}</h3></div>`;
         
         const entriesContainer = document.createElement('div');
         entriesContainer.className = 'space-y-3';
 
         dayEntries.forEach(entry => {
-            let statusClass = '', statusIcon = '';
+            let statusStyle = '', statusIcon = '', statusText = '';
             
             if (entry.status === 'approved') {
-                statusClass = 'border-l-4 border-green-500';
-                statusIcon = '<span class="text-green-600 font-bold">Accepté</span>';
+                statusStyle = 'background-color: rgba(22, 163, 74, 0.1); border-color: rgba(22, 163, 74, 0.4);';
+                statusText = 'Accepté';
             } else if (entry.status === 'refused') {
-                statusClass = 'border-l-4 border-red-500';
-                statusIcon = '<span class="text-red-600 font-bold">Refusé</span>';
+                statusStyle = 'background-color: rgba(220, 38, 38, 0.1); border-color: rgba(220, 38, 38, 0.4);';
+                statusText = 'Refusé';
             } else if (entry.status === 'pending' && entry.userId === currentUser.uid) {
-                statusClass = 'border-l-4 border-blue-500';
-                statusIcon = '<span class="text-blue-600 font-bold">En attente</span>';
+                statusStyle = 'background-color: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.4);';
+                statusText = 'En attente';
+                statusIcon = `<button class="cancel-leave-btn text-red-500 hover:text-red-700 text-xs font-bold" data-id="${entry.id}">ANNULER</button>`;
             } else {
-                return;
+                return; // Ne pas afficher les demandes en attente des autres
             }
             
             const card = document.createElement('div');
-            card.className = `p-3 border rounded-lg bg-gray-50 flex justify-between items-center ${statusClass}`;
+            card.className = `p-3 border rounded-lg flex justify-between items-center`;
+            card.style.cssText = statusStyle;
             card.innerHTML = `
                 <div>
-                    <p class="font-bold">${entry.userName}</p>
-                    <p class="text-sm text-gray-600">${entry.reason}</p>
+                    <p class="font-bold" style="color: var(--color-text-base);">${entry.userName}</p>
+                    <p class="text-sm" style="color: var(--color-text-muted);">${entry.reason}</p>
                 </div>
-                ${statusIcon}
+                <div class="text-right">
+                    <span class="font-bold text-sm">${statusText}</span>
+                    ${statusIcon}
+                </div>
             `;
             entriesContainer.appendChild(card);
         });
 
         if (entriesContainer.children.length > 0) {
-            dayWrapper.innerHTML = dayHeader;
             dayWrapper.appendChild(entriesContainer);
             listContainer.appendChild(dayWrapper);
         }
@@ -226,62 +252,63 @@ async function submitLeaveRequest(e) {
     const form = e.target;
     const submitButton = form.querySelector('button[type="submit"]');
     submitButton.disabled = true;
-    submitButton.textContent = "Envoi en cours...";
+    submitButton.textContent = "Vérification...";
 
     const startDate = document.getElementById('leave-start-date').value;
-    const endDate = document.getElementById('leave-end-date').value || startDate;
-    const reason = document.getElementById('leave-reason').value;
+    const isSingleDay = document.getElementById('single-day-leave').checked;
+    const endDate = isSingleDay ? startDate : document.getElementById('leave-end-date').value || startDate;
+    let reason = document.getElementById('leave-reason').value;
+    const customReason = document.getElementById('leave-reason-custom').value;
     const startTime = document.getElementById('leave-start-time').value;
     const endTime = document.getElementById('leave-end-time').value;
 
-    // --- VALIDATION STRICTE DES 7 JOURS ---
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // On compare les jours uniquement
-
-    const requestedDate = new Date(startDate);
-
-    const timeDiff = requestedDate.getTime() - today.getTime();
-    const dayDiff = Math.floor(timeDiff / (1000 * 3600 * 24));
-
-    // Si la différence est inférieure à 7 jours, on bloque.
-    if (dayDiff < 7) {
-        showInfoModal("Délai insuffisant", "Vous ne pouvez pas demander de congé moins de 7 jours à l'avance.");
-        submitButton.disabled = false;
-        submitButton.textContent = "Envoyer la demande";
-        return; // On arrête tout
+    // --- VALIDATIONS ---
+    if (customReason.length > CUSTOM_REASON_MAX_LENGTH) {
+        showInfoModal("Erreur", `La raison personnalisée ne doit pas dépasser ${CUSTOM_REASON_MAX_LENGTH} caractères.`);
+        submitButton.disabled = false; submitButton.textContent = "Envoyer la demande"; return;
     }
-    // --- FIN DE LA VALIDATION ---
-
     if (new Date(endDate) < new Date(startDate)) {
         showInfoModal("Attention", "La date de fin ne peut pas être antérieure à la date de début.");
-        submitButton.disabled = false;
-        submitButton.textContent = "Envoyer la demande";
-        return;
+        submitButton.disabled = false; submitButton.textContent = "Envoyer la demande"; return;
     }
+    if (reason === 'Autre') {
+        if (!customReason.trim()) {
+            showInfoModal("Attention", "Veuillez préciser la raison pour votre demande 'Autre'.");
+            submitButton.disabled = false; submitButton.textContent = "Envoyer la demande"; return;
+        }
+        reason = customReason.trim();
+    }
+    // --- FIN VALIDATIONS ---
 
     const requestData = {
-        userId: currentUser.uid,
-        userName: currentUser.displayName,
-        startDate: startDate,
-        endDate: endDate,
-        reason: reason,
-        status: 'pending',
+        userId: currentUser.uid, userName: currentUser.displayName,
+        startDate, endDate, reason, status: 'pending',
         requestedAt: serverTimestamp()
     };
-
-    if (reason === 'Médical' && startTime && endTime) {
+    if (startTime && endTime) {
         requestData.startTime = startTime;
         requestData.endTime = endTime;
     }
+    
+    // --- CONFIRMATION ---
+    let summary = `Motif : **${reason}**\nDu **${new Date(startDate+'T12:00:00').toLocaleDateString('fr-FR')}** au **${new Date(endDate+'T12:00:00').toLocaleDateString('fr-FR')}**`;
+    if(startTime && endTime) summary += `\nDe **${startTime}** à **${endTime}**`;
+    
+    const confirmed = await showConfirmationModal("Récapitulatif", summary);
+    if (!confirmed) {
+        submitButton.disabled = false; submitButton.textContent = "Envoyer la demande"; return;
+    }
+    // --- FIN CONFIRMATION ---
 
+    submitButton.textContent = "Envoi en cours...";
     try {
         await addDoc(collection(db, "leaveRequests"), requestData);
         showInfoModal("Succès", "Votre demande de congé a bien été envoyée.");
         form.reset();
-        document.getElementById('medical-times-container').classList.add('hidden');
+        document.getElementById('single-day-leave').dispatchEvent(new Event('change'));
+        document.getElementById('leave-reason').dispatchEvent(new Event('change'));
         loadAllRequestsAndDisplayList();
     } catch (error) {
-        console.error("Erreur d'envoi de la demande:", error);
         showInfoModal("Erreur", "L'envoi de la demande a échoué.");
     } finally {
         submitButton.disabled = false;
