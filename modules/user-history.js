@@ -53,22 +53,27 @@ export async function render(params = {}) {
             </div>
 
             <div id="filters-container" class="p-4 rounded-lg mb-4" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                    <div>
-                        <label for="filterStartDate" class="text-sm font-medium">Date de début</label>
-                        <input type="date" id="filterStartDate" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);">
-                    </div>
-                    <div>
-                        <label for="filterEndDate" class="text-sm font-medium">Date de fin</label>
-                        <input type="date" id="filterEndDate" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);">
-                    </div>
-                    <div>
-                        <label for="filterChantier" class="text-sm font-medium">Chantier</label>
-                        <select id="filterChantier" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);"></select>
-                    </div>
-                    <div class="flex gap-2">
-                        <button id="applyFiltersBtn" class="w-full text-white font-bold px-4 py-2 rounded" style="background-color: var(--color-primary);">Filtrer</button>
-                        <button id="resetFiltersBtn" class="w-full px-4 py-2 rounded" style="background-color: var(--color-background); border: 1px solid var(--color-border);" title="Réinitialiser">↻</button>
+                <button id="toggleFiltersBtn" class="w-full font-bold py-2 px-4 rounded text-left flex items-center gap-2" style="background-color: var(--color-background); border: 1px solid var(--color-border);">
+                    🔍 Affiner la recherche
+                </button>
+                <div id="filters-content" class="hidden mt-4">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                        <div>
+                            <label for="filterStartDate" class="text-sm font-medium">Date de début</label>
+                            <input type="date" id="filterStartDate" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);">
+                        </div>
+                        <div>
+                            <label for="filterEndDate" class="text-sm font-medium">Date de fin</label>
+                            <input type="date" id="filterEndDate" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);">
+                        </div>
+                        <div>
+                            <label for="filterChantier" class="text-sm font-medium">Chantier</label>
+                            <select id="filterChantier" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);"></select>
+                        </div>
+                        <div class="flex gap-2">
+                            <button id="applyFiltersBtn" class="w-full text-white font-bold px-4 py-2 rounded" style="background-color: var(--color-primary);">Filtrer</button>
+                            <button id="resetFiltersBtn" class="w-full px-4 py-2 rounded" style="background-color: var(--color-background); border: 1px solid var(--color-border);" title="Réinitialiser">↻</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -323,6 +328,19 @@ async function renderCalendar() {
 }
 
 function setupEventListeners() {
+    // Bouton pour afficher/masquer les filtres
+    const toggleBtn = document.getElementById('toggleFiltersBtn');
+    const filtersContent = document.getElementById('filters-content');
+    toggleBtn.addEventListener('click', () => {
+        const isHidden = filtersContent.classList.toggle('hidden');
+        if (isHidden) {
+            toggleBtn.innerHTML = '🔍 Affiner la recherche';
+        } else {
+            toggleBtn.innerHTML = 'Masquer les filtres';
+        }
+    });
+
+    // Le reste des écouteurs d'événements
     document.getElementById('showListViewBtn').onclick = () => switchView('list');
     document.getElementById('showCalendarViewBtn').onclick = () => switchView('calendar');
     document.getElementById('applyFiltersBtn').onclick = applyFilters;

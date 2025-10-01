@@ -1,6 +1,6 @@
 import { collection, query, where, getDocs, orderBy, doc, getDoc, addDoc, serverTimestamp, updateDoc, limit } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, pageContent, showInfoModal } from "../app.js";
-import { getWeekDateRange } from "./utils.js";
+import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 import { getActiveChantiers, getTeamMembers } from "./data-service.js";
 
 const MAPBOX_ACCESS_TOKEN = "pk.eyJ1IjoiamFzb255MjgiLCJhIjoiY21lMDcyYWhzMDIyODJsczl0cmM0aTVjciJ9.V14cJXdBNoq3yAQTDeUg-A";
@@ -15,9 +15,7 @@ export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto space-y-8">
             <div id="live-tracker-container" class="p-6 rounded-lg shadow-lg" style="background-color: var(--color-surface); border: 1px solid var(--color-border);"></div>
-            
             <div id="missed-pointage-suggestions" class="space-y-4"></div>
-
             <div>
                 <h2 class="text-xl font-bold mb-2">🗓️ Mon Planning de la Semaine</h2>
                 <div class="rounded-lg shadow-sm p-4" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
@@ -73,33 +71,26 @@ export async function render() {
             </div>
         </div>
     `;
-
     setTimeout(async () => {
         try {
             await cacheDataForModals();
             await checkForOpenPointage();
-            
             if (!localStorage.getItem('activePointage')) {
                 checkForMissedPointages();
             }
-
             document.getElementById("prevWeekBtn").onclick = () => { currentWeekOffset--; displayWeekView(); };
             document.getElementById("nextWeekBtn").onclick = () => { currentWeekOffset++; displayWeekView(); };
-            
             displayWeekView();
-
         } catch (error) {
             console.error("Erreur critique dans le rendu du dashboard utilisateur:", error);
         }
     }, 0);
 }
-
 async function cacheDataForModals() {
     const chantiersData = await getActiveChantiers();
     chantiersCache = chantiersData.map(c => c.name);
     colleaguesCache = await getTeamMembers();
 }
-
 async function checkForOpenPointage() {
     const q = query(collection(db, "pointages"), where("uid", "==", currentUser.uid), where("endTime", "==", null), limit(1));
     const snapshot = await getDocs(q);
@@ -114,13 +105,10 @@ async function checkForOpenPointage() {
     }
     initLiveTracker();
 }
-
 function initLiveTracker() {
     const container = document.getElementById('live-tracker-container');
     if (!container) return;
-
     const activePointage = JSON.parse(localStorage.getItem('activePointage'));
-
     if (activePointage && activePointage.uid === currentUser.uid) {
         const isPaused = activePointage.status === 'paused';
         container.innerHTML = `
@@ -147,7 +135,6 @@ function initLiveTracker() {
         document.getElementById('startBtn').onclick = openStartModal;
     }
 }
-
 function updateTimerUI() {
     const timerElement = document.getElementById('timer');
     const activePointage = JSON.parse(localStorage.getItem('activePointage'));
@@ -166,7 +153,6 @@ function updateTimerUI() {
     const seconds = String(Math.floor((effectiveElapsedTime % 60000) / 1000)).padStart(2, '0');
     timerElement.textContent = `${hours}:${minutes}:${seconds}`;
 }
-
 function pausePointage() {
     clearInterval(timerInterval);
     let activePointage = JSON.parse(localStorage.getItem('activePointage'));
@@ -178,7 +164,6 @@ function pausePointage() {
     updateDoc(pointageRef, { status: 'paused', pauses: activePointage.pauses });
     initLiveTracker();
 }
-
 function resumePointage() {
     let activePointage = JSON.parse(localStorage.getItem('activePointage'));
     activePointage.status = 'running';
@@ -189,30 +174,23 @@ function resumePointage() {
     updateDoc(pointageRef, { status: 'running', pauses: activePointage.pauses });
     initLiveTracker();
 }
-
 async function startPointage(chantierName, colleagues) {
     const isDriver = document.getElementById('isDriverCheckbox').checked;
-
     const newPointageData = {
         uid: currentUser.uid, userName: currentUser.displayName, chantier: chantierName, colleagues,
         timestamp: new Date().toISOString(), endTime: null, status: 'running', pauses: [], createdAt: serverTimestamp(),
         isDriver: isDriver
     };
-
     try {
         const newPointageRef = await addDoc(collection(db, "pointages"), newPointageData);
         localStorage.setItem('activePointage', JSON.stringify({ docId: newPointageRef.id, ...newPointageData }));
-        
         const lastPointageQuery = query(collection(db, "pointages"), where("uid", "==", currentUser.uid), where("endTime", "!=", null), orderBy("endTime", "desc"), limit(1));
         const lastPointageSnapshot = await getDocs(lastPointageQuery);
-
         let startAddressForTravel = HOME_BASE_ADDRESS;
-
         if (!lastPointageSnapshot.empty) {
             const lastPointageDoc = lastPointageSnapshot.docs[0].data();
             const lastEndTime = new Date(lastPointageDoc.endTime);
             const now = new Date();
-
             if (lastEndTime.toDateString() === now.toDateString()) {
                 const lastChantierQuery = query(collection(db, "chantiers"), where("name", "==", lastPointageDoc.chantier), limit(1));
                 const lastChantierSnapshot = await getDocs(lastChantierQuery);
@@ -221,25 +199,20 @@ async function startPointage(chantierName, colleagues) {
                 }
             }
         }
-
         const newChantierQuery = query(collection(db, "chantiers"), where("name", "==", chantierName), limit(1));
         const newChantierSnapshot = await getDocs(newChantierQuery);
         if (!newChantierSnapshot.empty) {
             const newChantierAddress = newChantierSnapshot.docs[0].data().address;
-            
             if (newChantierAddress !== startAddressForTravel) {
                 calculateAndSaveTravel(startAddressForTravel, newChantierAddress, newPointageRef.id, isDriver);
             }
         }
-        
         initLiveTracker();
-
     } catch (error) {
         console.error("Erreur de démarrage du pointage:", error);
         showInfoModal("Erreur", "Le démarrage du pointage a échoué.");
     }
 }
-
 async function stopPointage(notes = "") {
     let activePointage = JSON.parse(localStorage.getItem('activePointage'));
     if (!activePointage || !activePointage.docId) return;
@@ -261,13 +234,11 @@ async function stopPointage(notes = "") {
         initLiveTracker(); 
     }
 }
-
 async function calculateAndSaveTravel(startAddress, endAddress, arrivalPointageId, isDriver) {
     if (!startAddress || !endAddress) {
         console.log("Adresse de départ ou d'arrivée manquante pour le calcul du trajet.");
         return;
     }
-
     try {
         const getCoordinates = async (address) => {
             const geocodeUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${MAPBOX_ACCESS_TOKEN}&limit=1&country=BE`;
@@ -276,22 +247,17 @@ async function calculateAndSaveTravel(startAddress, endAddress, arrivalPointageI
             if (!data.features || data.features.length === 0) throw new Error(`Adresse non trouvée : ${address}`);
             return data.features[0].center;
         };
-
         const startCoords = await getCoordinates(startAddress);
         const endCoords = await getCoordinates(endAddress);
-
         const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${startCoords.join(',')};${endCoords.join(',')}?access_token=${MAPBOX_ACCESS_TOKEN}&geometries=geojson`;
         const response = await fetch(url);
         const data = await response.json();
-
         if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
             throw new Error(data.message || "Itinéraire non trouvé.");
         }
-        
         const route = data.routes[0];
         const distanceKm = isDriver ? (route.distance / 1000).toFixed(2) : 0;
         const durationMin = Math.round(route.duration / 60);
-        
         await addDoc(collection(db, "trajets"), {
             id_utilisateur: currentUser.uid,
             id_pointage_arrivee: arrivalPointageId, 
@@ -299,27 +265,21 @@ async function calculateAndSaveTravel(startAddress, endAddress, arrivalPointageI
             duree_min: durationMin,
             date_creation: serverTimestamp()
         });
-
     } catch (error) {
         console.error("Erreur lors du calcul du trajet:", error);
     }
 }
-
 async function openStartModal() {
     const modal = document.getElementById('startPointageModal');
     const form = document.getElementById('startPointageForm');
     const chantierSelect = document.getElementById('startChantierSelect');
     const colleaguesContainer = document.getElementById('startColleaguesContainer');
-
     chantierSelect.innerHTML = '<option>Chargement du planning...</option>';
     colleaguesContainer.innerHTML = `<p class="text-sm" style="color: var(--color-text-muted);">Chargement...</p>`;
     modal.classList.remove('hidden');
-
     const { weeklyChantiers, todaysColleagues, todaysChantiers } = await getContextualLists();
-
     const weeklyChantiersOnly = new Set([...weeklyChantiers].filter(chantier => !todaysChantiers.has(chantier)));
     const otherChantiers = chantiersCache.filter(name => !weeklyChantiers.has(name));
-    
     let chantierOptionsHTML = '';
     if (todaysChantiers.size > 0) {
         chantierOptionsHTML += '<optgroup label="Chantiers du jour">';
@@ -336,23 +296,19 @@ async function openStartModal() {
         otherChantiers.forEach(name => { chantierOptionsHTML += `<option value="${name}">${name}</option>`; });
         chantierOptionsHTML += '</optgroup>';
     }
-
     chantierSelect.innerHTML = chantierOptionsHTML;
     if (!chantierSelect.innerHTML) {
          chantierSelect.innerHTML = '<option value="" disabled selected>-- Choisissez un chantier --</option>';
          chantiersCache.forEach(name => { chantierSelect.innerHTML += `<option value="${name}">${name}</option>`; });
     }
-
     const otherColleagues = colleaguesCache.filter(name => !todaysColleagues.has(name) && name !== currentUser.displayName);
     const createColleagueElement = (name) => `<label class="flex items-center gap-2 p-1 rounded w-full"><input type="checkbox" value="${name}" name="colleagues" /><span>${name}</span></label>`;
-    
     let colleaguesHTML = '';
     if (todaysColleagues.size > 0) {
         todaysColleagues.forEach(name => { colleaguesHTML += createColleagueElement(name); });
         colleaguesHTML += `<div class="w-full border-t my-2" style="border-color: var(--color-border);"></div>`;
     }
     colleaguesContainer.innerHTML = colleaguesHTML;
-
     if (otherColleagues.length > 0) {
         const showAllButton = document.createElement('button');
         showAllButton.type = 'button';
@@ -365,7 +321,6 @@ async function openStartModal() {
         };
         colleaguesContainer.appendChild(showAllButton);
     }
-    
     form.onsubmit = (e) => {
         e.preventDefault();
         const chantier = chantierSelect.value;
@@ -376,12 +331,10 @@ async function openStartModal() {
     };
     document.getElementById('cancelStartPointage').onclick = closeStartModal;
 }
-
 async function getContextualLists() {
     const { startOfWeek, endOfWeek } = getWeekDateRange(0);
     const todayStr = new Date().toISOString().split('T')[0];
     const weeklyChantiers = new Set(), todaysColleagues = new Set(), todaysChantiers = new Set();
-
     try {
         const q = query(collection(db, "planning"), where("date", ">=", startOfWeek.toISOString().split('T')[0]), where("date", "<=", endOfWeek.toISOString().split('T')[0]));
         const querySnapshot = await getDocs(q);
@@ -400,11 +353,9 @@ async function getContextualLists() {
     } catch (error) { console.error("Impossible de charger le planning contextuel:", error); }
     return { weeklyChantiers, todaysColleagues, todaysChantiers };
 }
-
 function closeStartModal() {
     document.getElementById('startPointageModal').classList.add('hidden');
 }
-
 function openStopModal() {
     const modal = document.getElementById('stopPointageModal');
     const form = document.getElementById('stopPointageForm');
@@ -418,21 +369,16 @@ function openStopModal() {
         modal.classList.add('hidden');
     };
 }
-
 function displayWeekView() {
     const { startOfWeek, endOfWeek } = getWeekDateRange(currentWeekOffset);
-    
     const options = { day: 'numeric', month: 'long', timeZone: 'UTC' };
     const displayElement = document.getElementById("currentPeriodDisplay");
-    
     if(displayElement) {
         displayElement.textContent = `Semaine du ${startOfWeek.toLocaleDateString('fr-FR', options)} au ${endOfWeek.toLocaleDateString('fr-FR', options)}`;
     }
-    
     const scheduleGrid = document.getElementById("schedule-grid");
     if(scheduleGrid) {
         scheduleGrid.innerHTML = ""; 
-
         const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
         for (let i = 0; i < 7; i++) {
             const dayDate = new Date(startOfWeek);
@@ -443,11 +389,9 @@ function displayWeekView() {
             dayColumn.innerHTML = `<h4 class="font-bold text-center border-b pb-1 mb-2" style="border-color: var(--color-border);"><span style="color: var(--color-text-base);">${days[i]}</span> <span class="text-sm font-normal" style="color: var(--color-text-muted);">${dayDate.getUTCDate()}</span></h4><div id="day-col-${i}" class="space-y-2"></div>`;
             scheduleGrid.appendChild(dayColumn);
         }
-        
         loadUserScheduleForWeek(startOfWeek, endOfWeek);
     }
 }
-
 async function loadUserScheduleForWeek(start, end) {
     const weekId = start.toISOString().split('T')[0];
     const publishDoc = await getDoc(doc(db, "publishedSchedules", weekId));
@@ -458,101 +402,131 @@ async function loadUserScheduleForWeek(start, end) {
         return;
     }
 
-    const q = query(collection(db, "planning"), 
+    const planningQuery = query(collection(db, "planning"), 
         where("date", ">=", start.toISOString().split('T')[0]), 
         where("date", "<=", end.toISOString().split('T')[0]), 
         orderBy("date"),
         orderBy("order")
     );
-    const querySnapshot = await getDocs(q);
-    const scheduleData = querySnapshot.docs.map(doc => doc.data());
+    const planningSnapshot = await getDocs(planningQuery);
 
+    const scheduleData = planningSnapshot.docs.map(doc => doc.data());
     const userSchedule = scheduleData.filter(task => task.teamNames && task.teamNames.includes(currentUser.displayName));
+
+    const plannedHoursByChantier = {};
+    userSchedule.forEach(task => {
+        const chantierName = task.chantierName;
+        const duration = parseFloat(task.duration) || 0;
+        if (!plannedHoursByChantier[chantierName]) {
+            plannedHoursByChantier[chantierName] = 0;
+        }
+        plannedHoursByChantier[chantierName] += duration;
+    });
+
+    for (let i = 0; i < 7; i++) {
+        const dayColumn = document.getElementById(`day-col-${i}`);
+        if (dayColumn) dayColumn.innerHTML = '';
+    }
     
     userSchedule.forEach(data => {
         const utcDate = new Date(data.date + 'T12:00:00Z');
         const dayIndex = (utcDate.getUTCDay() + 6) % 7;
         const container = document.getElementById(`day-col-${dayIndex}`);
         if (container) {
-            container.appendChild(createTaskElement(data));
+            const totalPlannedHours = plannedHoursByChantier[data.chantierName] || 0;
+            // On récupère les détails du chantier depuis le cache
+            const chantierDetails = chantiersCache.find(c => c.id === data.chantierId);
+            container.appendChild(createTaskElement(data, totalPlannedHours, chantierDetails));
         }
     });
 }
 
-function createTaskElement(task) {
+function createTaskElement(task, totalPlannedHours, chantierDetails) {
     const el = document.createElement('div');
     el.className = 'p-3 rounded-lg shadow-sm border-l-4 text-sm';
     el.style.backgroundColor = 'var(--color-surface)';
     el.style.borderColor = 'var(--color-primary)';
     
     const team = (task.teamNames && task.teamNames.length) ? `Équipe : ${task.teamNames.join(', ')}` : 'Pas d\'équipe';
-    const start = task.startTime ? `<strong>${task.startTime}</strong> - ` : '';
     const note = task.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-primary);"><strong>Note:</strong> ${task.notes}</div>` : '';
-    el.innerHTML = `<div class="font-semibold" style="color: var(--color-text-base);">${task.chantierName}</div><div class="text-xs mt-1" style="color: var(--color-text-base);">${start}${task.duration || ''}h prévues</div><div class="text-xs mt-1" style="color: var(--color-text-muted);">${team}</div>${note}`;
+
+    const start = task.startTime ? `<strong>${task.startTime}</strong> - ` : '';
+    const dailyHoursText = `${start}${task.duration || ''}h prévues`;
+
+    let plannedHoursHTML = '';
+    if (totalPlannedHours > 0) {
+        plannedHoursHTML = `<div class="text-xs mt-1" style="color: var(--color-text-muted);">
+                               Total planifié (semaine) : <strong>${totalPlannedHours}h</strong>
+                            </div>`;
+    }
+
+    // On ajoute le budget total du projet
+    let projectBudgetHTML = '';
+    if (chantierDetails && chantierDetails.totalHeuresPrevues > 0) {
+        projectBudgetHTML = `<div class="text-xs mt-1" style="color: var(--color-text-muted);">
+                                Budget total (projet) : <strong>${chantierDetails.totalHeuresPrevues}h</strong>
+                             </div>`;
+    }
+
+    el.innerHTML = `<div class="font-semibold" style="color: var(--color-text-base);">${task.chantierName}</div>
+                    <div class="text-xs mt-1" style="color: var(--color-text-base);">${dailyHoursText}</div>
+                    <div class="text-xs mt-1" style="color: var(--color-text-muted);">${team}</div>
+                    <div class="mt-2 pt-2 border-t" style="border-color: var(--color-border);">
+                        ${plannedHoursHTML}
+                        ${projectBudgetHTML}
+                    </div>
+                    ${note}`;
     return el;
 }
 
 async function checkForMissedPointages() {
     const suggestionsContainer = document.getElementById('missed-pointage-suggestions');
     if (!suggestionsContainer) return;
-
     const twoDaysAgo = new Date();
     twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-
     const suggestionsQuery = query(
         collection(db, "pointages"),
         where("colleagues", "array-contains", currentUser.displayName),
         where("timestamp", ">=", twoDaysAgo.toISOString()),
         orderBy("timestamp", "desc")
     );
-    
     const userPointagesQuery = query(
         collection(db, "pointages"),
         where("uid", "==", currentUser.uid),
         where("timestamp", ">=", twoDaysAgo.toISOString())
     );
-
     const [suggestionsSnapshot, userPointagesSnapshot] = await Promise.all([
         getDocs(suggestionsQuery),
         getDocs(userPointagesQuery)
     ]);
-
     const userExistingPointages = new Set();
     userPointagesSnapshot.forEach(doc => {
         const data = doc.data();
         const day = new Date(data.timestamp).toISOString().split('T')[0];
         userExistingPointages.add(`${day}_${data.chantier}`);
     });
-
     const refusedPointages = JSON.parse(localStorage.getItem('refusedPointages') || '[]');
     const finalSuggestions = [];
-
     suggestionsSnapshot.forEach(doc => {
         const suggestion = { id: doc.id, ...doc.data() };
         if (!suggestion.endTime) return;
-        
         const suggestionDay = new Date(suggestion.timestamp).toISOString().split('T')[0];
         const suggestionKey = `${suggestionDay}_${suggestion.chantier}`;
-
         if (!refusedPointages.includes(suggestion.id) && !userExistingPointages.has(suggestionKey)) {
             finalSuggestions.push(suggestion);
         }
     });
-
     if (finalSuggestions.length > 0) {
         renderSuggestions(finalSuggestions);
     }
 }
-
 function renderSuggestions(suggestions) {
     const container = document.getElementById('missed-pointage-suggestions');
     container.innerHTML = `<h3 class="text-lg font-semibold" style="color: var(--color-text-base);">Suggestions de pointages manqués :</h3>`;
-
     suggestions.forEach(sugg => {
         const start = new Date(sugg.timestamp);
         const end = new Date(sugg.endTime);
         const timeFormat = { hour: '2-digit', minute: '2-digit' };
-
         const card = document.createElement('div');
         card.className = 'border-l-4 p-4 rounded-r-lg shadow-sm';
         card.style.borderColor = 'orange';
@@ -568,16 +542,12 @@ function renderSuggestions(suggestions) {
         `;
         container.appendChild(card);
     });
-
     container.addEventListener('click', handleSuggestionClick);
 }
-
 async function handleSuggestionClick(e) {
     const button = e.target;
     const suggId = button.dataset.suggId;
-
     if (!suggId) return;
-
     if (button.classList.contains('accept-suggestion-btn')) {
         const suggDoc = await getDoc(doc(db, "pointages", suggId));
         if (!suggDoc.exists()) {
@@ -585,11 +555,9 @@ async function handleSuggestionClick(e) {
              return;
         }
         const suggestion = suggDoc.data();
-        
         const originalColleagues = suggestion.colleagues || [];
         const filteredColleagues = originalColleagues.filter(name => name !== currentUser.displayName);
         const finalColleagues = [...new Set([...filteredColleagues, suggestion.userName])];
-
         const newPointageData = {
             ...suggestion,
             uid: currentUser.uid,
@@ -598,7 +566,6 @@ async function handleSuggestionClick(e) {
             createdAt: serverTimestamp(),
             notes: `(Pointage ajouté depuis la saisie de ${suggestion.userName}) --- ${suggestion.notes || ''}`
         };
-
         try {
             await addDoc(collection(db, "pointages"), newPointageData);
             showInfoModal("Succès", "Le pointage a été ajouté à votre historique.");
@@ -606,7 +573,6 @@ async function handleSuggestionClick(e) {
             console.error(error);
             showInfoModal("Erreur", "Impossible d'ajouter le pointage.");
         }
-
     } else if (button.classList.contains('refuse-suggestion-btn')) {
         const refusedPointages = JSON.parse(localStorage.getItem('refusedPointages') || '[]');
         if (!refusedPointages.includes(suggId)) {
@@ -614,6 +580,5 @@ async function handleSuggestionClick(e) {
             localStorage.setItem('refusedPointages', JSON.stringify(refusedPointages));
         }
     }
-    
     button.closest('div.border-l-4').remove();
 }
