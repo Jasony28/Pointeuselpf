@@ -1,5 +1,20 @@
 export const updatesLog = [
     {
+        version: 'v3.4.4',
+        date: '2 octobre 2025',
+        changes: [
+            "### Pour l'Administrateur",
+            "✨ **Réattribution des Pointages** : Dans l'historique d'un employé, un nouveau bouton `🔄` permet aux administrateurs de réattribuer un pointage à un autre utilisateur. Une fenêtre de sélection et une confirmation sécurisent l'opération."
+        ]
+    },
+    {
+        version: 'v3.4.3',
+        date: '1 octobre 2025',
+        changes: [
+            "✨ Interface des filtres épurée : Dans l'historique, les options de recherche sont maintenant regroupées sous un unique bouton 'Affiner la recherche' pour une présentation plus claire.",
+        ]
+    },
+    {
         version: 'v3.4.2',
         date: '1 octobre 2025',
         changes: [
@@ -13,7 +28,7 @@ export const updatesLog = [
         date: '29 septembre 2025',
         changes: [
             "### Améliorations Générales",
-            "✨ **Historique des Mises à Jour :** Un nouveau bouton dans la page **Paramètres**  vous permet désormais de consulter l'historique complet de toutes les notes de version de l'application.",
+            "✨ **Historique des Mises à Jour :** Un nouveau bouton dans la page **Paramètres** vous permet désormais de consulter l'historique complet de toutes les notes de version de l'application.",
             "### Pour l'Administrateur",
             "✨ **PDF de Planning en Grille** : La génération de PDF pour la planification a été entièrement revue. Elle produit maintenant une grille claire avec les employés en lignes et les jours en colonnes, optimisée pour tenir sur une seule page.",
             "🐛 **Correction des thèmes :** L'affichage des détails d'un chantier (depuis le tableau de bord) est maintenant compatible avec tous les thèmes. Les textes ne deviendront plus invisibles sur les thèmes sombres.",

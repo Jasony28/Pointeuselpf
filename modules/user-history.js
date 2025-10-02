@@ -1,6 +1,7 @@
 import { collection, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc, addDoc, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, pageContent, showConfirmationModal, showInfoModal, isStealthMode } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
+import { getUsers } from "./data-service.js";
 
 let currentWeekOffset = 0;
 let currentCalendarDate = new Date();
@@ -12,6 +13,9 @@ let allPointages = []; // Cache principal pour les pointages de la vue actuelle
 let entryWizardStep = 1;
 let entryWizardData = {};
 
+// On déclare les variables pour la modale de réattribution ici pour qu'elles soient accessibles partout
+let reassignModal, userSelect, reassignConfirmBtn, reassignCancelBtn;
+
 function formatMinutes(totalMinutes) {
     if (!totalMinutes || totalMinutes < 0) return "0h 0min";
     const hours = Math.floor(totalMinutes / 60);
@@ -19,7 +23,6 @@ function formatMinutes(totalMinutes) {
     return `${hours}h ${minutes}min`;
 }
 
-// *** NOUVELLE FONCTION UTILITAIRE POUR ÉVITER LES PROBLÈMES DE FUSEAU HORAIRE ***
 function toISODateString(date) {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -146,10 +149,55 @@ export async function render(params = {}) {
     setTimeout(async () => {
         await cacheModalData();
         setupEventListeners();
+        setupReassignModalListeners(); // On initialise les écouteurs de la modale ici
         currentWeekOffset = 0;
         loadHistoryForWeek();
     }, 0);
 }
+
+// MODIFICATION : La logique de l'écouteur du bouton "Confirmer" a été améliorée
+function setupReassignModalListeners() {
+    reassignModal = document.getElementById('reassignModal');
+    userSelect = document.getElementById('userSelect');
+    reassignConfirmBtn = document.getElementById('reassignConfirmBtn');
+    reassignCancelBtn = document.getElementById('reassignCancelBtn');
+
+    reassignConfirmBtn.addEventListener('click', async () => {
+        const pointageId = reassignModal.dataset.pointageId;
+        if (!pointageId) return;
+
+        const selectedOption = userSelect.options[userSelect.selectedIndex];
+        if (!selectedOption || !selectedOption.value) {
+            showInfoModal("Attention", "Veuillez sélectionner un employé.");
+            return;
+        }
+
+        const newUserId = selectedOption.value;
+        const newUserName = selectedOption.dataset.name;
+        const pointageToReassign = allPointages.find(p => p.id === pointageId);
+        const confirmationMessage = `Voulez-vous vraiment attribuer ce pointage de "${pointageToReassign.chantier}" à ${newUserName} ?`;
+
+        // Étape 1: Cacher la première modale
+        reassignModal.classList.add('hidden');
+
+        // Étape 2: Afficher la deuxième modale et attendre la réponse
+        const userConfirmed = await showConfirmationModal("Confirmation", confirmationMessage);
+
+        // Étape 3: Agir en fonction de la réponse
+        if (userConfirmed) {
+            // Si confirmé, on lance la réattribution. Les deux fenêtres sont déjà cachées.
+            await reassignPointage(pointageId, newUserId, newUserName, pointageToReassign);
+        } else {
+            // Si annulé, on ré-affiche la première fenêtre
+            reassignModal.classList.remove('hidden');
+        }
+    });
+
+    reassignCancelBtn.addEventListener('click', () => {
+        reassignModal.classList.add('hidden');
+    });
+}
+
 
 async function cacheModalData() {
     const chantiersQuery = query(collection(db, "chantiers"), where("status", "==", "active"), orderBy("name"));
@@ -328,7 +376,6 @@ async function renderCalendar() {
 }
 
 function setupEventListeners() {
-    // Bouton pour afficher/masquer les filtres
     const toggleBtn = document.getElementById('toggleFiltersBtn');
     const filtersContent = document.getElementById('filters-content');
     toggleBtn.addEventListener('click', () => {
@@ -340,7 +387,6 @@ function setupEventListeners() {
         }
     });
 
-    // Le reste des écouteurs d'événements
     document.getElementById('showListViewBtn').onclick = () => switchView('list');
     document.getElementById('showCalendarViewBtn').onclick = () => switchView('calendar');
     document.getElementById('applyFiltersBtn').onclick = applyFilters;
@@ -453,6 +499,9 @@ function handleHistoryClick(e) {
     } else if (target.closest('.delete-btn')) {
         const pointageId = target.closest('.delete-btn').dataset.id;
         deletePointage(pointageId);
+    } else if (target.closest('.reassign-btn')) {
+        const pointageId = target.closest('.reassign-btn').dataset.id;
+        openReassignModal(pointageId);
     }
 }
 
@@ -485,7 +534,11 @@ function createHistoryEntryElement(d, trajetData) {
         controlsWrapper.className = "absolute top-2 right-3 flex flex-col items-end text-right"; 
         const buttonsDiv = document.createElement('div');
         buttonsDiv.className = 'flex gap-2';
-        buttonsDiv.innerHTML = `<button class="edit-btn font-bold" title="Modifier" data-id="${d.id}" style="color: var(--color-text-muted);">✏️</button><button class="delete-btn font-bold" title="Supprimer" data-id="${d.id}" style="color: var(--color-text-muted);">✖️</button>`;
+        buttonsDiv.innerHTML = `
+            <button class="edit-btn font-bold" title="Modifier" data-id="${d.id}" style="color: var(--color-text-muted);">✏️</button>
+            <button class="delete-btn font-bold" title="Supprimer" data-id="${d.id}" style="color: var(--color-text-muted);">✖️</button>
+            <button class="reassign-btn font-bold" title="Réattribuer" data-id="${d.id}" style="color: var(--color-text-muted);">🔄</button>
+        `;
         controlsWrapper.appendChild(buttonsDiv);
         controlsWrapper.innerHTML += pauseDisplay + durationDisplay;
         wrapper.appendChild(controlsWrapper);
@@ -508,6 +561,62 @@ async function deletePointage(pointageId) {
         }
         await deleteDoc(pointageRef);
         resetFilters();
+    }
+}
+
+async function openReassignModal(pointageId) {
+    const pointageToReassign = allPointages.find(p => p.id === pointageId);
+    if (!pointageToReassign) {
+        showInfoModal("Erreur", "Pointage non trouvé.");
+        return;
+    }
+
+    reassignModal.dataset.pointageId = pointageId;
+    userSelect.innerHTML = '<option>Chargement des utilisateurs...</option>';
+    reassignConfirmBtn.disabled = true;
+
+    try {
+        const users = await getUsers(true);
+        const otherUsers = users.filter(user => user.uid !== pointageToReassign.uid);
+
+        if (otherUsers.length === 0) {
+            userSelect.innerHTML = '<option>Aucun autre utilisateur trouvé.</option>';
+        } else {
+            userSelect.innerHTML = otherUsers
+                .map(user => `<option value="${user.uid}" data-name="${user.displayName}">${user.displayName}</option>`)
+                .join('');
+            reassignConfirmBtn.disabled = false;
+        }
+    } catch (error) {
+        console.error("Erreur lors de la récupération des utilisateurs:", error);
+        userSelect.innerHTML = '<option>Erreur de chargement.</option>';
+    }
+    
+    reassignModal.classList.remove('hidden');
+}
+
+async function reassignPointage(pointageId, newUserId, newUserName, originalPointage) {
+    try {
+        const pointageRef = doc(db, "pointages", pointageId);
+        
+        const updateData = {
+            uid: newUserId,
+            userName: newUserName
+        };
+
+        await updateDoc(pointageRef, updateData);
+
+        await logAction(pointageId, "Réattribution", {
+            fromUser: { uid: originalPointage.uid, name: originalPointage.userName },
+            toUser: { uid: newUserId, name: newUserName }
+        });
+        
+        showInfoModal("Succès", "Le pointage a été réattribué avec succès.");
+        resetFilters();
+
+    } catch (error) {
+        console.error("Erreur lors de la réattribution:", error);
+        showInfoModal("Erreur", "La mise à jour a échoué. Veuillez réessayer.");
     }
 }
 
