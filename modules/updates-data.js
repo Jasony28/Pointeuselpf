@@ -1,5 +1,13 @@
 export const updatesLog = [
     {
+    version: 'v3.4.5',
+    date: '3 octobre 2025',
+    changes: [
+        "### Pour l'Administrateur",
+        "🐛 **Correction de la Duplication de Pointage** : La duplication d'un pointage pour un collègue (bouton `📋`) crée maintenant une copie 100% indépendante. La suppression de cette copie n'affecte plus le pointage original de l'employé qui l'a partagé."
+    ]
+},
+    {
         version: 'v3.4.4',
         date: '2 octobre 2025',
         changes: [

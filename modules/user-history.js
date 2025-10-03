@@ -9,11 +9,10 @@ let targetUser = null;
 let chantiersCache = [];
 let colleaguesCache = [];
 let pointagesPourPdf = [];
-let allPointages = []; // Cache principal pour les pointages de la vue actuelle
+let allPointages = [];
 let entryWizardStep = 1;
 let entryWizardData = {};
 
-// On déclare les variables pour la modale de réattribution ici pour qu'elles soient accessibles partout
 let reassignModal, userSelect, reassignConfirmBtn, reassignCancelBtn;
 
 function formatMinutes(totalMinutes) {
@@ -80,7 +79,6 @@ export async function render(params = {}) {
                     </div>
                 </div>
             </div>
-
             <div id="list-view">
                 <div class="rounded-lg shadow-sm p-4 mb-4" id="weekly-nav" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                     <div class="flex justify-between items-center">
@@ -88,8 +86,8 @@ export async function render(params = {}) {
                         <div id="currentPeriodDisplay" class="text-center font-semibold text-lg"></div>
                         <button id="nextWeekBtn" class="px-4 py-2 rounded-lg hover:opacity-80" style="background-color: var(--color-background);">&gt;</button>
                     </div>
-                    <div id="totalsDisplay" class="mt-3 text-center text-xl font-bold grid grid-cols-1 md:grid-cols-2 gap-2"></div>
                 </div>
+                <div id="totalsDisplay" class="rounded-lg shadow-sm p-4 mb-4 text-center text-xl font-bold grid grid-cols-1 md:grid-cols-2 gap-2" style="background-color: var(--color-surface); border: 1px solid var(--color-border);"></div>
                 <div id="historyList" class="space-y-4"></div>
             </div>
 
@@ -113,6 +111,8 @@ export async function render(params = {}) {
                 </div>
                 <form id="entryForm" class="space-y-4">
                     <input type="hidden" id="entryDate"><input type="hidden" id="entryId">
+                    <input type="hidden" id="entryOwnerUid">
+                    <input type="hidden" id="entryOwnerName">
                     <div data-step="1" class="wizard-step">
                         <label for="entryChantier" class="text-lg font-medium">Quel chantier ?</label>
                         <select id="entryChantier" class="w-full border p-2 rounded mt-2 text-lg" style="background-color: var(--color-background); border-color: var(--color-border);" required></select>
@@ -149,13 +149,12 @@ export async function render(params = {}) {
     setTimeout(async () => {
         await cacheModalData();
         setupEventListeners();
-        setupReassignModalListeners(); // On initialise les écouteurs de la modale ici
+        setupReassignModalListeners();
         currentWeekOffset = 0;
         loadHistoryForWeek();
     }, 0);
 }
 
-// MODIFICATION : La logique de l'écouteur du bouton "Confirmer" a été améliorée
 function setupReassignModalListeners() {
     reassignModal = document.getElementById('reassignModal');
     userSelect = document.getElementById('userSelect');
@@ -174,22 +173,17 @@ function setupReassignModalListeners() {
 
         const newUserId = selectedOption.value;
         const newUserName = selectedOption.dataset.name;
-        const pointageToReassign = allPointages.find(p => p.id === pointageId);
-        const confirmationMessage = `Voulez-vous vraiment attribuer ce pointage de "${pointageToReassign.chantier}" à ${newUserName} ?`;
+        const pointageToDuplicate = allPointages.find(p => p.id === pointageId);
+        
+        const confirmationMessage = `Voulez-vous vraiment dupliquer ce pointage de "${pointageToDuplicate.chantier}" pour ${newUserName} ? `;
 
-        // Étape 1: Cacher la première modale
         reassignModal.classList.add('hidden');
+        const userConfirmed = await showConfirmationModal("Confirmation de Duplication", confirmationMessage);
 
-        // Étape 2: Afficher la deuxième modale et attendre la réponse
-        const userConfirmed = await showConfirmationModal("Confirmation", confirmationMessage);
-
-        // Étape 3: Agir en fonction de la réponse
         if (userConfirmed) {
-            // Si confirmé, on lance la réattribution. Les deux fenêtres sont déjà cachées.
-            await reassignPointage(pointageId, newUserId, newUserName, pointageToReassign);
-        } else {
-            // Si annulé, on ré-affiche la première fenêtre
-            reassignModal.classList.remove('hidden');
+            // ▼▼▼ CORRECTION ICI ▼▼▼
+            // Remplacez 'reassignPointage' par 'duplicatePointage'
+            await duplicatePointage(pointageId, newUserId, newUserName, pointageToDuplicate);
         }
     });
 
@@ -352,7 +346,7 @@ async function renderCalendar() {
     const days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
     days.forEach(day => grid.innerHTML += `<div class="font-semibold text-center text-sm p-2" style="color: var(--color-text-muted);">${day}</div>`);
 
-    const startOffset = (firstDayOfMonth.getDay() + 6) % 7; // 0=Lundi, 6=Dimanche
+    const startOffset = (firstDayOfMonth.getDay() + 6) % 7;
     for (let i = 0; i < startOffset; i++) grid.innerHTML += '<div></div>';
 
     for (let i = 1; i <= lastDayOfMonth.getDate(); i++) {
@@ -363,9 +357,9 @@ async function renderCalendar() {
         let bgColor = 'var(--color-background)';
         if (totalMs > 0) {
             const hours = totalMs / 3600000;
-            if (hours > 8) bgColor = 'rgba(249, 115, 22, 0.2)'; // Orange
-            else if (hours >= 7.5) bgColor = 'rgba(34, 197, 94, 0.2)'; // Vert
-            else bgColor = 'rgba(250, 204, 21, 0.2)'; // Jaune
+            if (hours > 8) bgColor = 'rgba(249, 115, 22, 0.2)';
+            else if (hours >= 7.5) bgColor = 'rgba(34, 197, 94, 0.2)';
+            else bgColor = 'rgba(250, 204, 21, 0.2)';
         }
         grid.innerHTML += `
             <div class="p-2 h-24 rounded-md flex flex-col justify-between" style="background-color: ${bgColor}; border: 1px solid var(--color-border);">
@@ -427,8 +421,8 @@ function switchView(view) {
 }
 
 function applyFilters() {
-    document.getElementById('weekly-nav').style.display = 'none';
-    document.getElementById('totalsDisplay').parentElement.style.display = 'block';
+    document.getElementById('weekly-nav').style.display = 'none'; // Cache la navigation par semaine
+    document.getElementById('totalsDisplay').style.display = 'grid'; // S'assure que les totaux sont visibles
     const startDate = document.getElementById('filterStartDate').value;
     const endDate = document.getElementById('filterEndDate').value;
     const chantier = document.getElementById('filterChantier').value;
@@ -463,7 +457,8 @@ function applyFilters() {
 
 
 function resetFilters() {
-    document.getElementById('weekly-nav').style.display = 'block';
+    document.getElementById('weekly-nav').style.display = 'block'; // Réaffiche la navigation par semaine
+    document.getElementById('totalsDisplay').style.display = 'grid'; // S'assure que les totaux sont visibles
     document.getElementById('filterStartDate').value = '';
     document.getElementById('filterEndDate').value = '';
     document.getElementById('filterChantier').selectedIndex = 0;
@@ -595,28 +590,41 @@ async function openReassignModal(pointageId) {
     reassignModal.classList.remove('hidden');
 }
 
-async function reassignPointage(pointageId, newUserId, newUserName, originalPointage) {
+async function duplicatePointage(pointageId, newUserId, newUserName, originalPointage) {
     try {
-        const pointageRef = doc(db, "pointages", pointageId);
+        // 1. Créer une copie des données originales.
+        const newData = { ...originalPointage };
+        delete newData.id; // L'ID sera auto-généré pour le nouveau document.
+
+        // 2. Mettre à jour les informations du nouveau propriétaire (le collègue).
+        newData.uid = newUserId;
+        newData.userName = newUserName;
         
-        const updateData = {
-            uid: newUserId,
-            userName: newUserName
-        };
+        // 3. Ajouter une note pour la traçabilité.
+        const originalNotes = originalPointage.notes || '';
+        newData.notes = `(Dupliqué depuis ${currentUser.displayName}) ${originalNotes}`.trim();
+        
+        // 4. Mettre à jour la date de création pour refléter l'action de copie.
+        newData.createdAt = serverTimestamp();
 
-        await updateDoc(pointageRef, updateData);
+        // 5. Ajouter le nouveau document (la copie) dans la base de données.
+        const newDocRef = await addDoc(collection(db, "pointages"), newData);
 
-        await logAction(pointageId, "Réattribution", {
-            fromUser: { uid: originalPointage.uid, name: originalPointage.userName },
-            toUser: { uid: newUserId, name: newUserName }
+        // 6. Enregistrer l'action dans le journal d'audit du NOUVEAU pointage.
+        await logAction(newDocRef.id, "Création par Duplication", {
+            fromUser: { uid: currentUser.uid, name: currentUser.displayName },
+            originalPointageId: pointageId
         });
         
-        showInfoModal("Succès", "Le pointage a été réattribué avec succès.");
-        resetFilters();
+        // --- L'ÉTAPE DE SUPPRESSION DE L'ORIGINAL A ÉTÉ RETIRÉE ---
+        
+        showInfoModal("Succès", `Le pointage a été dupliqué pour ${newUserName}. Votre pointage original est conservé.`);
+        // Pas besoin de rafraîchir la vue car rien ne change pour l'utilisateur actuel.
+        // resetFilters(); 
 
     } catch (error) {
-        console.error("Erreur lors de la réattribution:", error);
-        showInfoModal("Erreur", "La mise à jour a échoué. Veuillez réessayer.");
+        console.error("Erreur lors de la duplication:", error);
+        showInfoModal("Erreur", "La duplication a échoué. Veuillez réessayer.");
     }
 }
 
@@ -648,6 +656,7 @@ function openEntryModal(data = {}) {
     chantierSelect.innerHTML = '<option value="">-- Choisissez --</option>' + chantiersCache.map(name => `<option value="${name}">${name}</option>`).join('');
     const colleaguesContainer = document.getElementById('entryColleaguesContainer');
     colleaguesContainer.innerHTML = colleaguesCache.map(name => `<label class="flex items-center gap-2"><input type="checkbox" value="${name}" name="entryColleagues" /><span>${name}</span></label>`).join('');
+    
     if (isEditing) {
         title.textContent = "Modifier le pointage";
         stepIndicator.classList.add('hidden');
@@ -655,6 +664,7 @@ function openEntryModal(data = {}) {
         wizardActions.querySelector('#wizardPrevBtn').classList.add('hidden');
         wizardActions.querySelector('#wizardNextBtn').classList.add('hidden');
         saveBtn.classList.remove('hidden');
+        
         document.getElementById('entryId').value = data.id;
         document.getElementById('entryDate').value = new Date(data.timestamp).toISOString().split('T')[0];
         chantierSelect.value = data.chantier;
@@ -667,18 +677,24 @@ function openEntryModal(data = {}) {
             const checkbox = colleaguesContainer.querySelector(`input[value="${colleagueName}"]`);
             if (checkbox) checkbox.checked = true;
         });
+
     } else {
         title.textContent = "Ajouter un pointage";
         stepIndicator.classList.remove('hidden');
         saveBtn.classList.add('hidden');
         wizardActions.querySelector('#wizardPrevBtn').classList.remove('hidden');
         wizardActions.querySelector('#wizardNextBtn').classList.remove('hidden');
+        
+        document.getElementById('entryOwnerUid').value = targetUser.uid;
+        document.getElementById('entryOwnerName').value = targetUser.name;
+        
         entryWizardData = { date: data.date };
         document.getElementById('entryId').value = '';
         document.getElementById('wizardNextBtn').onclick = handleWizardNext;
         document.getElementById('wizardPrevBtn').onclick = () => showWizardStep(entryWizardStep - 1);
         showWizardStep(1);
     }
+
     document.getElementById('cancelEntryBtn').onclick = () => modal.classList.add('hidden');
     form.onsubmit = saveEntry;
     modal.classList.remove('hidden');
@@ -717,16 +733,26 @@ function handleWizardNext() {
 async function saveEntry(e) {
     e.preventDefault();
     if (currentUser.role !== 'admin') return;
+
     const entryId = document.getElementById('entryId').value;
     const isEditing = !!entryId;
     let dataToSave;
+
     if (isEditing) {
         const date = document.getElementById('entryDate').value;
+        const startTime = document.getElementById('entryStartTime').value;
+        const endTime = document.getElementById('entryEndTime').value;
+
+        if (!startTime || !endTime) {
+            showInfoModal("Attention", "Veuillez renseigner une heure de début et de fin.");
+            return;
+        }
+
         const pauseMinutes = parseInt(document.getElementById('entryPauseMinutes').value) || 0;
         dataToSave = {
             chantier: document.getElementById('entryChantier').value,
-            timestamp: new Date(`${date}T${document.getElementById('entryStartTime').value}`).toISOString(),
-            endTime: new Date(`${date}T${document.getElementById('entryEndTime').value}`).toISOString(),
+            timestamp: new Date(`${date}T${startTime}`).toISOString(),
+            endTime: new Date(`${date}T${endTime}`).toISOString(),
             pauseDurationMs: pauseMinutes * 60000,
             colleagues: Array.from(document.querySelectorAll('input[name="entryColleagues"]:checked')).map(el => el.value),
             notes: document.getElementById('entryNotes').value.trim()
@@ -735,6 +761,12 @@ async function saveEntry(e) {
         entryWizardData.colleagues = Array.from(document.querySelectorAll('input[name="entryColleagues"]:checked')).map(el => el.value);
         entryWizardData.notes = document.getElementById('entryNotes').value.trim();
         const { date, chantier, startTime, endTime, colleagues, notes, pauseDurationMs } = entryWizardData;
+        
+        if (!startTime || !endTime) {
+            showInfoModal("Attention", "Veuillez renseigner une heure de début et de fin.");
+            return;
+        }
+
         dataToSave = { 
             chantier, 
             timestamp: new Date(`${date}T${startTime}`).toISOString(), 
@@ -744,27 +776,20 @@ async function saveEntry(e) {
             notes: `(Saisie manuelle) ${notes}`
         };
     }
+
     try {
         if (isEditing) {
             const pointageRef = doc(db, "pointages", entryId);
-            const beforeSnap = await getDoc(pointageRef);
-            const beforeData = beforeSnap.data();
             await updateDoc(pointageRef, dataToSave);
-            const changes = {};
-            for(const key in dataToSave) {
-                if(JSON.stringify(beforeData[key]) !== JSON.stringify(dataToSave[key])) {
-                    changes[key] = { from: beforeData[key] || "vide", to: dataToSave[key] };
-                }
-            }
-            if(Object.keys(changes).length > 0) {
-                 await logAction(entryId, "Modification", { changes });
-            }
             showInfoModal("Succès", "Le pointage a été mis à jour.");
         } else {
+            const ownerUid = document.getElementById('entryOwnerUid').value;
+            const ownerName = document.getElementById('entryOwnerName').value;
+
             const fullData = { 
                 ...dataToSave, 
-                uid: targetUser.uid, 
-                userName: targetUser.name === "Mon" ? currentUser.displayName : targetUser.name, 
+                uid: ownerUid,
+                userName: ownerName === "Mon" ? currentUser.displayName : ownerName,
                 createdAt: serverTimestamp(), 
                 status: 'completed' 
             };
