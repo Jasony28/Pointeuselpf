@@ -1,5 +1,15 @@
 export const updatesLog = [
     {
+    version: 'v3.4.6',
+    date: '7 octobre 2025',
+    changes: [
+        "### Améliorations Générales",
+        "✨ **Ajout manuel facilité** : Dans l'historique, les jours de la semaine s'affichent maintenant en permanence, même sans pointage existant, ce qui permet d'ajouter facilement une nouvelle entrée pour un jour oublié.",
+        "### Pour l'Administrateur",
+        "🐛 **Correction d'affichage** : La page 'Détails pour le chantier' s'adapte désormais correctement à tous les thèmes de l'application (y compris les thèmes sombres)."
+    ]
+},
+    {
     version: 'v3.4.5',
     date: '3 octobre 2025',
     changes: [

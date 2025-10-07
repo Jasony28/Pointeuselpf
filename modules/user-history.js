@@ -268,8 +268,7 @@ async function displayHistoryList(startDate, endDate, chantierFilter = null) {
 
     historyList.innerHTML = "";
     let totalMs = 0, totalKm = 0, totalMin = 0;
-    let hasEntries = false;
-
+    
     const daysOfWeek = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
     Object.keys(dataByDate).sort().forEach(dateString => {
@@ -277,8 +276,6 @@ async function displayHistoryList(startDate, endDate, chantierFilter = null) {
         totalMs += dayData.dailyTotalMs;
         totalKm += dayData.dailyTotalKm;
         totalMin += dayData.dailyTotalMin;
-
-        if (dayData.entries.length > 0) hasEntries = true;
 
         if(chantierFilter && dayData.entries.length === 0) return;
 
@@ -310,10 +307,6 @@ async function displayHistoryList(startDate, endDate, chantierFilter = null) {
         dayWrapper.appendChild(entriesContainer);
         historyList.appendChild(dayWrapper);
     });
-
-    if (!hasEntries) {
-        historyList.innerHTML = `<p class='text-center p-8' style='color: var(--color-text-muted);'>Aucun pointage trouvé pour les critères sélectionnés.</p>`;
-    }
     
     document.getElementById("totalsDisplay").innerHTML = `
         <div><p class="text-sm font-medium" style="color: var(--color-text-muted);">Total Heures Période</p><p>${formatMilliseconds(totalMs)}</p></div>

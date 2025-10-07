@@ -1,6 +1,5 @@
 import { collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, navigateTo } from "../app.js";
-// CORRECTION: Import des fonctions utilitaires centralisées.
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 
 let currentChantierName = null;
@@ -17,37 +16,47 @@ export async function render(params = {}) {
     currentChantierName = params.chantierName;
 
     pageContent.innerHTML = `
-        <div class="max-w-4xl mx-auto">
-            <button id="back-to-dashboard" class="text-blue-600 hover:underline mb-4">&larr; Retour au tableau de bord</button>
-            <h2 class="text-2xl font-bold mb-4">Détails pour le chantier : <span class="text-purple-700">${currentChantierName}</span></h2>
+        <div class="max-w-4xl mx-auto space-y-6">
+            <button id="back-to-dashboard" class="font-semibold hover:underline" style="color: var(--color-primary);">&larr; Retour au tableau de bord</button>
             
-            <div class="bg-white p-4 rounded-lg shadow-sm mb-4">
+            <h2 class="text-2xl font-bold" style="color: var(--color-text-base);">
+                Détails pour le chantier : <span style="color: var(--color-primary);">${currentChantierName}</span>
+            </h2>
+            
+            <div class="p-4 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                 <div class="flex items-center justify-center gap-2" id="filter-buttons">
-                    <button data-filter="week" class="px-4 py-2 text-sm font-medium rounded-md">Cette Semaine</button>
-                    <button data-filter="month" class="px-4 py-2 text-sm font-medium rounded-md">Ce Mois</button>
-                    <button data-filter="year" class="px-4 py-2 text-sm font-medium rounded-md">Cette Année</button>
+                    <button data-filter="week" class="px-4 py-2 text-sm font-medium rounded-md transition-colors"></button>
+                    <button data-filter="month" class="px-4 py-2 text-sm font-medium rounded-md transition-colors"></button>
+                    <button data-filter="year" class="px-4 py-2 text-sm font-medium rounded-md transition-colors"></button>
                 </div>
             </div>
 
-            <div class="bg-white p-6 rounded-lg shadow-sm">
+            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                 <div id="total-hours-display" class="text-center mb-4"></div>
                 <div id="details-list" class="space-y-3">
-                    <p class="text-center text-gray-500">Chargement des détails...</p>
+                    <p class="text-center" style="color: var(--color-text-muted);">Chargement des détails...</p>
                 </div>
             </div>
         </div>
     `;
-setTimeout(() => {
-    document.getElementById('back-to-dashboard').onclick = () => navigateTo('admin-dashboard');
-    document.getElementById('filter-buttons').addEventListener('click', (e) => {
-        if (e.target.tagName === 'BUTTON') {
-            currentFilter = e.target.dataset.filter;
-            loadChantierDetails();
-        }
-    });
 
-    loadChantierDetails();
-     }, 0);
+    setTimeout(() => {
+        document.getElementById('back-to-dashboard').onclick = () => navigateTo('admin-dashboard');
+        document.getElementById('filter-buttons').addEventListener('click', (e) => {
+            if (e.target.tagName === 'BUTTON') {
+                currentFilter = e.target.dataset.filter;
+                loadChantierDetails();
+            }
+        });
+
+        // Initialisation des textes des boutons
+        const buttons = document.getElementById('filter-buttons').querySelectorAll('button');
+        buttons[0].textContent = "Cette Semaine";
+        buttons[1].textContent = "Ce Mois";
+        buttons[2].textContent = "Cette Année";
+
+        loadChantierDetails();
+    }, 0);
 }
 
 /**
@@ -57,21 +66,20 @@ async function loadChantierDetails() {
     const listContainer = document.getElementById('details-list');
     const totalContainer = document.getElementById('total-hours-display');
     const filterButtons = document.getElementById('filter-buttons');
-    listContainer.innerHTML = `<p class="text-center text-gray-500">Chargement des détails...</p>`;
+    listContainer.innerHTML = `<p class="text-center" style="color: var(--color-text-muted);">Chargement des détails...</p>`;
     totalContainer.innerHTML = '';
 
-    // Met à jour le style du bouton de filtre actif
+    // Met à jour le style du bouton de filtre actif en utilisant les variables de thème
     filterButtons.querySelectorAll('button').forEach(btn => {
-        btn.classList.toggle('bg-purple-600', btn.dataset.filter === currentFilter);
-        btn.classList.toggle('text-white', btn.dataset.filter === currentFilter);
-        btn.classList.toggle('bg-gray-200', btn.dataset.filter !== currentFilter);
+        const isActive = btn.dataset.filter === currentFilter;
+        btn.style.backgroundColor = isActive ? 'var(--color-primary)' : 'var(--color-background)';
+        btn.style.color = isActive ? '#FFFFFF' : 'var(--color-text-base)';
     });
 
     const now = new Date();
     let startDate;
     let periodText = "";
 
-    // CORRECTION: Utilisation de méthodes UTC fiables pour définir la plage de dates.
     switch (currentFilter) {
         case 'week':
             startDate = getWeekDateRange(0).startOfWeek;
@@ -102,28 +110,29 @@ async function loadChantierDetails() {
         querySnapshot.forEach(doc => {
             const data = doc.data();
             if (data.endTime) {
-                const durationMs = new Date(data.endTime) - new Date(data.timestamp);
+                const durationMs = (new Date(data.endTime) - new Date(data.timestamp)) - (data.pauseDurationMs || 0);
                 userHours[data.userName] = (userHours[data.userName] || 0) + durationMs;
                 totalMs += durationMs;
             }
         });
 
-        totalContainer.innerHTML = `<h3 class="text-xl font-bold">Total ${periodText} : <span class="text-purple-700">${formatMilliseconds(totalMs)}</span></h3>`;
+        totalContainer.innerHTML = `<h3 class="text-xl font-bold" style="color: var(--color-text-base);">Total ${periodText} : <span style="color: var(--color-primary);">${formatMilliseconds(totalMs)}</span></h3>`;
 
         listContainer.innerHTML = "";
         const sortedUsers = Object.entries(userHours).sort(([, a], [, b]) => b - a);
 
         if (sortedUsers.length === 0) {
-            listContainer.innerHTML = `<p class="text-center text-gray-500">Aucun pointage pour ce chantier sur la période sélectionnée.</p>`;
+            listContainer.innerHTML = `<p class="text-center" style="color: var(--color-text-muted);">Aucun pointage pour ce chantier sur la période sélectionnée.</p>`;
             return;
         }
 
         sortedUsers.forEach(([name, ms]) => {
             const div = document.createElement('div');
             div.className = 'flex justify-between items-center text-sm p-2 border-b';
+            div.style.borderColor = 'var(--color-border)';
             div.innerHTML = `
-                <span class="font-medium">${name}</span>
-                <span class="font-bold">${formatMilliseconds(ms)}</span>
+                <span class="font-medium" style="color: var(--color-text-base);">${name}</span>
+                <span class="font-bold" style="color: var(--color-primary);">${formatMilliseconds(ms)}</span>
             `;
             listContainer.appendChild(div);
         });
@@ -132,5 +141,3 @@ async function loadChantierDetails() {
         listContainer.innerHTML = `<p class="text-center text-red-500">Erreur de chargement.</p>`;
     }
 }
-
-// CORRECTION: La fonction locale a été supprimée car elle est maintenant importée depuis utils.js
