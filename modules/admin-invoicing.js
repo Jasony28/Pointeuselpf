@@ -1,238 +1,293 @@
-import { collection, query, where, getDocs, orderBy, getDoc, doc, runTransaction, increment } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, pageContent, showInfoModal } from "../app.js";
+import { collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { db, pageContent } from "../app.js";
 import { formatMilliseconds } from "./utils.js";
 
-// --- À PERSONNALISER : VOS INFORMATIONS D'ENTREPRISE ---
-const MY_COMPANY_INFO = {
-    name: "Nom de Votre Entreprise",
-    address: "123 Rue de l'Exemple, 1000 Bruxelles",
-    vat: "BE 0123.456.789",
-    iban: "BE12 3456 7890 1234",
-    bic: "GEBABEBB"
-};
-const VAT_RATE = 0.21; // 21% de TVA
-// ----------------------------------------------------
+// --- Variables pour la mise en cache des données ---
+let chantiersCache = [];
+let pointagesCache = new Map();
+let activeChantiersCache = []; // Cache pour les chantiers actifs ce mois-ci
 
+/**
+ * Point d'entrée principal : Affiche la structure de la page.
+ */
 export async function render() {
     pageContent.innerHTML = `
-        <div class="max-w-3xl mx-auto space-y-6">
-            <h2 class="text-2xl font-bold">🧾 Facturation Client</h2>
-            
-            <div class="p-6 rounded-lg shadow-sm space-y-4" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <div>
-                    <label for="chantier-select" class="text-sm font-medium">1. Sélectionnez un client (chantier)</label>
-                    <select id="chantier-select" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);"></select>
+        <style>
+            /* Style pour le bouton de période actif */
+            .period-btn.active {
+                background-color: var(--color-primary);
+                color: white;
+                font-weight: bold;
+            }
+            /* Style pour le curseur de la barre de défilement */
+            #chantier-summary-content::-webkit-scrollbar { width: 8px; }
+            #chantier-summary-content::-webkit-scrollbar-thumb { background-color: var(--color-primary); border-radius: 4px; }
+            #chantier-summary-content::-webkit-scrollbar-track { background: var(--color-surface); }
+        </style>
+
+        <div class="max-w-5xl mx-auto space-y-6">
+            <div id="chantier-list-view">
+                <h2 class="text-2xl font-bold mb-4">📊 Suivi des Heures (Chantiers actifs ce mois-ci)</h2>
+                <div class="relative">
+                    <input type="search" id="search-chantier-input" placeholder="Rechercher un chantier..." class="w-full border p-2 pl-10 rounded" style="background-color: var(--color-background); border-color: var(--color-border);">
+                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
                 </div>
-                <div>
-                    <label class="text-sm font-medium">2. Choisissez une période à facturer</label>
-                    <div class="flex flex-col sm:flex-row gap-4 mt-1">
-                        <input type="date" id="start-date" class="w-full border p-2 rounded" style="background-color: var(--color-background); border-color: var(--color-border);">
-                        <input type="date" id="end-date" class="w-full border p-2 rounded" style="background-color: var(--color-background); border-color: var(--color-border);">
+                <div id="chantiers-summary-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
                     </div>
-                </div>
-                <div class="text-right pt-4 border-t" style="border-color: var(--color-border);">
-                    <button id="generate-invoice-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-2 rounded-lg">
-                        Générer la Facture
-                    </button>
+            </div>
+
+            <div id="chantier-detail-view" class="hidden">
+                <button id="back-to-list-btn" class="mb-4 font-semibold hover:underline text-sm" style="color: var(--color-primary);">← Retour à la liste</button>
+                <div class="p-4 sm:p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                    <div class="flex justify-between items-start gap-4">
+                        <div>
+                            <h3 id="detail-chantier-name" class="text-2xl font-bold"></h3>
+                            <p id="detail-chantier-address" class="text-sm mt-1" style="color: var(--color-text-muted);"></p>
+                        </div>
+                        <a id="detail-chantier-nav-link" href="#" target="_blank" rel="noopener noreferrer" class="text-3xl hover:opacity-75 transition-opacity" title="Ouvrir l'itinéraire dans Google Maps">🧭</a>
+                    </div>
+                    <hr class="my-4" style="border-color: var(--color-border);">
+                    <div class="flex justify-center flex-wrap gap-2 mb-4">
+                        <button data-period="month" class="period-btn active px-4 py-2 rounded-md text-sm">Par Mois</button>
+                        <button data-period="week" class="period-btn px-4 py-2 rounded-md text-sm">Par Semaine</button>
+                        <button data-period="year" class="period-btn px-4 py-2 rounded-md text-sm">Par Année</button>
+                    </div>
+                    <div id="chantier-summary-content" class="max-h-[60vh] overflow-y-auto pr-2">
+                        </div>
                 </div>
             </div>
         </div>
     `;
-
+    
     setTimeout(() => {
-        populateChantierSelect();
-        document.getElementById('generate-invoice-btn').onclick = generateInvoicePDF;
+        setupEventListeners();
+        loadAndDisplayChantiers();
     }, 0);
 }
-async function populateChantierSelect() {
-    const select = document.getElementById('chantier-select');
-    select.innerHTML = '<option value="">Chargement...</option>';
+
+/**
+ * Charge les données, filtre les chantiers avec des heures ce mois-ci et les affiche.
+ */
+async function loadAndDisplayChantiers() {
+    const listContainer = document.getElementById('chantiers-summary-list');
+    listContainer.innerHTML = `<p class="col-span-full text-center py-8">Chargement des données...</p>`;
+
     try {
-        const q = query(collection(db, "chantiers"), orderBy("name"));
-        const snapshot = await getDocs(q);
-        select.innerHTML = '<option value="">-- Choisissez un client --</option>';
-        snapshot.forEach(doc => {
-            select.innerHTML += `<option value="${doc.id}">${doc.data().name}</option>`;
+        const chantiersQuery = query(collection(db, "chantiers"), orderBy("name", "asc"));
+        const chantiersSnapshot = await getDocs(chantiersQuery);
+        chantiersCache = chantiersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+        const pointagesQuery = query(collection(db, "pointages"),
+            where("timestamp", ">=", startOfMonth.toISOString()),
+            where("timestamp", "<=", endOfMonth.toISOString())
+        );
+        const pointagesSnapshot = await getDocs(pointagesQuery);
+
+        const monthlyHoursMap = new Map();
+        pointagesSnapshot.forEach(doc => {
+            const data = doc.data();
+            const durationMs = new Date(data.endTime) - new Date(data.timestamp) - (data.pauseDurationMs || 0);
+            const currentTotal = monthlyHoursMap.get(data.chantier) || 0;
+            monthlyHoursMap.set(data.chantier, currentTotal + durationMs);
         });
+
+        const chantiersWithHours = chantiersCache.map(chantier => ({
+            ...chantier,
+            monthlyTotalMs: monthlyHoursMap.get(chantier.name) || 0
+        }));
+
+        // *** MODIFICATION PRINCIPALE : On ne garde que les chantiers avec des heures > 0 ***
+        activeChantiersCache = chantiersWithHours.filter(chantier => chantier.monthlyTotalMs > 0);
+
+        displayChantierCards(activeChantiersCache);
     } catch (error) {
-        select.innerHTML = '<option value="">Erreur de chargement</option>';
+        console.error("Erreur de chargement des chantiers:", error);
+        listContainer.innerHTML = `<p class="col-span-full text-center text-red-500 py-8">Une erreur est survenue lors du chargement.</p>`;
     }
 }
 
-async function generateInvoicePDF() {
-    const chantierId = document.getElementById('chantier-select').value;
-    const startDateValue = document.getElementById('start-date').value;
-    const endDateValue = document.getElementById('end-date').value;
+/**
+ * Affiche les cartes des chantiers dans la liste principale.
+ * @param {Array} chantiers - La liste des chantiers à afficher.
+ */
+function displayChantierCards(chantiers) {
+    const listContainer = document.getElementById('chantiers-summary-list');
+    listContainer.innerHTML = '';
 
-    if (!chantierId || !startDateValue || !endDateValue) {
-        showInfoModal("Attention", "Veuillez sélectionner un client et une plage de dates complète.");
+    if (chantiers.length === 0) {
+        const searchTerm = document.getElementById('search-chantier-input').value;
+        if (searchTerm) {
+            listContainer.innerHTML = `<p class="col-span-full text-center py-8">Aucun chantier actif ne correspond à votre recherche.</p>`;
+        } else {
+            listContainer.innerHTML = `<p class="col-span-full text-center py-8">Aucun chantier avec des heures enregistrées ce mois-ci.</p>`;
+        }
         return;
     }
+
+    chantiers.forEach(chantier => {
+        const card = document.createElement('div');
+        card.className = 'p-4 rounded-lg shadow-sm cursor-pointer hover:shadow-lg transition-shadow duration-300';
+        card.style.backgroundColor = 'var(--color-surface)';
+        card.style.border = '1px solid var(--color-border)';
+        card.setAttribute('data-chantier-id', chantier.id);
+        card.innerHTML = `
+            <h3 class="font-bold text-lg truncate" title="${chantier.name}">${chantier.name}</h3>
+            <p class="text-sm mt-1" style="color: var(--color-text-muted);">
+                Heures ce mois-ci : 
+                <span class="font-bold text-base" style="color: var(--color-primary);">${formatMilliseconds(chantier.monthlyTotalMs)}</span>
+            </p>
+        `;
+        listContainer.appendChild(card);
+    });
+}
+
+/**
+ * Affiche la vue détaillée pour un chantier spécifique.
+ * @param {string} chantierId - L'ID du chantier à afficher.
+ */
+async function showChantierDetails(chantierId) {
+    document.getElementById('chantier-list-view').classList.add('hidden');
+    document.getElementById('chantier-detail-view').classList.remove('hidden');
+
+    const chantier = chantiersCache.find(c => c.id === chantierId);
+    if (!chantier) return;
+
+    document.getElementById('detail-chantier-name').textContent = chantier.name;
+    document.getElementById('detail-chantier-address').textContent = chantier.address || 'Adresse non spécifiée';
+    document.getElementById('detail-chantier-nav-link').href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(chantier.address)}`;
     
-    showInfoModal("Génération en cours...", "La facture est en cours de préparation, veuillez patienter.");
+    document.querySelectorAll('.period-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelector('.period-btn[data-period="month"]').classList.add('active');
+    document.getElementById('chantier-summary-content').innerHTML = `<p class="text-center py-4">Chargement des heures...</p>`;
 
-    try {
-        // Étape 1 : Récupérer toutes les données nécessaires
-        const chantierRef = doc(db, "chantiers", chantierId);
-        const chantierSnap = await getDoc(chantierRef);
-        if (!chantierSnap.exists()) throw new Error("Chantier non trouvé.");
-        
-        const chantierData = chantierSnap.data();
-        const billingRate = chantierData.tauxFacturation || 0;
-        if (billingRate === 0) {
-            showInfoModal("Erreur", `Le taux de facturation pour "${chantierData.name}" n'est pas défini.`);
-            return;
-        }
-
-        const startDate = new Date(startDateValue);
-        const endDate = new Date(endDateValue);
-        endDate.setHours(23, 59, 59, 999);
-
-        const q = query(collection(db, "pointages"),
-            where("chantier", "==", chantierData.name),
-            where("timestamp", ">=", startDate.toISOString()),
-            where("timestamp", "<=", endDate.toISOString()),
-            orderBy("timestamp", "asc")
-        );
-        const pointagesSnapshot = await getDocs(q);
-        if (pointagesSnapshot.empty) {
-            showInfoModal("Information", "Aucune heure à facturer pour cette période.");
-            return;
-        }
-
-        // Étape 2 : Lancer la transaction pour obtenir un numéro de facture unique
-        const invoiceNumber = await runTransaction(db, async (transaction) => {
-            const counterRef = doc(db, "counters", "invoiceCounter");
-            const counterDoc = await transaction.get(counterRef);
-            if (!counterDoc.exists()) throw "Le document compteur de factures est introuvable !";
-            
-            const currentYear = new Date().getFullYear();
-            const counterData = counterDoc.data();
-            let newNumber = counterData.lastNumber + 1;
-
-            if (counterData.year !== currentYear) {
-                newNumber = 1;
-                transaction.update(counterRef, { lastNumber: 1, year: currentYear });
-            } else {
-                transaction.update(counterRef, { lastNumber: increment(1) });
-            }
-            
-            const formattedNumber = String(newNumber).padStart(3, '0');
-            return `${currentYear}-${formattedNumber}`;
-        });
-
-        // Étape 3 : Traiter les données de pointage et calculer les totaux
-        let totalMs = 0;
-        const pointagesToBill = [];
-        pointagesSnapshot.forEach(docSnap => {
-            const data = docSnap.data();
-            const durationMs = new Date(data.endTime) - new Date(data.timestamp) - (data.pauseDurationMs || 0);
-            totalMs += durationMs;
-            pointagesToBill.push({ ...data, durationMs });
-        });
-        
-        const totalHours = totalMs / 3600000;
-        const subtotal = totalHours * billingRate;
-        const vatAmount = subtotal * VAT_RATE;
-        const grandTotal = subtotal + vatAmount;
-
-        // Étape 4 : Générer le PDF avec toutes les informations
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
-        
+    let pointages = pointagesCache.get(chantier.id);
+    if (!pointages) {
         try {
-            const logoPath = 'icons/assets/logo.png';
-            const response = await fetch(logoPath);
-            if (!response.ok) throw new Error('Logo non trouvé');
-            const blob = await response.blob();
-            const reader = new FileReader();
-            const logoDataUrl = await new Promise((resolve, reject) => {
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-            });
-            pdf.addImage(logoDataUrl, 'PNG', 40, 40, 80, 40);
-        } catch (e) {
-            console.warn("Logo non chargé, PDF généré sans logo.", e);
+            const q = query(collection(db, "pointages"), where("chantier", "==", chantier.name), orderBy("timestamp", "desc"));
+            const snapshot = await getDocs(q);
+            pointages = snapshot.docs.map(doc => doc.data());
+            pointagesCache.set(chantier.id, pointages);
+        } catch (error) {
+            console.error("Erreur de chargement des pointages:", error);
+            document.getElementById('chantier-summary-content').innerHTML = `<p class="text-center text-red-500 py-4">Erreur de chargement des heures.</p>`;
+            return;
         }
-
-        pdf.setFontSize(20);
-        pdf.setFont(undefined, 'bold');
-        pdf.text("FACTURE", 40, 100);
-
-        pdf.setFontSize(10);
-        pdf.setFont(undefined, 'normal');
-        pdf.text(MY_COMPANY_INFO.name, 555, 60, { align: 'right' });
-        pdf.text(MY_COMPANY_INFO.address, 555, 72, { align: 'right' });
-        pdf.text(`TVA: ${MY_COMPANY_INFO.vat}`, 555, 84, { align: 'right' });
-
-        pdf.setLineWidth(1);
-        pdf.line(40, 130, 555, 130);
-
-        pdf.setFontSize(10);
-        pdf.setFont(undefined, 'bold');
-        pdf.text("Facturé à :", 40, 150);
-        pdf.setFont(undefined, 'normal');
-        pdf.text(chantierData.name, 40, 162);
-        pdf.text(chantierData.address || "Adresse non spécifiée", 40, 174);
-
-        const invoiceDate = new Date();
-        const dueDate = new Date();
-        dueDate.setDate(invoiceDate.getDate() + 30);
-
-        pdf.setFont(undefined, 'bold');
-        pdf.text("Numéro de facture :", 400, 150);
-        pdf.text("Date de facturation :", 400, 162);
-        pdf.text("Date d'échéance :", 400, 174);
-        pdf.setFont(undefined, 'normal');
-        pdf.text(invoiceNumber, 555, 150, { align: 'right' });
-        pdf.text(invoiceDate.toLocaleDateString('fr-FR'), 555, 162, { align: 'right' });
-        pdf.text(dueDate.toLocaleDateString('fr-FR'), 555, 174, { align: 'right' });
-
-        const tableHead = [['Date', 'Employé(s)', 'Heure début', 'Heure fin', 'Durée']];
-        const tableBody = [];
-
-        pointagesToBill.forEach(p => {
-            const startDateObj = new Date(p.timestamp);
-            const endDateObj = new Date(p.endTime);
-            const team = [p.userName, ...(p.colleagues || [])].filter(name => name && name !== "Seul");
-            
-            tableBody.push([
-                startDateObj.toLocaleDateString('fr-FR'),
-                [...new Set(team)].join(', '),
-                startDateObj.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-                endDateObj.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-                formatMilliseconds(p.durationMs)
-            ]);
-        });
-        
-        pdf.autoTable({
-            startY: 200, head: tableHead, body: tableBody,
-            theme: 'striped', headStyles: { fillColor: [41, 51, 92] }
-        });
-
-        const finalY = pdf.lastAutoTable.finalY;
-        pdf.autoTable({
-            startY: finalY > 700 ? 700 : finalY + 20,
-            body: [
-                ['Total HTVA :', `${subtotal.toFixed(2)} €`],
-                [`TVA (${VAT_RATE * 100}%) :`, `${vatAmount.toFixed(2)} €`],
-                [{ content: 'Total TVAC :', styles: { fontStyle: 'bold' } }, { content: `${grandTotal.toFixed(2)} €`, styles: { fontStyle: 'bold' } }]
-            ],
-            theme: 'plain', styles: { fontSize: 10, cellPadding: 4, halign: 'right' }, margin: { left: 395 }
-        });
-
-        const footerY = pdf.internal.pageSize.height - 60;
-        pdf.setFontSize(9);
-        pdf.setTextColor(100);
-        pdf.text(`Veuillez virer le montant total sur le compte ${MY_COMPANY_INFO.iban} (BIC: ${MY_COMPANY_INFO.bic}) en mentionnant le numéro de facture.`, 40, footerY);
-        pdf.text("Merci de votre confiance.", 40, footerY + 12);
-        
-        const fileName = `Facture_${chantierData.name.replace(/ /g, '_')}_${invoiceNumber}.pdf`;
-        pdf.save(fileName);
-
-    } catch (error) {
-        console.error("Erreur de génération de la facture:", error);
-        showInfoModal("Erreur", "Une erreur est survenue : " + error.message);
     }
+    
+    generateSummary('month', pointages);
+}
+
+/**
+ * Génère et affiche le résumé détaillé des heures avec des sections dépliantes.
+ * @param {'month'|'week'|'year'} period - La période de regroupement.
+ * @param {Array} pointages - La liste des pointages pour ce chantier.
+ */
+function generateSummary(period, pointages) {
+    const contentDiv = document.getElementById('chantier-summary-content');
+    if (pointages.length === 0) {
+        contentDiv.innerHTML = `<p class="text-center italic py-4">Aucune heure enregistrée pour ce chantier.</p>`;
+        return;
+    }
+
+    const getGroupKey = (date, period) => {
+        if (period === 'year') return date.getFullYear().toString();
+        if (period === 'month') return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+        return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+    };
+
+    const formatGroupKey = (key, period) => {
+        const parts = key.split('-');
+        if (period === 'year') return `Année ${key}`;
+        if (period === 'month') {
+            const date = new Date(parts[0], parts[1] - 1);
+            return `Mois : ${date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}`;
+        }
+        if (period === 'week') return `Année ${parts[0]}, Semaine ${parts[1].replace('W', '')}`;
+        return key;
+    };
+
+    const grouped = pointages.reduce((acc, p) => {
+        const key = getGroupKey(new Date(p.timestamp), period);
+        if (!acc[key]) acc[key] = { totalMs: 0, entries: [] };
+        const durationMs = new Date(p.endTime) - new Date(p.timestamp) - (p.pauseDurationMs || 0);
+        acc[key].totalMs += durationMs;
+        acc[key].entries.push({ ...p, durationMs });
+        return acc;
+    }, {});
+
+    const sortedKeys = Object.keys(grouped).sort().reverse();
+    
+    let html = '<div class="space-y-3">';
+    sortedKeys.forEach((key, index) => {
+        const group = grouped[key];
+        html += `<details class="rounded-lg overflow-hidden" ${index === 0 ? 'open' : ''}>
+            <summary class="flex justify-between items-center p-3 cursor-pointer font-semibold list-none rounded-t-lg" style="background-color: var(--color-background);">
+                <span>${formatGroupKey(key, period)}</span>
+                <span class="font-bold text-lg" style="color: var(--color-primary);">${formatMilliseconds(group.totalMs)}</span>
+            </summary>
+            <div class="p-2 md:p-3 space-y-2 border-t" style="border-color: var(--color-border);">`;
+        
+        group.entries.forEach(entry => {
+            const team = [...new Set([entry.userName, ...(entry.colleagues || [])].filter(Boolean))].join(', ');
+            const startDate = new Date(entry.timestamp);
+            const endDate = new Date(entry.endTime);
+            html += `
+                <div class="grid grid-cols-3 gap-2 items-center text-sm p-2 rounded hover:bg-opacity-50" style="background-color: var(--color-surface);">
+                    <div class="font-medium">${startDate.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' })}</div>
+                    <div class="truncate text-center" title="${team}">${team}</div>
+                    <div class="text-right font-mono">${startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} - ${endDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>
+                </div>`;
+        });
+        html += `</div></details>`;
+    });
+    html += '</div>';
+    
+    contentDiv.innerHTML = html;
+}
+
+/**
+ * Met en place tous les écouteurs d'événements de la page.
+ */
+function setupEventListeners() {
+    document.getElementById('search-chantier-input').addEventListener('input', (e) => {
+        const searchTerm = e.target.value.toLowerCase();
+        const filtered = activeChantiersCache.filter(c => c.name.toLowerCase().includes(searchTerm));
+        displayChantierCards(filtered);
+    });
+
+    document.getElementById('chantiers-summary-list').addEventListener('click', (e) => {
+        const card = e.target.closest('[data-chantier-id]');
+        if (card) {
+            showChantierDetails(card.dataset.chantierId);
+        }
+    });
+
+    document.getElementById('back-to-list-btn').addEventListener('click', () => {
+        document.getElementById('chantier-detail-view').classList.add('hidden');
+        document.getElementById('chantier-list-view').classList.remove('hidden');
+    });
+    
+    document.querySelectorAll('.period-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+            const clickedBtn = e.target;
+            clickedBtn.classList.add('active');
+            
+            const period = clickedBtn.dataset.period;
+            const chantierName = document.getElementById('detail-chantier-name').textContent;
+            const chantier = chantiersCache.find(c => c.name === chantierName);
+            if(chantier) {
+                const pointages = pointagesCache.get(chantier.id) || [];
+                generateSummary(period, pointages);
+            }
+        });
+    });
 }

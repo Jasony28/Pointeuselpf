@@ -1,5 +1,5 @@
 import { updatesLog } from './modules/updates-data.js';
-const APP_VERSION ='v3.4.5';
+const APP_VERSION ='v3.4.7';
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";

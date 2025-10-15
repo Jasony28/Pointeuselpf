@@ -1,5 +1,13 @@
 export const updatesLog = [
     {
+    version: 'v3.4.7',
+    date: '15 octobre 2025',
+    changes: [
+        "### Pour l'Administrateur",
+        "✨ **Vue épurée du Suivi des Heures** : La page de suivi n'affiche désormais par défaut que les chantiers sur lesquels des heures ont été prestées durant le mois en cours, offrant une vue plus pertinente de l'activité récente."
+    ]
+},
+    {
     version: 'v3.4.6',
     date: '7 octobre 2025',
     changes: [
