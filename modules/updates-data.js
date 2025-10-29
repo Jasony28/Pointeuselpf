@@ -1,5 +1,18 @@
 export const updatesLog = [
     {
+    version: 'v3.4.8',
+    date: '29 octobre 2025',
+    changes: [
+        "### Améliorations Générales",
+        "✨ **Navigation simplifiée** : Cliquer sur le logo \"Pointeuse Lpf\" en haut à gauche vous ramène désormais toujours à votre planning (Vue Employé). Si vous étiez en \"Vue Admin\", l'interface bascule automatiquement.",
+        "🐛 **Correction des noms de collègues** : Un bug qui affichait `[object Object]` ou `undefined` au lieu des noms de vos collègues dans la fenêtre \"Démarrer un pointage\" a été corrigé.",
+        "### Pour l'Administrateur",
+        "✨ **Stats Globales Navigables** : Sur le Tableau de Bord, les cartes principales \"Heures (Semaine)\" et \"Heures (Mois)\" ont maintenant des flèches pour voir les totaux des périodes précédentes.",
+        "✨ **Gestion des Congés (Admin)** : Les administrateurs peuvent désormais voir, accepter ou refuser les demandes de congé en attente directement depuis la page \"Mes Congés\" (la même que les utilisateurs).",
+        "✨ **Recherche complète en Suivi des Heures** : La page \"Suivi des Heures\" (Facturation) affiche et permet désormais de rechercher **tous** les chantiers, y compris ceux n'ayant aucune heure enregistrée ce mois-ci (annule la restriction de la v3.4.7)."
+    ]
+},
+    {
     version: 'v3.4.7',
     date: '15 octobre 2025',
     changes: [

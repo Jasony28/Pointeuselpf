@@ -1,5 +1,5 @@
 import { updatesLog } from './modules/updates-data.js';
-const APP_VERSION ='v3.4.7';
+const APP_VERSION ='v3.4.8';
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
@@ -249,20 +249,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const pinModal = document.getElementById('pinModal');
     const pinForm = document.getElementById('pinForm');
     const pinInput = document.getElementById('pinInput');
-    const stealthTrigger = document.getElementById('stealth-trigger');
 
-    if (stealthTrigger) {
-        stealthTrigger.onclick = () => {
-            if (isStealthMode()) {
-                localStorage.removeItem('stealthMode');
-                showInfoModal("Mode Confidentiel", "Désactivé. Rechargement...");
-                setTimeout(() => window.location.reload(), 1500);
-            } else {
-                pinModal.classList.remove('hidden');
-                pinInput.focus();
-            }
-        };
-    }
+    // Le 'stealth-trigger' a été supprimé
 
     document.getElementById('pinCancelBtn').onclick = () => {
         pinModal.classList.add('hidden');
@@ -280,6 +268,23 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             showInfoModal("Erreur", "Code PIN incorrect.");
             pinForm.reset();
+        }
+    });
+
+    // --- C'EST ICI LA MODIFICATION ---
+    // Gère le clic sur le logo "Pointeuse Lpf"
+    document.getElementById('home-nav-link').addEventListener('click', (e) => {
+        e.preventDefault();
+        
+        // Si l'utilisateur est en mode Admin (isEffectiveAdmin() est true)
+        if (isEffectiveAdmin()) {
+            // On bascule en mode Employé.
+            // toggleView() s'occupe de changer le state, le menu, et de naviguer.
+            toggleView(); 
+        } else {
+            // Si l'utilisateur est déjà en mode Employé,
+            // on s'assure juste qu'il est sur la page principale du planning.
+            navigateTo('user-dashboard');
         }
     });
     

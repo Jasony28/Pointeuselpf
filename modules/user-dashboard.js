@@ -301,9 +301,13 @@ async function openStartModal() {
          chantierSelect.innerHTML = '<option value="" disabled selected>-- Choisissez un chantier --</option>';
          chantiersCache.forEach(name => { chantierSelect.innerHTML += `<option value="${name}">${name}</option>`; });
     }
-    const otherColleagues = colleaguesCache.filter(name => !todaysColleagues.has(name) && name !== currentUser.displayName);
+    
+    // --- C'EST ICI LA CORRECTION (Ligne 365) ---
+    // On utilise colleague.name au lieu de colleague.displayName
+    const otherColleagues = colleaguesCache.filter(colleague => !todaysColleagues.has(colleague.name) && colleague.name !== currentUser.displayName);
     const createColleagueElement = (name) => `<label class="flex items-center gap-2 p-1 rounded w-full"><input type="checkbox" value="${name}" name="colleagues" /><span>${name}</span></label>`;
     let colleaguesHTML = '';
+    
     if (todaysColleagues.size > 0) {
         todaysColleagues.forEach(name => { colleaguesHTML += createColleagueElement(name); });
         colleaguesHTML += `<div class="w-full border-t my-2" style="border-color: var(--color-border);"></div>`;
@@ -317,7 +321,9 @@ async function openStartModal() {
         showAllButton.style.color = 'var(--color-primary)';
         showAllButton.onclick = () => {
             showAllButton.remove();
-            colleaguesContainer.insertAdjacentHTML('beforeend', otherColleagues.map(createColleagueElement).join(''));
+            // --- C'EST ICI LA DEUXIÈME CORRECTION (Ligne 379) ---
+            // On extrait c.name au lieu de c.displayName
+            colleaguesContainer.insertAdjacentHTML('beforeend', otherColleagues.map(c => c.name).map(createColleagueElement).join(''));
         };
         colleaguesContainer.appendChild(showAllButton);
     }

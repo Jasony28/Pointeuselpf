@@ -101,7 +101,7 @@ async function loadAndDisplayChantiers() {
         }));
 
         // *** MODIFICATION PRINCIPALE : On ne garde que les chantiers avec des heures > 0 ***
-        activeChantiersCache = chantiersWithHours.filter(chantier => chantier.monthlyTotalMs > 0);
+        activeChantiersCache = chantiersWithHours;
 
         displayChantierCards(activeChantiersCache);
     } catch (error) {

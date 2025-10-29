@@ -3,6 +3,11 @@ import { db, pageContent, showConfirmationModal, navigateTo } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 import { getUsers } from "./data-service.js";
 
+// --- VARIABLES GLOBALES POUR LES CARTES NAVIGABLES ---
+let globalWeekOffset = 0;
+let globalMonthOffset = 0;
+// --- FIN ---
+
 let userStatsFilter = { period: 'week', offset: 0 };
 let chantierStatsFilter = { period: 'week', offset: 0 };
 
@@ -12,14 +17,25 @@ export async function render() {
             <h2 class="text-2xl font-bold" style="color: var(--color-text-base);">📊 Tableau de Bord Administrateur</h2>
             
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div id="week-total-card" class="p-6 rounded-lg shadow-sm text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                    <h3 class="text-sm font-medium" style="color: var(--color-text-muted);">Heures cette semaine</h3>
-                    <p class="mt-1 text-3xl font-semibold animate-pulse" style="color: var(--color-text-base);">...</p>
+                
+                <div class="p-6 rounded-lg shadow-sm text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                    <div class="flex justify-between items-center mb-1">
+                        <button id="global-week-prev" class="p-1 rounded-lg" style="background-color: var(--color-background);">&lt;</button>
+                        <h3 id="global-week-title" class="text-sm font-medium" style="color: var(--color-text-muted);">Heures (Semaine)</h3>
+                        <button id="global-week-next" class="p-1 rounded-lg" style="background-color: var(--color-background);">&gt;</button>
+                    </div>
+                    <p id="global-week-total" class="mt-1 text-3xl font-semibold animate-pulse" style="color: var(--color-text-base);">...</p>
                 </div>
-                <div id="month-total-card" class="p-6 rounded-lg shadow-sm text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                    <h3 class="text-sm font-medium" style="color: var(--color-text-muted);">Heures ce mois-ci</h3>
-                    <p class="mt-1 text-3xl font-semibold animate-pulse" style="color: var(--color-text-base);">...</p>
+
+                <div class="p-6 rounded-lg shadow-sm text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                    <div class="flex justify-between items-center mb-1">
+                        <button id="global-month-prev" class="p-1 rounded-lg" style="background-color: var(--color-background);">&lt;</button>
+                        <h3 id="global-month-title" class="text-sm font-medium" style="color: var(--color-text-muted);">Heures (Mois)</h3>
+                        <button id="global-month-next" class="p-1 rounded-lg" style="background-color: var(--color-background);">&gt;</button>
+                    </div>
+                    <p id="global-month-total" class="mt-1 text-3xl font-semibold animate-pulse" style="color: var(--color-text-base);">...</p>
                 </div>
+
                 <div id="active-projects-card" class="p-6 rounded-lg shadow-sm text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                     <h3 class="text-sm font-medium" style="color: var(--color-text-muted);">Chantiers Actifs</h3>
                     <p class="mt-1 text-3xl font-semibold animate-pulse" style="color: var(--color-text-base);">...</p>
@@ -68,29 +84,33 @@ export async function render() {
             </div>
         </div>
     `;
-    // MODIFICATION CI-DESSOUS POUR UN CHARGEMENT EN DEUX TEMPS
+    
     setTimeout(() => {
         // --- CHARGEMENT PRIORITAIRE (rapide) ---
-        loadGlobalStats();
+        loadGlobalStats(); 
+        loadStaticStats(); 
         loadRecentActivity();
         setupEventListeners();
 
-        // On affiche un message de chargement pour les stats détaillées
         const loadingMessage = `<p class="text-center p-4" style="color: var(--color-text-muted);">Chargement...</p>`;
         document.getElementById('user-stats-list').innerHTML = loadingMessage;
         document.getElementById('chantier-stats-list').innerHTML = loadingMessage;
 
         // --- CHARGEMENT DIFFÉRÉ (plus lent) ---
-        // On attend un court instant avant de lancer les requêtes plus lourdes
         setTimeout(() => {
             loadUserStats();
             loadChantierStats();
-        }, 200); // Un délai de 200ms est imperceptible mais efficace
+        }, 200);
 
     }, 0);
 }
 
 function setupEventListeners() {
+    document.getElementById('global-week-prev').onclick = () => { globalWeekOffset--; loadGlobalStats(); };
+    document.getElementById('global-week-next').onclick = () => { globalWeekOffset++; loadGlobalStats(); };
+    document.getElementById('global-month-prev').onclick = () => { globalMonthOffset--; loadGlobalStats(); };
+    document.getElementById('global-month-next').onclick = () => { globalMonthOffset++; loadGlobalStats(); };
+
     document.querySelectorAll('.user-stats-filter-btn').forEach(btn => {
         btn.onclick = () => {
             userStatsFilter.period = btn.dataset.period;
@@ -112,14 +132,31 @@ function setupEventListeners() {
 }
 
 async function loadGlobalStats() {
+    const weekTitle = document.getElementById('global-week-title');
+    const weekTotal = document.getElementById('global-week-total');
+    const monthTitle = document.getElementById('global-month-title');
+    const monthTotal = document.getElementById('global-month-total');
+
+    if (weekTotal) { weekTotal.textContent = '...'; weekTotal.classList.add('animate-pulse'); }
+    if (monthTotal) { monthTotal.textContent = '...'; monthTotal.classList.add('animate-pulse'); }
+
+    // --- Calcul Période Semaine ---
+    const { startOfWeek, endOfWeek } = getWeekDateRange(globalWeekOffset);
+    if(weekTitle) weekTitle.textContent = `Semaine du ${startOfWeek.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`;
+
+    // --- Calcul Période Mois ---
     const now = new Date();
-    const { startOfWeek } = getWeekDateRange(0);
-    const startOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
-    const weekQuery = query(collection(db, "pointages"), where("timestamp", ">=", startOfWeek.toISOString()));
-    const monthQuery = query(collection(db, "pointages"), where("timestamp", ">=", startOfMonth.toISOString()));
-    const chantiersQuery = query(collection(db, "chantiers"), where("status", "==", "active"));
+    const dateForMonth = new Date(now.getFullYear(), now.getMonth() + globalMonthOffset, 1);
+    const startOfMonth = new Date(Date.UTC(dateForMonth.getFullYear(), dateForMonth.getMonth(), 1));
+    const endOfMonth = new Date(Date.UTC(dateForMonth.getFullYear(), dateForMonth.getMonth() + 1, 0, 23, 59, 59, 999));
+    if(monthTitle) monthTitle.textContent = dateForMonth.toLocaleString('fr-FR', { month: 'long', year: 'numeric' });
+
+    // --- Requêtes ---
+    const weekQuery = query(collection(db, "pointages"), where("timestamp", ">=", startOfWeek.toISOString()), where("timestamp", "<=", endOfWeek.toISOString()));
+    const monthQuery = query(collection(db, "pointages"), where("timestamp", ">=", startOfMonth.toISOString()), where("timestamp", "<=", endOfMonth.toISOString()));
+    
     try {
-        const [weekSnapshot, monthSnapshot, chantiersSnapshot] = await Promise.all([ getDocs(weekQuery), getDocs(monthQuery), getDocs(chantiersQuery) ]);
+        const [weekSnapshot, monthSnapshot] = await Promise.all([ getDocs(weekQuery), getDocs(monthQuery) ]);
         
         let weekMs = 0;
         weekSnapshot.forEach(doc => { 
@@ -128,8 +165,7 @@ async function loadGlobalStats() {
                 weekMs += (new Date(data.endTime) - new Date(data.timestamp)) - (data.pauseDurationMs || 0); 
             }
         });
-        const weekCard = document.querySelector('#week-total-card p');
-        if (weekCard) { weekCard.textContent = formatMilliseconds(weekMs); weekCard.classList.remove('animate-pulse'); }
+        if (weekTotal) { weekTotal.textContent = formatMilliseconds(weekMs); weekTotal.classList.remove('animate-pulse'); }
         
         let monthMs = 0;
         monthSnapshot.forEach(doc => { 
@@ -138,12 +174,24 @@ async function loadGlobalStats() {
                 monthMs += (new Date(data.endTime) - new Date(data.timestamp)) - (data.pauseDurationMs || 0); 
             }
         });
-        const monthCard = document.querySelector('#month-total-card p');
-        if (monthCard) { monthCard.textContent = formatMilliseconds(monthMs); monthCard.classList.remove('animate-pulse'); }
+        if (monthTotal) { monthTotal.textContent = formatMilliseconds(monthMs); monthTotal.classList.remove('animate-pulse'); }
 
-        const projectsCard = document.querySelector('#active-projects-card p');
-        if (projectsCard) { projectsCard.textContent = chantiersSnapshot.size; projectsCard.classList.remove('animate-pulse'); }
     } catch (error) { console.error("Erreur de chargement des statistiques globales:", error); }
+}
+
+async function loadStaticStats() {
+    const projectsCard = document.querySelector('#active-projects-card p');
+    if (!projectsCard) return;
+
+    const chantiersQuery = query(collection(db, "chantiers"), where("status", "==", "active"));
+    try {
+        const chantiersSnapshot = await getDocs(chantiersQuery);
+        projectsCard.textContent = chantiersSnapshot.size; 
+        projectsCard.classList.remove('animate-pulse');
+    } catch (error) {
+        console.error("Erreur de chargement des stats statiques:", error);
+        projectsCard.textContent = "Erreur";
+    }
 }
 
 function getPeriodInfo(filter) {

@@ -1,4 +1,4 @@
-import { collection, query, getDocs, addDoc, serverTimestamp, orderBy, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { collection, query, getDocs, addDoc, serverTimestamp, orderBy, doc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, pageContent, showInfoModal, showConfirmationModal } from "../app.js";
 import { getWeekDateRange } from "./utils.js";
 
@@ -91,9 +91,18 @@ function setMinimumLeaveDate() {
 }
 
 function setupEventListeners() {
-    document.getElementById('prevWeekBtn').onclick = () => { currentWeekOffset--; displayLeaveList(); };
-    document.getElementById('nextWeekBtn').onclick = () => { currentWeekOffset++; displayLeaveList(); };
-    document.getElementById('leaveRequestForm').onsubmit = submitLeaveRequest;
+    // --- DÉBUT DE LA MODIFICATION ---
+    // Remplacement de .onclick par .addEventListener pour plus de fiabilité
+    document.getElementById('prevWeekBtn').addEventListener('click', () => { 
+        currentWeekOffset--; 
+        displayLeaveList(); 
+    });
+    document.getElementById('nextWeekBtn').addEventListener('click', () => { 
+        currentWeekOffset++; 
+        displayLeaveList(); 
+    });
+    document.getElementById('leaveRequestForm').addEventListener('submit', submitLeaveRequest);
+    // --- FIN DE LA MODIFICATION ---
 
     const startDateInput = document.getElementById('leave-start-date');
     const endDateInput = document.getElementById('leave-end-date');
@@ -136,8 +145,12 @@ function setupEventListeners() {
     });
 
     document.getElementById('leave-list-container').addEventListener('click', async (e) => {
-        if (e.target.classList.contains('cancel-leave-btn')) {
-            const docId = e.target.dataset.id;
+        const button = e.target;
+        const docId = button.dataset.id;
+        if (!docId) return; // Ce n'est pas un bouton qui nous intéresse
+
+        // Logique pour le bouton ANNULER (pour l'utilisateur)
+        if (button.classList.contains('cancel-leave-btn')) {
             const confirmed = await showConfirmationModal("Confirmation", "Êtes-vous sûr de vouloir annuler cette demande de congé ?");
             if (confirmed) {
                 try {
@@ -147,6 +160,32 @@ function setupEventListeners() {
                 } catch (error) {
                     showInfoModal("Erreur", "Impossible d'annuler la demande.");
                 }
+            }
+        }
+
+        // Logique pour le bouton ACCEPTER (pour l'admin)
+        else if (button.classList.contains('approve-leave-btn')) {
+            if (currentUser.role !== 'admin') return; // Sécurité
+            try {
+                button.disabled = true;
+                await updateDoc(doc(db, "leaveRequests", docId), { status: 'approved' });
+                loadAllRequestsAndDisplayList(); // Recharger la liste
+            } catch (error) {
+                showInfoModal("Erreur", "Impossible d'approuver la demande.");
+                button.disabled = false;
+            }
+        }
+
+        // Logique pour le bouton REFUSER (pour l'admin)
+        else if (button.classList.contains('refuse-leave-btn')) {
+            if (currentUser.role !== 'admin') return; // Sécurité
+            try {
+                button.disabled = true;
+                await updateDoc(doc(db, "leaveRequests", docId), { status: 'refused' });
+                loadAllRequestsAndDisplayList(); // Recharger la liste
+            } catch (error) {
+                showInfoModal("Erreur", "Impossible de refuser la demande.");
+                button.disabled = false;
             }
         }
     });
@@ -215,12 +254,31 @@ function displayLeaveList() {
             } else if (entry.status === 'refused') {
                 statusStyle = 'background-color: rgba(220, 38, 38, 0.1); border-color: rgba(220, 38, 38, 0.4);';
                 statusText = 'Refusé';
-            } else if (entry.status === 'pending' && entry.userId === currentUser.uid) {
+            } else if (entry.status === 'pending') {
                 statusStyle = 'background-color: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.4);';
                 statusText = 'En attente';
-                statusIcon = `<button class="cancel-leave-btn text-red-500 hover:text-red-700 text-xs font-bold" data-id="${entry.id}">ANNULER</button>`;
-            } else {
-                return; // Ne pas afficher les demandes en attente des autres
+
+                // Si l'utilisateur est un admin, il voit les boutons de gestion
+                if (currentUser.role === 'admin') {
+                    statusIcon = `
+                        <div class="flex gap-2 justify-end mt-1">
+                            <button class="refuse-leave-btn bg-red-500 hover:bg-red-600 text-white text-xs font-bold px-2 py-1 rounded" data-id="${entry.id}">Refuser</button>
+                            <button class="approve-leave-btn bg-green-500 hover:bg-green-600 text-white text-xs font-bold px-2 py-1 rounded" data-id="${entry.id}">Accepter</button>
+                        </div>`;
+                } 
+                // Si c'est l'utilisateur normal, il voit son bouton Annuler
+                else if (entry.userId === currentUser.uid) {
+                    statusIcon = `<button class="cancel-leave-btn text-red-500 hover:text-red-700 text-xs font-bold" data-id="${entry.id}">ANNULER</button>`;
+                }
+                // Si c'est un autre utilisateur et qu'on n'est pas admin, on n'affiche pas
+                else {
+                    return; 
+                }
+            }
+
+            let reasonText = entry.reason;
+            if (entry.startTime && entry.endTime) {
+                reasonText = `${entry.reason} (de ${entry.startTime} à ${entry.endTime})`;
             }
             
             const card = document.createElement('div');
@@ -229,7 +287,7 @@ function displayLeaveList() {
             card.innerHTML = `
                 <div>
                     <p class="font-bold" style="color: var(--color-text-base);">${entry.userName}</p>
-                    <p class="text-sm" style="color: var(--color-text-muted);">${entry.reason}</p>
+                    <p class="text-sm" style="color: var(--color-text-muted);">${reasonText}</p>
                 </div>
                 <div class="text-right">
                     <span class="font-bold text-sm">${statusText}</span>
