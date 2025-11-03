@@ -88,7 +88,7 @@ export async function render() {
 }
 async function cacheDataForModals() {
     const chantiersData = await getActiveChantiers();
-    chantiersCache = chantiersData.map(c => c.name);
+    chantiersCache = chantiersData; // <-- CORRECTION: On garde l'objet complet
     colleaguesCache = await getTeamMembers();
 }
 async function checkForOpenPointage() {
@@ -279,7 +279,10 @@ async function openStartModal() {
     modal.classList.remove('hidden');
     const { weeklyChantiers, todaysColleagues, todaysChantiers } = await getContextualLists();
     const weeklyChantiersOnly = new Set([...weeklyChantiers].filter(chantier => !todaysChantiers.has(chantier)));
-    const otherChantiers = chantiersCache.filter(name => !weeklyChantiers.has(name));
+    
+    // --- CORRECTION 1 (Ligne 344) ---
+    const otherChantiers = chantiersCache.filter(chantier => !weeklyChantiers.has(chantier.name));
+    
     let chantierOptionsHTML = '';
     if (todaysChantiers.size > 0) {
         chantierOptionsHTML += '<optgroup label="Chantiers du jour">';
@@ -293,13 +296,15 @@ async function openStartModal() {
     }
     if (otherChantiers.length > 0) {
         chantierOptionsHTML += '<optgroup label="Tous les autres chantiers">';
-        otherChantiers.forEach(name => { chantierOptionsHTML += `<option value="${name}">${name}</option>`; });
+        // --- CORRECTION 2 (Ligne 357) ---
+        otherChantiers.forEach(chantier => { chantierOptionsHTML += `<option value="${chantier.name}">${chantier.name}</option>`; });
         chantierOptionsHTML += '</optgroup>';
     }
     chantierSelect.innerHTML = chantierOptionsHTML;
     if (!chantierSelect.innerHTML) {
          chantierSelect.innerHTML = '<option value="" disabled selected>-- Choisissez un chantier --</option>';
-         chantiersCache.forEach(name => { chantierSelect.innerHTML += `<option value="${name}">${name}</option>`; });
+         // --- CORRECTION 3 (Ligne 361) ---
+         chantiersCache.forEach(chantier => { chantierSelect.innerHTML += `<option value="${chantier.name}">${chantier.name}</option>`; });
     }
     
     // --- C'EST ICI LA CORRECTION (Ligne 365) ---
@@ -456,9 +461,6 @@ function createTaskElement(task, totalPlannedHours, chantierDetails) {
     const team = (task.teamNames && task.teamNames.length) ? `Équipe : ${task.teamNames.join(', ')}` : 'Pas d\'équipe';
     const note = task.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-primary);"><strong>Note:</strong> ${task.notes}</div>` : '';
 
-    const start = task.startTime ? `<strong>${task.startTime}</strong> - ` : '';
-    const dailyHoursText = `${start}${task.duration || ''}h prévues`;
-
     let plannedHoursHTML = '';
     if (totalPlannedHours > 0) {
         plannedHoursHTML = `<div class="text-xs mt-1" style="color: var(--color-text-muted);">
@@ -470,12 +472,12 @@ function createTaskElement(task, totalPlannedHours, chantierDetails) {
     let projectBudgetHTML = '';
     if (chantierDetails && chantierDetails.totalHeuresPrevues > 0) {
         projectBudgetHTML = `<div class="text-xs mt-1" style="color: var(--color-text-muted);">
-                                Budget total (projet) : <strong>${chantierDetails.totalHeuresPrevues}h</strong>
+                                Heures prévues (seul) : <strong>${chantierDetails.totalHeuresPrevues}h</strong>
                              </div>`;
     }
 
     el.innerHTML = `<div class="font-semibold" style="color: var(--color-text-base);">${task.chantierName}</div>
-                    <div class="text-xs mt-1" style="color: var(--color-text-base);">${dailyHoursText}</div>
+                    
                     <div class="text-xs mt-1" style="color: var(--color-text-muted);">${team}</div>
                     <div class="mt-2 pt-2 border-t" style="border-color: var(--color-border);">
                         ${plannedHoursHTML}

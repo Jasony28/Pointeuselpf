@@ -1,4 +1,4 @@
-import { collection, query, getDocs, addDoc, serverTimestamp, orderBy, doc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, doc, deleteDoc, updateDoc, writeBatch, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, pageContent, showInfoModal, showConfirmationModal } from "../app.js";
 import { getWeekDateRange } from "./utils.js";
 
@@ -90,9 +90,59 @@ function setMinimumLeaveDate() {
     document.getElementById('leave-end-date').min = minDateString;
 }
 
+/**
+ * Met à jour la collection 'planning' en fonction d'un changement de statut de congé.
+ * @param {string} docId - L'ID de la demande de congé.
+ * @param {object} leaveData - Les données de la demande de congé.
+ * @param {string} newStatus - 'approved', 'refused', or 'deleted'.
+ * @param {WriteBatch} [existingBatch] - Un batch Firestore optionnel pour combiner les opérations.
+ */
+async function updatePlanningOnLeaveChange(docId, leaveData, newStatus, existingBatch = null) {
+    const batch = existingBatch || writeBatch(db);
+    const planningRef = collection(db, "planning");
+
+    // 1. Supprimer toutes les entrées de planning existantes pour ce congé
+    const q = query(planningRef, where("id_leaveRequest", "==", docId));
+    const existingEntries = await getDocs(q);
+    existingEntries.forEach(doc => batch.delete(doc.ref));
+
+    // 2. Si le nouveau statut est 'approved', créer les nouvelles entrées
+    if (newStatus === 'approved') {
+        // --- CORRECTION DÉCALAGE HORAIRE ---
+        // On utilise T12:00:00Z (midi UTC) pour que la date soit stable
+        const startDate = new Date(leaveData.startDate + 'T12:00:00Z');
+        const endDate = new Date((leaveData.endDate || leaveData.startDate) + 'T12:00:00Z');
+
+        const chantierName = `Congé (${leaveData.reason})`;
+
+        // Boucle sur les dates UTC
+        for (let d = new Date(startDate); d <= endDate; d.setUTCDate(d.getUTCDate() + 1)) {
+            // Reconvertir en string YYYY-MM-DD
+            const dateString = d.toISOString().split('T')[0];
+            
+            const newPlanningRef = doc(planningRef); // Crée un ID unique
+            const planningData = {
+                chantierId: "LEAVE_ID", // Un ID spécial pour les congés
+                chantierName: chantierName,
+                teamNames: [leaveData.userName],
+                date: dateString, // Sauvegarde la date YYYY-MM-DD
+                startTime: leaveData.startTime || "",
+                notes: `Congé approuvé: ${leaveData.reason}`,
+                order: 0, // Pour s'afficher en haut
+                createdAt: serverTimestamp(),
+                id_leaveRequest: docId // Lien vers la demande originale
+            };
+            batch.set(newPlanningRef, planningData);
+        }
+    }
+
+    // Si on n'a pas passé de batch, on le commit ici.
+    if (!existingBatch) {
+        await batch.commit();
+    }
+}
+
 function setupEventListeners() {
-    // --- DÉBUT DE LA MODIFICATION ---
-    // Remplacement de .onclick par .addEventListener pour plus de fiabilité
     document.getElementById('prevWeekBtn').addEventListener('click', () => { 
         currentWeekOffset--; 
         displayLeaveList(); 
@@ -102,7 +152,6 @@ function setupEventListeners() {
         displayLeaveList(); 
     });
     document.getElementById('leaveRequestForm').addEventListener('submit', submitLeaveRequest);
-    // --- FIN DE LA MODIFICATION ---
 
     const startDateInput = document.getElementById('leave-start-date');
     const endDateInput = document.getElementById('leave-end-date');
@@ -144,52 +193,89 @@ function setupEventListeners() {
         charCounter.style.color = count > CUSTOM_REASON_MAX_LENGTH ? 'red' : 'var(--color-text-muted)';
     });
 
+    // Logique d'action unifiée
     document.getElementById('leave-list-container').addEventListener('click', async (e) => {
         const button = e.target;
         const docId = button.dataset.id;
         if (!docId) return; // Ce n'est pas un bouton qui nous intéresse
 
-        // Logique pour le bouton ANNULER (pour l'utilisateur)
+        // On a besoin des données du congé pour toutes les actions
+        const leaveDocRef = doc(db, "leaveRequests", docId);
+        let leaveData;
+        try {
+            const leaveDocSnap = await getDoc(leaveDocRef);
+            if (!leaveDocSnap.exists()) {
+                showInfoModal("Erreur", "Demande non trouvée.");
+                loadAllRequestsAndDisplayList();
+                return;
+            }
+            leaveData = leaveDocSnap.data();
+        } catch (error) {
+            showInfoModal("Erreur", "Impossible de récupérer la demande.");
+            return;
+        }
+
+        // Logique pour le bouton ANNULER (pour l'utilisateur ou l'admin)
         if (button.classList.contains('cancel-leave-btn')) {
-            const confirmed = await showConfirmationModal("Confirmation", "Êtes-vous sûr de vouloir annuler cette demande de congé ?");
+            const confirmed = await showConfirmationModal("Confirmation", "Êtes-vous sûr de vouloir annuler cette demande ? (Cela la retirera aussi du planning si elle était approuvée)");
             if (confirmed) {
                 try {
-                    await deleteDoc(doc(db, "leaveRequests", docId));
-                    showInfoModal("Succès", "La demande a été annulée.");
-                    loadAllRequestsAndDisplayList(); // Recharger la liste
+                    const batch = writeBatch(db);
+                    batch.delete(leaveDocRef); // Supprimer la demande
+                    await updatePlanningOnLeaveChange(docId, leaveData, 'deleted', batch); // Nettoyer le planning
+                    await batch.commit(); // Valider les deux opérations
+                    
+                    showInfoModal("Succès", "La demande a été annulée et retirée du planning.");
+                    loadAllRequestsAndDisplayList();
                 } catch (error) {
+                    console.error("Erreur d'annulation:", error);
                     showInfoModal("Erreur", "Impossible d'annuler la demande.");
                 }
             }
         }
 
-        // Logique pour le bouton ACCEPTER (pour l'admin)
+        // Logique pour le bouton ACCEPTER (admin seulement)
         else if (button.classList.contains('approve-leave-btn')) {
-            if (currentUser.role !== 'admin') return; // Sécurité
+            if (currentUser.role !== 'admin') return; 
+            if (leaveData.status === 'approved') return; // Déjà fait
+            
+            button.disabled = true;
             try {
-                button.disabled = true;
-                await updateDoc(doc(db, "leaveRequests", docId), { status: 'approved' });
-                loadAllRequestsAndDisplayList(); // Recharger la liste
+                const batch = writeBatch(db);
+                batch.update(leaveDocRef, { status: 'approved' }); // Mettre à jour la demande
+                await updatePlanningOnLeaveChange(docId, leaveData, 'approved', batch); // Ajouter au planning
+                await batch.commit(); // Valider les deux
+                
+                loadAllRequestsAndDisplayList();
             } catch (error) {
+                console.error("Erreur d'approbation:", error);
                 showInfoModal("Erreur", "Impossible d'approuver la demande.");
                 button.disabled = false;
             }
         }
 
-        // Logique pour le bouton REFUSER (pour l'admin)
+        // Logique pour le bouton REFUSER (admin seulement)
         else if (button.classList.contains('refuse-leave-btn')) {
-            if (currentUser.role !== 'admin') return; // Sécurité
+            if (currentUser.role !== 'admin') return;
+            if (leaveData.status === 'refused') return; // Déjà fait
+
+            button.disabled = true;
             try {
-                button.disabled = true;
-                await updateDoc(doc(db, "leaveRequests", docId), { status: 'refused' });
-                loadAllRequestsAndDisplayList(); // Recharger la liste
+                const batch = writeBatch(db);
+                batch.update(leaveDocRef, { status: 'refused' }); // Mettre à jour la demande
+                await updatePlanningOnLeaveChange(docId, leaveData, 'refused', batch); // Nettoyer le planning
+                await batch.commit(); // Valider les deux
+                
+                loadAllRequestsAndDisplayList();
             } catch (error) {
+                console.error("Erreur de refus:", error);
                 showInfoModal("Erreur", "Impossible de refuser la demande.");
                 button.disabled = false;
             }
         }
     });
 }
+
 
 async function loadAllRequestsAndDisplayList() {
     try {
@@ -211,6 +297,7 @@ function displayLeaveList() {
 
     const dailyEntries = [];
     leaveRequestsCache.forEach(req => {
+        // --- CORRECTION DÉCALAGE HORAIRE ---
         const start = new Date(req.startDate + 'T12:00:00Z');
         const end = new Date((req.endDate || req.startDate) + 'T12:00:00Z');
         let loopDate = new Date(start);
@@ -218,12 +305,15 @@ function displayLeaveList() {
             if (loopDate >= startOfWeek && loopDate <= endOfWeek) {
                 dailyEntries.push({ date: new Date(loopDate), ...req });
             }
-            loopDate.setUTCDate(loopDate.getUTCDate() + 1);
+            loopDate.setUTCDate(loopDate.getUTCDate() + 1); // Utilise setUTCDate
         }
     });
     
     const groupedByDay = dailyEntries.reduce((acc, entry) => {
+        // --- CORRECTION DÉCALAGE HORAIRE ---
+        // entry.date est une date UTC, on peut utiliser toISOString sans danger
         const dateString = entry.date.toISOString().split('T')[0];
+        
         if (!acc[dateString]) acc[dateString] = [];
         acc[dateString].push(entry);
         return acc;
@@ -238,27 +328,42 @@ function displayLeaveList() {
 
     sortedDays.forEach(dateString => {
         const dayEntries = groupedByDay[dateString];
-        const dayDate = new Date(dateString + 'T12:00:00');
+        // --- CORRECTION DÉCALAGE HORAIRE ---
+        // On recrée la date en UTC pour un affichage stable
+        const dayDate = new Date(dateString + 'T12:00:00Z');
         const dayWrapper = document.createElement('div');
+        // On affiche en UTC
         dayWrapper.innerHTML = `<div class="border-b pb-2 mb-3"><h3 class="font-bold text-lg">${dayDate.toLocaleDateString('fr-FR', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' })}</h3></div>`;
         
         const entriesContainer = document.createElement('div');
         entriesContainer.className = 'space-y-3';
 
         dayEntries.forEach(entry => {
+            // Ne pas afficher les entrées des autres utilisateurs si elles sont en attente
+            if (entry.status === 'pending' && entry.userId !== currentUser.uid && currentUser.role !== 'admin') {
+                return;
+            }
+
             let statusStyle = '', statusIcon = '', statusText = '';
             
             if (entry.status === 'approved') {
                 statusStyle = 'background-color: rgba(22, 163, 74, 0.1); border-color: rgba(22, 163, 74, 0.4);';
                 statusText = 'Accepté';
+                 // Bouton Annuler visible même si accepté (pour l'admin ou l'utilisateur)
+                statusIcon = `<button class="cancel-leave-btn text-red-500 hover:text-red-700 text-xs font-bold" data-id="${entry.id}">ANNULER</button>`;
+
             } else if (entry.status === 'refused') {
                 statusStyle = 'background-color: rgba(220, 38, 38, 0.1); border-color: rgba(220, 38, 38, 0.4);';
                 statusText = 'Refusé';
+                 // L'admin peut toujours annuler (supprimer) une demande refusée
+                if(currentUser.role === 'admin') {
+                     statusIcon = `<button class="cancel-leave-btn text-red-500 hover:text-red-700 text-xs font-bold" data-id="${entry.id}">SUPPRIMER</button>`;
+                }
+
             } else if (entry.status === 'pending') {
                 statusStyle = 'background-color: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.4);';
                 statusText = 'En attente';
 
-                // Si l'utilisateur est un admin, il voit les boutons de gestion
                 if (currentUser.role === 'admin') {
                     statusIcon = `
                         <div class="flex gap-2 justify-end mt-1">
@@ -266,13 +371,8 @@ function displayLeaveList() {
                             <button class="approve-leave-btn bg-green-500 hover:bg-green-600 text-white text-xs font-bold px-2 py-1 rounded" data-id="${entry.id}">Accepter</button>
                         </div>`;
                 } 
-                // Si c'est l'utilisateur normal, il voit son bouton Annuler
                 else if (entry.userId === currentUser.uid) {
                     statusIcon = `<button class="cancel-leave-btn text-red-500 hover:text-red-700 text-xs font-bold" data-id="${entry.id}">ANNULER</button>`;
-                }
-                // Si c'est un autre utilisateur et qu'on n'est pas admin, on n'affiche pas
-                else {
-                    return; 
                 }
             }
 
@@ -349,7 +449,10 @@ async function submitLeaveRequest(e) {
     }
     
     // --- CONFIRMATION ---
-    let summary = `Motif : **${reason}**\nDu **${new Date(startDate+'T12:00:00').toLocaleDateString('fr-FR')}** au **${new Date(endDate+'T12:00:00').toLocaleDateString('fr-FR')}**`;
+    // --- CORRECTION DÉCALAGE HORAIRE ---
+    // On utilise T12:00:00Z pour un affichage stable
+    const options = { timeZone: 'UTC', day: 'numeric', month: 'long' };
+    let summary = `Motif : **${reason}**\nDu **${new Date(startDate+'T12:00:00Z').toLocaleDateString('fr-FR', options)}** au **${new Date(endDate+'T12:00:00Z').toLocaleDateString('fr-FR', options)}**`;
     if(startTime && endTime) summary += `\nDe **${startTime}** à **${endTime}**`;
     
     const confirmed = await showConfirmationModal("Récapitulatif", summary);

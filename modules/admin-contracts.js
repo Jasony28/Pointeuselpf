@@ -145,7 +145,7 @@ function renderCardEdit(cardElement, user) {
              <div>
                 <label class="block text-xs font-medium mb-1">N° de compte (IBAN)</label>
                 <input id="iban-${user.id}" type="text" value="${user.iban || ''}" class="input-field" placeholder="BE00 0000 0000 0000">
-            </div> // AJOUTÉ : Champ d'édition pour l'IBAN
+            </div> 
             <div>
                 <label class="block text-xs font-medium mb-1">Heures/semaine</label>
                 <input id="contractHours-${user.id}" type="number" value="${user.contractHours || 0}" class="input-field">

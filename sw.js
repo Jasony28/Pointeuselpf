@@ -4,7 +4,7 @@ const { precaching, routing, strategies, core } = workbox;
 core.setCacheNameDetails({ prefix: 'pointeuse-lpf-cache' });
 
 // Version synchronisée avec app.js
-const APP_VERSION = 'v3.4.8';
+const APP_VERSION = 'v3.4.9';
 
 precaching.precacheAndRoute([
     { url: './', revision: APP_VERSION },

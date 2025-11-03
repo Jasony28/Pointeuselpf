@@ -1,5 +1,15 @@
 export const updatesLog = [
     {
+    version: 'v3.4.9',
+    date: '3 novembre 2025',
+    changes: [
+        "### Gestion des Congés & Planning",
+        "✨ **Lien direct entre Congés et Planning** : L'approbation d'une demande de congé (depuis 'Mes Congés' ou 'Admin Congés') crée désormais **automatiquement** un bloc \"Congé (Raison)\" dans le planning de l'administrateur pour les jours concernés. Le refus ou l'annulation d'un congé le retire automatiquement du planning.",
+        "🐛 **Correction du décalage horaire des congés** : Un bug critique qui pouvait afficher une demande de congé un jour avant la date demandée (ex: 10 nov. au lieu du 11 nov.) a été corrigé. Les dates de congé sont désormais toujours affichées et enregistrées correctement.",
+        "✨ **Priorisation des demandes (Admin)** : Dans la page 'Admin Congés', les demandes 'En attente' s'affichent désormais en premier dans la liste pour une action plus rapide, tout en gardant un tri par date de début."
+    ]
+},
+    {
     version: 'v3.4.8',
     date: '29 octobre 2025',
     changes: [
