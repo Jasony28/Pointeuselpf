@@ -19,12 +19,15 @@ export async function render() {
             <div>
                 <h2 class="text-xl font-bold mb-2">🗓️ Mon Planning de la Semaine</h2>
                 <div class="rounded-lg shadow-sm p-4" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                    
                     <div class="flex justify-between items-center">
                         <button id="prevWeekBtn" class="px-4 py-2 rounded-lg hover:opacity-80" style="background-color: var(--color-background);">&lt;</button>
-                        <div id="currentPeriodDisplay" class="text-center font-semibold text-lg"></div>
+                        <div class="text-center"> <div id="currentPeriodDisplay" class="font-semibold text-lg"></div>
+                            <div id="currentWeekTotalHours" class="text-sm font-bold" style="color: var(--color-primary);"></div>
+                        </div>
                         <button id="nextWeekBtn" class="px-4 py-2 rounded-lg hover:opacity-80" style="background-color: var(--color-background);">&gt;</button>
                     </div>
-                </div>
+                    </div>
                 <div id="schedule-grid" class="grid grid-cols-1 md:grid-cols-7 gap-2 mt-4"></div>
             </div>
         </div>
@@ -380,6 +383,8 @@ function openStopModal() {
         modal.classList.add('hidden');
     };
 }
+
+// MODIFIÉ : displayWeekView pour afficher le total
 function displayWeekView() {
     const { startOfWeek, endOfWeek } = getWeekDateRange(currentWeekOffset);
     const options = { day: 'numeric', month: 'long', timeZone: 'UTC' };
@@ -387,6 +392,13 @@ function displayWeekView() {
     if(displayElement) {
         displayElement.textContent = `Semaine du ${startOfWeek.toLocaleDateString('fr-FR', options)} au ${endOfWeek.toLocaleDateString('fr-FR', options)}`;
     }
+
+    // Ajout pour le total
+    const totalHoursElement = document.getElementById("currentWeekTotalHours");
+    if (totalHoursElement) {
+        totalHoursElement.textContent = 'Chargement...';
+    }
+
     const scheduleGrid = document.getElementById("schedule-grid");
     if(scheduleGrid) {
         scheduleGrid.innerHTML = ""; 
@@ -403,13 +415,20 @@ function displayWeekView() {
         loadUserScheduleForWeek(startOfWeek, endOfWeek);
     }
 }
+
+// MODIFIÉ : loadUserScheduleForWeek pour calculer et afficher le total
 async function loadUserScheduleForWeek(start, end) {
     const weekId = start.toISOString().split('T')[0];
     const publishDoc = await getDoc(doc(db, "publishedSchedules", weekId));
     const scheduleGrid = document.getElementById("schedule-grid");
+    
+    // On récupère l'élément pour le total
+    const totalHoursElement = document.getElementById("currentWeekTotalHours");
 
     if (!publishDoc.exists()) {
         if(scheduleGrid) scheduleGrid.innerHTML = `<p class='col-span-1 md:col-span-7 text-center p-4' style='color: var(--color-text-muted);'>Le planning de cette semaine n'a pas encore été publié.</p>`;
+        // On met le total à 0
+        if (totalHoursElement) totalHoursElement.textContent = 'Total semaine  : 0h';
         return;
     }
 
@@ -425,14 +444,27 @@ async function loadUserScheduleForWeek(start, end) {
     const userSchedule = scheduleData.filter(task => task.teamNames && task.teamNames.includes(currentUser.displayName));
 
     const plannedHoursByChantier = {};
+    
+    // On calcule le total de la semaine
+    let totalWeekHours = 0;
+
     userSchedule.forEach(task => {
         const chantierName = task.chantierName;
         const duration = parseFloat(task.duration) || 0;
+        
         if (!plannedHoursByChantier[chantierName]) {
             plannedHoursByChantier[chantierName] = 0;
         }
         plannedHoursByChantier[chantierName] += duration;
+        
+        // On ajoute au total de la semaine
+        totalWeekHours += duration;
     });
+    
+    // On affiche le total de la semaine
+    if (totalHoursElement) {
+        totalHoursElement.textContent = `Total semaine prevues : ${totalWeekHours}h`;
+    }
 
     for (let i = 0; i < 7; i++) {
         const dayColumn = document.getElementById(`day-col-${i}`);
@@ -458,9 +490,16 @@ function createTaskElement(task, totalPlannedHours, chantierDetails) {
     el.style.backgroundColor = 'var(--color-surface)';
     el.style.borderColor = 'var(--color-primary)';
     
-    const team = (task.teamNames && task.teamNames.length) ? `Équipe : ${task.teamNames.join(', ')}` : 'Pas d\'équipe';
+    // --- 1. Get Team Info ---
+    const teamNames = task.teamNames || [];
+    const teamCount = teamNames.length;
+    const team = teamCount > 0 ? `Équipe : ${teamNames.join(', ')}` : 'Pas d\'équipe';
+    
+    // --- 2. Get Note Info ---
     const note = task.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-primary);"><strong>Note:</strong> ${task.notes}</div>` : '';
 
+    // --- 3. Get Weekly Planned Hours (for this chantier) ---
+    // C'est le total des "Durée (h)" de la semaine pour ce chantier
     let plannedHoursHTML = '';
     if (totalPlannedHours > 0) {
         plannedHoursHTML = `<div class="text-xs mt-1" style="color: var(--color-text-muted);">
@@ -468,21 +507,36 @@ function createTaskElement(task, totalPlannedHours, chantierDetails) {
                             </div>`;
     }
 
-    // On ajoute le budget total du projet
+    // --- 4. Get Project Budget Hours (and divide it) ---
+    // C'est le "Heures totales prévues" de admin-chantiers
     let projectBudgetHTML = '';
     if (chantierDetails && chantierDetails.totalHeuresPrevues > 0) {
-        projectBudgetHTML = `<div class="text-xs mt-1" style="color: var(--color-text-muted);">
-                                Heures prévues (seul) : <strong>${chantierDetails.totalHeuresPrevues}h</strong>
-                             </div>`;
+        const totalBudget = chantierDetails.totalHeuresPrevues;
+        
+        // C'est la NOUVELLE LOGIQUE que tu as demandée
+        if (teamCount > 0) {
+            const budgetPerPerson = (totalBudget / teamCount).toFixed(1);
+            projectBudgetHTML = `
+                <div class="text-xs mt-1" style="color: var(--color-text-muted);">
+                    Heures prévues (projet) : <strong>${totalBudget}h</strong>
+                </div>
+                <div class="text-xs mt-1" style="color: var(--color-text-muted);">
+                    Heures prévues (par pers.) : <strong>${budgetPerPerson}h</strong>
+                </div>`;
+        } else {
+             // S'il n'y a pas d'équipe, on affiche comme avant
+             projectBudgetHTML = `
+                <div class="text-xs mt-1" style="color: var(--color-text-muted);">
+                    Heures prévues (seul) : <strong>${totalBudget}h</strong>
+                </div>`;
+        }
     }
 
     el.innerHTML = `<div class="font-semibold" style="color: var(--color-text-base);">${task.chantierName}</div>
                     
                     <div class="text-xs mt-1" style="color: var(--color-text-muted);">${team}</div>
                     <div class="mt-2 pt-2 border-t" style="border-color: var(--color-border);">
-                        ${plannedHoursHTML}
-                        ${projectBudgetHTML}
-                    </div>
+                        ${plannedHoursHTML} ${projectBudgetHTML} </div>
                     ${note}`;
     return el;
 }

@@ -56,7 +56,17 @@ export async function render() {
                     <h3 id="modalTitle" class="text-xl font-bold mb-4"></h3>
                     <form id="planningItemForm" class="space-y-4">
                         <div><label class="text-sm font-medium">Chantier</label><select id="chantierSelect" class="w-full border p-2 rounded" style="background-color: var(--color-background); border-color: var(--color-border);" required></select></div>
-                        <div><label for="planningStartTime" class="text-sm font-medium">Heure de début</label><input id="planningStartTime" type="time" class="w-full border p-2 rounded" style="background-color: var(--color-background); border-color: var(--color-border);" /></div>
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label for="planningStartTime" class="text-sm font-medium">H. début</label>
+                                <input id="planningStartTime" type="time" class="w-full border p-2 rounded" style="background-color: var(--color-background); border-color: var(--color-border);" />
+                            </div>
+                            <div>
+                                <label for="planningDuration" class="text-sm font-medium">Durée (h)</label>
+                                <input id="planningDuration" type="number" step="0.5" min="0" placeholder="Ex: 8" class="w-full border p-2 rounded" style="background-color: var(--color-background); border-color: var(--color-border);" />
+                            </div>
+                        </div>
                         <div><label for="planningNotes" class="text-sm font-medium">Notes (facultatif)</label><textarea id="planningNotes" placeholder="Instructions..." class="w-full border p-2 rounded" style="background-color: var(--color-background); border-color: var(--color-border);"></textarea></div>
                         <div class="flex justify-end gap-4 pt-4 border-t" style="border-color: var(--color-border);">
                             <button type="button" id="cancelPlanningItem" class="px-4 py-2 rounded" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Annuler</button>
@@ -186,14 +196,116 @@ function updateViewButtons() { document.querySelectorAll('.view-btn').forEach(bt
 async function displayWeekView() { const { startOfWeek, endOfWeek } = getWeekDateRange(state.currentWeekOffset); document.getElementById("currentPeriodDisplay").textContent = `Semaine du ${startOfWeek.toLocaleDateString('fr-FR', { timeZone: 'UTC', day: 'numeric', month: 'long' })} au ${endOfWeek.toLocaleDateString('fr-FR', { timeZone: 'UTC', day: 'numeric', month: 'long' })}`; await checkAndRenderPublishButton(startOfWeek); const planningGrid = document.getElementById("planning-grid"); planningGrid.className = 'flex-grow grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3'; planningGrid.innerHTML = ""; const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']; for (let i = 0; i < 7; i++) { const dayDate = new Date(startOfWeek); dayDate.setUTCDate(startOfWeek.getUTCDate() + i); const dateString = dayDate.toISOString().split('T')[0]; const dayCol = document.createElement('div'); dayCol.className = 'p-2 rounded-lg flex flex-col'; dayCol.style.backgroundColor = 'var(--color-background)'; dayCol.innerHTML = `<div class="flex justify-between items-center mb-2"><h4 class="font-bold text-center">${days[i]} <span class="text-sm font-normal" style="color: var(--color-text-muted);">${dayDate.getUTCDate()}</span></h4><button data-date="${dateString}" class="add-chantier-btn text-lg font-bold hover:opacity-70" style="color: var(--color-primary);">+</button></div><div class="day-tasks-container space-y-2 flex-grow" id="day-col-${dateString}"></div>`; planningGrid.appendChild(dayCol); } loadPlanningForWeek(startOfWeek, endOfWeek); }
 function displayDayView() { const { startOfWeek } = getWeekDateRange(state.currentWeekOffset); const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']; const selectedDate = new Date(startOfWeek); selectedDate.setUTCDate(selectedDate.getUTCDate() + state.selectedDayIndex); const dateString = selectedDate.toISOString().split('T')[0]; document.getElementById("currentPeriodDisplay").textContent = selectedDate.toLocaleDateString('fr-FR', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' }); const planningGrid = document.getElementById("planning-grid"); planningGrid.className = 'flex'; planningGrid.innerHTML = `<div class="p-2 rounded-lg flex flex-col w-full" style="background-color: var(--color-background);"><div class="flex justify-between items-center mb-2"><div class="flex items-center gap-2 flex-wrap">${days.map((day, index) => `<button data-day-index="${index}" class="day-selector-btn px-3 py-1 text-sm rounded-md ${index === state.selectedDayIndex ? 'text-white shadow' : ''}" style="background-color: ${index === state.selectedDayIndex ? 'var(--color-primary)' : 'var(--color-surface)'};">${day}</button>`).join('')}</div><button data-date="${dateString}" class="add-chantier-btn text-2xl font-bold hover:opacity-70" style="color: var(--color-primary);">+</button></div><div class="day-tasks-container grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2 flex-grow overflow-y-auto" style="grid-auto-flow: column; grid-template-rows: repeat(9, auto);" id="day-col-${dateString}"></div></div>`; loadPlanningForDay(selectedDate); }
 function populateTeamPool() { const pool = document.getElementById('team-pool'); pool.innerHTML = ''; state.teamMembers.forEach(member => { const item = document.createElement('label'); item.className = 'flex items-center gap-2 p-2 rounded cursor-pointer'; item.style.backgroundColor = 'var(--color-background)'; item.innerHTML = `<input type="checkbox" class="team-checkbox h-4 w-4 rounded border-gray-300 focus:ring-offset-0" style="color: var(--color-primary);" data-member-id="${member.id}"><span class="text-sm">${member.name}</span>`; pool.appendChild(item); }); }
-function createChantierBlock(planningDoc) { const { id, chantierName, teamNames, notes, startTime } = planningDoc; const block = document.createElement('div'); block.className = 'planning-block p-1.5 rounded shadow cursor-pointer text-xs relative'; block.style.backgroundColor = 'var(--color-surface)'; block.dataset.planningId = id; const noteIndicator = notes ? ` <span style="color: var(--color-primary);" title="${notes}">📝</span>` : ''; const timeInfo = startTime ? `<strong>${startTime}</strong>` : ''; block.innerHTML = `<div class="flex justify-between items-start"><p class="font-bold leading-tight pointer-events-none" style="color: var(--color-primary);">${chantierName}</p><button class="delete-planning-btn text-red-400 hover:text-red-700 font-bold -mt-1 -mr-1">✖</button></div><p class="my-0.5 time-info pointer-events-none" style="color: var(--color-text-muted);">${timeInfo}${noteIndicator}</p><div class="team-display-zone mt-1 space-y-0.5"></div><input type="checkbox" class="selection-checkbox hidden absolute top-1 right-1 h-4 w-4">`; renderTeamInBlock(block, teamNames); return block; }
+
+// MODIFIÉ : createChantierBlock pour afficher la durée
+function createChantierBlock(planningDoc) {
+    const { id, chantierName, teamNames, notes, startTime, duration } = planningDoc;
+    const block = document.createElement('div');
+    block.className = 'planning-block p-1.5 rounded shadow cursor-pointer text-xs relative';
+    block.style.backgroundColor = 'var(--color-surface)';
+    block.dataset.planningId = id;
+    
+    const noteIndicator = notes ? ` <span style="color: var(--color-primary);" title="${notes}">📝</span>` : '';
+    
+    const timeInfo = startTime ? `<strong>${startTime}</strong>` : '';
+    const durationInfo = duration ? ` <span class="font-bold">${duration}h</span>` : '';
+
+    block.innerHTML = `<div class="flex justify-between items-start"><p class="font-bold leading-tight pointer-events-none" style="color: var(--color-primary);">${chantierName}</p><button class="delete-planning-btn text-red-400 hover:text-red-700 font-bold -mt-1 -mr-1">✖</button></div>
+                       <p class="my-0.5 time-info pointer-events-none" style="color: var(--color-text-muted);">${timeInfo}${timeInfo && durationInfo ? ' - ' : ''}${durationInfo}${noteIndicator}</p>
+                       <div class="team-display-zone mt-1 space-y-0.5"></div>
+                       <input type="checkbox" class="selection-checkbox hidden absolute top-1 right-1 h-4 w-4">`;
+    renderTeamInBlock(block, teamNames);
+    return block;
+}
+
 function renderTeamInBlock(planningBlock, teamNames) { const teamZone = planningBlock.querySelector('.team-display-zone'); teamZone.innerHTML = (teamNames && teamNames.length > 0) ? teamNames.map(name => `<div class="team-member-tag p-0.5 rounded text-[10px] leading-tight flex items-center gap-1" data-name="${name}" title="Cliquer pour retirer" style="background-color: var(--color-background);"><span>${name}</span><span class="font-bold text-red-500 hover:text-red-700 pointer-events-none">&times;</span></div>`).join('') : ''; }
 async function loadPlanningForWeek(start, end) { try { const q = query(collection(db, "planning"), where("date", ">=", start.toISOString().split('T')[0]), where("date", "<=", end.toISOString().split('T')[0]), orderBy("date"), orderBy("order")); const snapshot = await getDocs(q); snapshot.docs.forEach(docSnap => { const data = { id: docSnap.id, ...docSnap.data() }; const container = document.getElementById(`day-col-${data.date}`); if (container) container.appendChild(createChantierBlock(data)); }); } catch (error) { console.error("Erreur de chargement du planning:", error); document.getElementById("planning-grid").innerHTML = `<p class="text-red-500 text-center col-span-full">Erreur de chargement du planning.</p>`; } }
 async function loadPlanningForDay(date) { const dateString = date.toISOString().split('T')[0]; const container = document.getElementById(`day-col-${dateString}`); if (!container) return; container.innerHTML = 'Chargement...'; try { const q = query(collection(db, "planning"), where("date", "==", dateString), orderBy("order")); const snapshot = await getDocs(q); container.innerHTML = ''; snapshot.docs.forEach(docSnap => { const data = { id: docSnap.id, ...docSnap.data() }; container.appendChild(createChantierBlock(data)); }); } catch (error) { console.error("Erreur de chargement du planning du jour:", error); container.innerHTML = `<p class="text-red-500 text-center">Erreur de chargement.</p>`; } }
 async function getPlanningTask(id) { const docRef = doc(db, "planning", id); const docSnap = await getDoc(docRef); return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } : null; }
-function openPlanningItemModal(planningDoc = null, date = null) { const modal = document.getElementById('planningItemModal'); const form = document.getElementById('planningItemForm'); const select = document.getElementById('chantierSelect'); form.reset(); if (planningDoc) { state.editing = { id: planningDoc.id, date: planningDoc.date }; document.getElementById('modalTitle').textContent = 'Modifier le travail'; select.innerHTML = state.chantiers.map(c => `<option value="${c.id}|${c.name}" ${c.name === planningDoc.chantierName ? 'selected' : ''}>${c.name}</option>`).join(''); document.getElementById('planningStartTime').value = planningDoc.startTime || ''; document.getElementById('planningNotes').value = planningDoc.notes || ''; document.getElementById('saveAndAddAnotherBtn').style.display = 'none'; } else { state.editing = { id: null, date: date }; document.getElementById('modalTitle').textContent = `Ajouter un chantier pour le ${new Date(date + 'T12:00:00Z').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric' })}`; select.innerHTML = '<option value="" disabled selected>-- Choisissez un chantier --</option>' + state.chantiers.map(c => `<option value="${c.id}|${c.name}">${c.name}</option>`).join(''); document.getElementById('planningStartTime').value = '08:00'; document.getElementById('saveAndAddAnotherBtn').style.display = 'inline-block'; } modal.classList.remove('hidden'); }
+
+// MODIFIÉ : openPlanningItemModal pour gérer la durée
+function openPlanningItemModal(planningDoc = null, date = null) {
+    const modal = document.getElementById('planningItemModal');
+    const form = document.getElementById('planningItemForm');
+    const select = document.getElementById('chantierSelect');
+    form.reset();
+    if (planningDoc) {
+        state.editing = { id: planningDoc.id, date: planningDoc.date };
+        document.getElementById('modalTitle').textContent = 'Modifier le travail';
+        select.innerHTML = state.chantiers.map(c => `<option value="${c.id}|${c.name}" ${c.name === planningDoc.chantierName ? 'selected' : ''}>${c.name}</option>`).join('');
+        document.getElementById('planningStartTime').value = planningDoc.startTime || '';
+        document.getElementById('planningDuration').value = planningDoc.duration || ''; // Ajout
+        document.getElementById('planningNotes').value = planningDoc.notes || '';
+        document.getElementById('saveAndAddAnotherBtn').style.display = 'none';
+    } else {
+        state.editing = { id: null, date: date };
+        document.getElementById('modalTitle').textContent = `Ajouter un chantier pour le ${new Date(date + 'T12:00:00Z').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric' })}`;
+        select.innerHTML = '<option value="" disabled selected>-- Choisissez un chantier --</option>' + state.chantiers.map(c => `<option value="${c.id}|${c.name}">${c.name}</option>`).join('');
+        document.getElementById('planningStartTime').value = '08:00';
+        document.getElementById('planningDuration').value = '8'; // Ajout (défaut)
+        document.getElementById('saveAndAddAnotherBtn').style.display = 'inline-block';
+    }
+    modal.classList.remove('hidden');
+}
+
 function closePlanningItemModal() { document.getElementById('planningItemModal').classList.add('hidden'); }
-async function savePlanningItem(closeAfterSave) { const select = document.getElementById('chantierSelect'); if (!select.value) { showInfoModal("Attention", "Veuillez choisir un chantier."); return; } const [chantierId, chantierName] = select.value.split('|'); const dataToSave = { chantierId, chantierName, notes: document.getElementById('planningNotes').value.trim(), startTime: document.getElementById('planningStartTime').value }; try { if (state.editing.id) { const planningRef = doc(db, "planning", state.editing.id); await updateDoc(planningRef, dataToSave); const originalTaskData = await getPlanningTask(state.editing.id); const updatedTaskData = { ...originalTaskData, ...dataToSave }; const existingBlock = document.querySelector(`.planning-block[data-planning-id="${state.editing.id}"]`); if (existingBlock) { existingBlock.replaceWith(createChantierBlock(updatedTaskData)); } } else { const q = query(collection(db, "planning"), where("date", "==", state.editing.date)); const snapshot = await getDocs(q); if (snapshot.docs.some(d => d.data().chantierName === chantierName)) { showInfoModal("Action Impossible", `Le chantier "${chantierName}" est déjà planifié pour ce jour.`); return; } const dataWithMeta = { ...dataToSave, date: state.editing.date, teamNames: [], order: snapshot.size, createdAt: serverTimestamp() }; const newDocRef = await addDoc(collection(db, "planning"), dataWithMeta); const newPlanningDoc = { id: newDocRef.id, ...dataWithMeta }; const container = document.getElementById(`day-col-${state.editing.date}`); if (container) { container.appendChild(createChantierBlock(newPlanningDoc)); } } if (closeAfterSave) { closePlanningItemModal(); } else { document.getElementById('planningItemForm').reset(); document.getElementById('planningStartTime').value = '08:00'; select.selectedIndex = 0; select.focus(); } } catch (error) { console.error("Erreur de sauvegarde:", error); showInfoModal("Erreur", "Une erreur est survenue."); } }
+
+// MODIFIÉ : savePlanningItem pour enregistrer la durée
+async function savePlanningItem(closeAfterSave) {
+    const select = document.getElementById('chantierSelect');
+    if (!select.value) {
+        showInfoModal("Attention", "Veuillez choisir un chantier.");
+        return;
+    }
+    const [chantierId, chantierName] = select.value.split('|');
+    const durationValue = document.getElementById('planningDuration').value; // Ajout
+
+    const dataToSave = { 
+        chantierId, 
+        chantierName, 
+        notes: document.getElementById('planningNotes').value.trim(), 
+        startTime: document.getElementById('planningStartTime').value,
+        duration: durationValue ? parseFloat(durationValue) : 0 // Ajout
+    };
+
+    try {
+        if (state.editing.id) {
+            const planningRef = doc(db, "planning", state.editing.id);
+            await updateDoc(planningRef, dataToSave);
+            const originalTaskData = await getPlanningTask(state.editing.id);
+            const updatedTaskData = { ...originalTaskData, ...dataToSave };
+            const existingBlock = document.querySelector(`.planning-block[data-planning-id="${state.editing.id}"]`);
+            if (existingBlock) {
+                existingBlock.replaceWith(createChantierBlock(updatedTaskData));
+            }
+        } else {
+            const q = query(collection(db, "planning"), where("date", "==", state.editing.date));
+            const snapshot = await getDocs(q);
+            // On enlève la vérification de doublon qui posait problème
+            // if (snapshot.docs.some(d => d.data().chantierName === chantierName)) { ... }
+            const dataWithMeta = { ...dataToSave, date: state.editing.date, teamNames: [], order: snapshot.size, createdAt: serverTimestamp() };
+            const newDocRef = await addDoc(collection(db, "planning"), dataWithMeta);
+            const newPlanningDoc = { id: newDocRef.id, ...dataWithMeta };
+            const container = document.getElementById(`day-col-${state.editing.date}`);
+            if (container) {
+                container.appendChild(createChantierBlock(newPlanningDoc));
+            }
+        }
+        if (closeAfterSave) {
+            closePlanningItemModal();
+        } else {
+            document.getElementById('planningItemForm').reset();
+            document.getElementById('planningStartTime').value = '08:00';
+            document.getElementById('planningDuration').value = '8'; // Ajout
+            select.selectedIndex = 0;
+            select.focus();
+        }
+    } catch (error) {
+        console.error("Erreur de sauvegarde:", error);
+        showInfoModal("Erreur", "Une erreur est survenue.");
+    }
+}
+
 function updateAssignMode() { const selectedCheckboxes = document.querySelectorAll('.team-checkbox:checked'); state.assignMode = selectedCheckboxes.length > 0; document.body.style.cursor = state.assignMode ? 'copy' : 'default'; const clearButton = document.getElementById('clear-team-selection'); if (clearButton) { clearButton.classList.toggle('hidden', !state.assignMode); } }
 async function logChangeForUser(userId, changeObject, batch = null) { if (!userId) return; const userRef = doc(db, "users", userId); const updateData = { pendingChanges: arrayUnion(changeObject) }; if (batch) { batch.update(userRef, updateData); } else { await updateDoc(userRef, updateData); } }
 async function assignSelectedTeamToBlock(planningBlock, planningDoc) { const selectedTeamCheckboxes = Array.from(document.querySelectorAll('.team-checkbox:checked')); const selectedTeamNames = selectedTeamCheckboxes.map(cb => cb.nextElementSibling.textContent); const initialTeamNames = new Set(planningDoc.teamNames || []); const newTeamNames = [...new Set([...(planningDoc.teamNames || []), ...selectedTeamNames])]; if (newTeamNames.length > initialTeamNames.size) { planningDoc.teamNames = newTeamNames; renderTeamInBlock(planningBlock, planningDoc.teamNames); await updateDoc(doc(db, "planning", planningDoc.id), { teamNames: planningDoc.teamNames }); const newlyAddedNames = selectedTeamNames.filter(name => !initialTeamNames.has(name)); newlyAddedNames.forEach(name => { const member = state.teamMembers.find(m => m.name === name); if (member) { const change = { date: planningDoc.date, type: 'ajout', chantier: planningDoc.chantierName, timestamp: new Date().toISOString() }; logChangeForUser(member.id, change); } }); } updateAssignMode(); }

@@ -1,5 +1,15 @@
 export const updatesLog = [
     {
+        version: 'v3.5.0',
+        date: '4 novembre 2025',
+        changes: [
+            "### Améliorations du Planning",
+            "✨ **Total d'heures planifiées (Employé)** : Le planning utilisateur affiche désormais un \"Total semaine prevues\" en haut de la page. Ce total additionne les durées de toutes les tâches assignées à l'utilisateur pour la semaine.",
+            "✨ **Durée des tâches (Admin)** : Lors de la création ou modification d'une tâche dans le planning, un nouveau champ \"Durée (h)\" permet de définir le temps alloué pour cette intervention. C'est ce champ qui est utilisé pour le calcul du total semaine de l'employé.",
+            "✨ **Calcul des heures par personne (Employé)** : Sur une tâche du planning, le budget \"Heures prévues\" (défini dans Admin Chantiers) est maintenant automatiquement divisé par le nombre de personnes assignées à la tâche, affichant un budget \"par personne\"."
+        ]
+    },
+    {
     version: 'v3.4.9',
     date: '3 novembre 2025',
     changes: [
