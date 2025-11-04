@@ -426,9 +426,9 @@ async function loadUserScheduleForWeek(start, end) {
     const totalHoursElement = document.getElementById("currentWeekTotalHours");
 
     if (!publishDoc.exists()) {
-        if(scheduleGrid) scheduleGrid.innerHTML = `<p class='col-span-1 md:col-span-7 text-center p-4' style='color: var(--color-text-muted);'>Le planning de cette semaine n'a pas encore été publié.</p>`;
+        if(scheduleGrid) scheduleGrid.innerHTML = `<p class'col-span-1 md:col-span-7 text-center p-4' style='color: var(--color-text-muted);'>Le planning de cette semaine n'a pas encore été publié.</p>`;
         // On met le total à 0
-        if (totalHoursElement) totalHoursElement.textContent = 'Total semaine  : 0h';
+        if (totalHoursElement) totalHoursElement.textContent = 'Total semaine prevues : 0h';
         return;
     }
 
@@ -443,29 +443,46 @@ async function loadUserScheduleForWeek(start, end) {
     const scheduleData = planningSnapshot.docs.map(doc => doc.data());
     const userSchedule = scheduleData.filter(task => task.teamNames && task.teamNames.includes(currentUser.displayName));
 
-    const plannedHoursByChantier = {};
+    // 'plannedHoursByChantier' est pour le petit total "planifié (semaine)" SUR la carte
+    const plannedHoursByChantier = {}; 
     
-    // On calcule le total de la semaine
+    // 'totalWeekHours' est pour le GRAND total "Total semaine prevues" EN HAUT
     let totalWeekHours = 0;
 
     userSchedule.forEach(task => {
         const chantierName = task.chantierName;
-        const duration = parseFloat(task.duration) || 0;
         
+        // --- Calcul pour le total SUR LA CARTE (basé sur la "Durée (h)" de l'Admin Planning) ---
+        const duration = parseFloat(task.duration) || 0;
         if (!plannedHoursByChantier[chantierName]) {
             plannedHoursByChantier[chantierName] = 0;
         }
         plannedHoursByChantier[chantierName] += duration;
         
-        // On ajoute au total de la semaine
-        totalWeekHours += duration;
+        // --- NOUVELLE LOGIQUE : Calcul pour le total EN HAUT (basé sur le budget "Heures prévues (par pers.)") ---
+        
+        // 1. Trouver les détails du chantier (comme dans createTaskElement)
+        const chantierDetails = chantiersCache.find(c => c.id === task.chantierId);
+        
+        // 2. Trouver le nombre de personnes (comme dans createTaskElement)
+        const teamCount = (task.teamNames || []).length;
+        
+        // 3. Calculer le budget par personne et l'ajouter au total
+        if (chantierDetails && chantierDetails.totalHeuresPrevues > 0 && teamCount > 0) {
+            const totalBudget = chantierDetails.totalHeuresPrevues;
+            const budgetPerPerson = (totalBudget / teamCount);
+            
+            totalWeekHours += budgetPerPerson;
+        }
+        // --- Fin de la nouvelle logique ---
     });
     
-    // On affiche le total de la semaine
+    // On affiche le total de la semaine (avec 1 décimale)
     if (totalHoursElement) {
-        totalHoursElement.textContent = `Total semaine prevues : ${totalWeekHours}h`;
+        totalHoursElement.textContent = `Total semaine prevues : ${totalWeekHours.toFixed(1)}h`;
     }
 
+    // (Le reste de la fonction est inchangé)
     for (let i = 0; i < 7; i++) {
         const dayColumn = document.getElementById(`day-col-${i}`);
         if (dayColumn) dayColumn.innerHTML = '';
@@ -476,8 +493,8 @@ async function loadUserScheduleForWeek(start, end) {
         const dayIndex = (utcDate.getUTCDay() + 6) % 7;
         const container = document.getElementById(`day-col-${dayIndex}`);
         if (container) {
+            // On passe l'autre total (planifié) à la carte
             const totalPlannedHours = plannedHoursByChantier[data.chantierName] || 0;
-            // On récupère les détails du chantier depuis le cache
             const chantierDetails = chantiersCache.find(c => c.id === data.chantierId);
             container.appendChild(createTaskElement(data, totalPlannedHours, chantierDetails));
         }
