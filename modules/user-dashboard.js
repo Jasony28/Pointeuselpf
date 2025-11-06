@@ -73,6 +73,31 @@ export async function render() {
                 </form>
             </div>
         </div>
+
+        <div id="detailsModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-20 p-4">
+            <div class="p-6 rounded-lg shadow-xl w-full max-w-lg space-y-4 relative" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <button id="closeDetailsBtn" class="absolute top-2 right-3 text-2xl font-bold" style="color: var(--color-text-muted);">×</button>
+                <h3 id="modalChantierName" class="text-2xl font-bold border-b pb-2" style="border-color: var(--color-border);"></h3>
+                <div>
+                    <h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">ADRESSE</h4>
+                    <p id="modalChantierAddress" class="hover:underline text-lg cursor-pointer" style="color: var(--color-primary);"></p>
+                </div>
+                <div><h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">HEURES PRÉVUES</h4><p id="modalChantierHours" class="text-lg"></p></div>
+                <div><h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">CODES & ACCÈS</h4><div id="modalChantierKeybox" class="text-lg"></div></div>
+                <div><h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">INFOS SUPPLÉMENTAIRES</h4><p id="modalChantierInfo" class="text-lg" style="white-space: pre-wrap; overflow-wrap: break-word;"></p></div>
+            </div>
+        </div>
+        
+        <div id="navigationModal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-40 p-4">
+            <div class="p-6 rounded-lg shadow-xl w-full max-w-xs text-center" style="background-color: var(--color-surface);">
+                <h3 class="text-xl font-bold mb-5">Ouvrir l'itinéraire</h3>
+                <div class="space-y-3">
+                    <a id="navGoogleMaps" href="#" target="_blank" rel="noopener noreferrer" class="block w-full text-white font-semibold py-3 px-4 rounded-lg" style="background-color: #4285F4;">Google Maps</a>
+                    <a id="navWaze" href="#" target="_blank" rel="noopener noreferrer" class="block w-full text-white font-semibold py-3 px-4 rounded-lg" style="background-color: #33CCFF;">Waze</a>
+                </div>
+                <button id="closeNavModalBtn" class="mt-6 w-full font-semibold py-2 px-4 rounded-lg" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Annuler</button>
+            </div>
+        </div>
     `;
     setTimeout(async () => {
         try {
@@ -84,6 +109,19 @@ export async function render() {
             document.getElementById("prevWeekBtn").onclick = () => { currentWeekOffset--; displayWeekView(); };
             document.getElementById("nextWeekBtn").onclick = () => { currentWeekOffset++; displayWeekView(); };
             displayWeekView();
+
+            // NOUVEL AJOUT : Écouteurs pour les nouvelles modales
+            const closeBtn = document.getElementById('closeDetailsBtn');
+            if(closeBtn) closeBtn.onclick = () => document.getElementById('detailsModal').classList.add('hidden');
+            
+            const navModal = document.getElementById('navigationModal');
+            const closeNavModalBtn = document.getElementById('closeNavModalBtn');
+            if(navModal && closeNavModalBtn) {
+                closeNavModalBtn.onclick = () => navModal.classList.add('hidden');
+                // Ferme aussi la modale de nav si on clique sur un lien (Waze/Maps)
+                navModal.querySelectorAll('a').forEach(a => a.addEventListener('click', () => navModal.classList.add('hidden')));
+            }
+
         } catch (error) {
             console.error("Erreur critique dans le rendu du dashboard utilisateur:", error);
         }
@@ -91,7 +129,7 @@ export async function render() {
 }
 async function cacheDataForModals() {
     const chantiersData = await getActiveChantiers();
-    chantiersCache = chantiersData; // <-- CORRECTION: On garde l'objet complet
+    chantiersCache = chantiersData; 
     colleaguesCache = await getTeamMembers();
 }
 async function checkForOpenPointage() {
@@ -283,7 +321,6 @@ async function openStartModal() {
     const { weeklyChantiers, todaysColleagues, todaysChantiers } = await getContextualLists();
     const weeklyChantiersOnly = new Set([...weeklyChantiers].filter(chantier => !todaysChantiers.has(chantier)));
     
-    // --- CORRECTION 1 (Ligne 344) ---
     const otherChantiers = chantiersCache.filter(chantier => !weeklyChantiers.has(chantier.name));
     
     let chantierOptionsHTML = '';
@@ -299,19 +336,15 @@ async function openStartModal() {
     }
     if (otherChantiers.length > 0) {
         chantierOptionsHTML += '<optgroup label="Tous les autres chantiers">';
-        // --- CORRECTION 2 (Ligne 357) ---
         otherChantiers.forEach(chantier => { chantierOptionsHTML += `<option value="${chantier.name}">${chantier.name}</option>`; });
         chantierOptionsHTML += '</optgroup>';
     }
     chantierSelect.innerHTML = chantierOptionsHTML;
     if (!chantierSelect.innerHTML) {
          chantierSelect.innerHTML = '<option value="" disabled selected>-- Choisissez un chantier --</option>';
-         // --- CORRECTION 3 (Ligne 361) ---
          chantiersCache.forEach(chantier => { chantierSelect.innerHTML += `<option value="${chantier.name}">${chantier.name}</option>`; });
     }
     
-    // --- C'EST ICI LA CORRECTION (Ligne 365) ---
-    // On utilise colleague.name au lieu de colleague.displayName
     const otherColleagues = colleaguesCache.filter(colleague => !todaysColleagues.has(colleague.name) && colleague.name !== currentUser.displayName);
     const createColleagueElement = (name) => `<label class="flex items-center gap-2 p-1 rounded w-full"><input type="checkbox" value="${name}" name="colleagues" /><span>${name}</span></label>`;
     let colleaguesHTML = '';
@@ -329,8 +362,6 @@ async function openStartModal() {
         showAllButton.style.color = 'var(--color-primary)';
         showAllButton.onclick = () => {
             showAllButton.remove();
-            // --- C'EST ICI LA DEUXIÈME CORRECTION (Ligne 379) ---
-            // On extrait c.name au lieu de c.displayName
             colleaguesContainer.insertAdjacentHTML('beforeend', otherColleagues.map(c => c.name).map(createColleagueElement).join(''));
         };
         colleaguesContainer.appendChild(showAllButton);
@@ -384,7 +415,96 @@ function openStopModal() {
     };
 }
 
-// MODIFIÉ : displayWeekView pour afficher le total
+// =============================================
+// NOUVELLE FONCTION UTILITAIRE AJOUTÉE
+// =============================================
+/**
+ * Convertit des heures décimales en format "HHh MMm".
+ * @param {number} decimalHours - Le nombre d'heures en décimal (ex: 1.5)
+ * @returns {string} - Le format (ex: "1h 30m" ou "3h" ou "45m")
+ */
+function formatDecimalHours(decimalHours) {
+    if (!decimalHours || decimalHours <= 0) return '0h';
+    
+    const hours = Math.floor(decimalHours);
+    // On utilise Math.round pour la précision (ex: 26.8 * 60 = 48)
+    const minutes = Math.round((decimalHours - hours) * 60);
+    
+    let parts = [];
+    if (hours > 0) {
+        parts.push(`${hours}h`);
+    }
+    if (minutes > 0) {
+        // padStart ajoute un '0' si le nombre est < 10 (ex: 5 -> "05m")
+        parts.push(`${String(minutes).padStart(2, '0')}m`);
+    }
+    
+    // Si c'est 0h 0m (à cause de l'arrondi), on retourne 0h
+    return parts.length > 0 ? parts.join(' ') : '0h';
+}
+
+// =============================================
+// FONCTIONS DE MODALES AJOUTÉES
+// =============================================
+function dbShowDetailsModal(chantierId) {
+    // Note: on utilise chantiersCache qui est déjà chargé dans user-dashboard.js
+    const chantier = chantiersCache.find(c => c.id === chantierId);
+    if (!chantier) return;
+
+    document.getElementById('modalChantierName').textContent = chantier.name;
+    
+    const addressTrigger = document.getElementById('modalChantierAddress');
+    if (chantier.address) {
+        addressTrigger.textContent = chantier.address;
+        addressTrigger.onclick = () => dbShowNavigationChoice(chantier.address);
+        addressTrigger.parentElement.style.display = 'block';
+    } else {
+        addressTrigger.parentElement.style.display = 'none';
+    }
+    
+    const hoursP = document.getElementById('modalChantierHours');
+    if (chantier.totalHeuresPrevues && chantier.totalHeuresPrevues > 0) {
+        // MODIFIÉ : On utilise la nouvelle fonction de formatage
+        hoursP.textContent = formatDecimalHours(chantier.totalHeuresPrevues);
+        hoursP.parentElement.style.display = 'block';
+    } else {
+        hoursP.parentElement.style.display = 'none';
+    }
+
+    const keyboxContainer = document.getElementById('modalChantierKeybox');
+    keyboxContainer.innerHTML = '';
+    if (Array.isArray(chantier.keyboxCodes) && chantier.keyboxCodes.length > 0) {
+        const ul = document.createElement('ul');
+        ul.className = 'list-disc list-inside';
+        chantier.keyboxCodes.forEach(code => {
+            const li = document.createElement('li');
+            li.textContent = code;
+            ul.appendChild(li);
+        });
+        keyboxContainer.appendChild(ul);
+    } else {
+        keyboxContainer.textContent = "Non spécifié";
+    }
+    document.getElementById('modalChantierInfo').textContent = chantier.additionalInfo || "Aucune";
+    
+    document.getElementById('detailsModal').classList.remove('hidden');
+}
+
+function dbShowNavigationChoice(address) {
+    const encodedAddress = encodeURIComponent(address);
+    // URL Corrigée pour Google Maps pour plus de fiabilité
+    const mapsUrl = `https://maps.google.com/?q=${encodedAddress}`;
+    const wazeUrl = `https://waze.com/ul?q=${encodedAddress}&navigate=yes`;
+
+    document.getElementById('navGoogleMaps').href = mapsUrl;
+    document.getElementById('navWaze').href = wazeUrl;
+
+    document.getElementById('navigationModal').classList.remove('hidden');
+}
+
+// =============================================
+// FONCTIONS DE PLANNING MODIFIÉES
+// =============================================
 function displayWeekView() {
     const { startOfWeek, endOfWeek } = getWeekDateRange(currentWeekOffset);
     const options = { day: 'numeric', month: 'long', timeZone: 'UTC' };
@@ -393,7 +513,6 @@ function displayWeekView() {
         displayElement.textContent = `Semaine du ${startOfWeek.toLocaleDateString('fr-FR', options)} au ${endOfWeek.toLocaleDateString('fr-FR', options)}`;
     }
 
-    // Ajout pour le total
     const totalHoursElement = document.getElementById("currentWeekTotalHours");
     if (totalHoursElement) {
         totalHoursElement.textContent = 'Chargement...';
@@ -416,18 +535,15 @@ function displayWeekView() {
     }
 }
 
-// MODIFIÉ : loadUserScheduleForWeek pour calculer et afficher le total
 async function loadUserScheduleForWeek(start, end) {
     const weekId = start.toISOString().split('T')[0];
     const publishDoc = await getDoc(doc(db, "publishedSchedules", weekId));
     const scheduleGrid = document.getElementById("schedule-grid");
     
-    // On récupère l'élément pour le total
     const totalHoursElement = document.getElementById("currentWeekTotalHours");
 
     if (!publishDoc.exists()) {
         if(scheduleGrid) scheduleGrid.innerHTML = `<p class'col-span-1 md:col-span-7 text-center p-4' style='color: var(--color-text-muted);'>Le planning de cette semaine n'a pas encore été publié.</p>`;
-        // On met le total à 0
         if (totalHoursElement) totalHoursElement.textContent = 'Total semaine prevues : 0h';
         return;
     }
@@ -443,46 +559,34 @@ async function loadUserScheduleForWeek(start, end) {
     const scheduleData = planningSnapshot.docs.map(doc => doc.data());
     const userSchedule = scheduleData.filter(task => task.teamNames && task.teamNames.includes(currentUser.displayName));
 
-    // 'plannedHoursByChantier' est pour le petit total "planifié (semaine)" SUR la carte
     const plannedHoursByChantier = {}; 
-    
-    // 'totalWeekHours' est pour le GRAND total "Total semaine prevues" EN HAUT
     let totalWeekHours = 0;
 
     userSchedule.forEach(task => {
         const chantierName = task.chantierName;
         
-        // --- Calcul pour le total SUR LA CARTE (basé sur la "Durée (h)" de l'Admin Planning) ---
         const duration = parseFloat(task.duration) || 0;
         if (!plannedHoursByChantier[chantierName]) {
             plannedHoursByChantier[chantierName] = 0;
         }
         plannedHoursByChantier[chantierName] += duration;
         
-        // --- NOUVELLE LOGIQUE : Calcul pour le total EN HAUT (basé sur le budget "Heures prévues (par pers.)") ---
-        
-        // 1. Trouver les détails du chantier (comme dans createTaskElement)
         const chantierDetails = chantiersCache.find(c => c.id === task.chantierId);
-        
-        // 2. Trouver le nombre de personnes (comme dans createTaskElement)
         const teamCount = (task.teamNames || []).length;
         
-        // 3. Calculer le budget par personne et l'ajouter au total
         if (chantierDetails && chantierDetails.totalHeuresPrevues > 0 && teamCount > 0) {
             const totalBudget = chantierDetails.totalHeuresPrevues;
             const budgetPerPerson = (totalBudget / teamCount);
             
             totalWeekHours += budgetPerPerson;
         }
-        // --- Fin de la nouvelle logique ---
     });
     
-    // On affiche le total de la semaine (avec 1 décimale)
     if (totalHoursElement) {
-        totalHoursElement.textContent = `Total semaine prevues : ${totalWeekHours.toFixed(1)}h`;
+        // MODIFIÉ : On utilise la nouvelle fonction de formatage
+        totalHoursElement.textContent = `Total semaine prevues : ${formatDecimalHours(totalWeekHours)}`;
     }
 
-    // (Le reste de la fonction est inchangé)
     for (let i = 0; i < 7; i++) {
         const dayColumn = document.getElementById(`day-col-${i}`);
         if (dayColumn) dayColumn.innerHTML = '';
@@ -493,7 +597,6 @@ async function loadUserScheduleForWeek(start, end) {
         const dayIndex = (utcDate.getUTCDay() + 6) % 7;
         const container = document.getElementById(`day-col-${dayIndex}`);
         if (container) {
-            // On passe l'autre total (planifié) à la carte
             const totalPlannedHours = plannedHoursByChantier[data.chantierName] || 0;
             const chantierDetails = chantiersCache.find(c => c.id === data.chantierId);
             container.appendChild(createTaskElement(data, totalPlannedHours, chantierDetails));
@@ -503,9 +606,15 @@ async function loadUserScheduleForWeek(start, end) {
 
 function createTaskElement(task, totalPlannedHours, chantierDetails) {
     const el = document.createElement('div');
-    el.className = 'p-3 rounded-lg shadow-sm border-l-4 text-sm';
+    // MODIFIÉ : Ajout de classes pour le curseur et le survol
+    el.className = 'p-3 rounded-lg shadow-sm border-l-4 text-sm cursor-pointer hover:shadow-md transition-shadow';
     el.style.backgroundColor = 'var(--color-surface)';
     el.style.borderColor = 'var(--color-primary)';
+
+    // NOUVEL AJOUT : Définir l'action de clic
+    if (chantierDetails) {
+        el.onclick = () => dbShowDetailsModal(chantierDetails.id);
+    }
     
     // --- 1. Get Team Info ---
     const teamNames = task.teamNames || [];
@@ -516,35 +625,35 @@ function createTaskElement(task, totalPlannedHours, chantierDetails) {
     const note = task.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-primary);"><strong>Note:</strong> ${task.notes}</div>` : '';
 
     // --- 3. Get Weekly Planned Hours (for this chantier) ---
-    // C'est le total des "Durée (h)" de la semaine pour ce chantier
     let plannedHoursHTML = '';
     if (totalPlannedHours > 0) {
+        // MODIFIÉ : Utilisation de formatDecimalHours
         plannedHoursHTML = `<div class="text-xs mt-1" style="color: var(--color-text-muted);">
-                               Total planifié (semaine) : <strong>${totalPlannedHours}h</strong>
+                               Total planifié (semaine) : <strong>${formatDecimalHours(totalPlannedHours)}</strong>
                             </div>`;
     }
 
     // --- 4. Get Project Budget Hours (and divide it) ---
-    // C'est le "Heures totales prévues" de admin-chantiers
     let projectBudgetHTML = '';
     if (chantierDetails && chantierDetails.totalHeuresPrevues > 0) {
         const totalBudget = chantierDetails.totalHeuresPrevues;
         
-        // C'est la NOUVELLE LOGIQUE que tu as demandée
         if (teamCount > 0) {
-            const budgetPerPerson = (totalBudget / teamCount).toFixed(1);
+            // MODIFIÉ : On garde le calcul en décimal
+            const budgetPerPersonDecimal = (totalBudget / teamCount);
+            
             projectBudgetHTML = `
                 <div class="text-xs mt-1" style="color: var(--color-text-muted);">
-                    Heures prévues (projet) : <strong>${totalBudget}h</strong>
+                    Heures prévues (projet) : <strong>${formatDecimalHours(totalBudget)}</strong>
                 </div>
                 <div class="text-xs mt-1" style="color: var(--color-text-muted);">
-                    Heures prévues (par pers.) : <strong>${budgetPerPerson}h</strong>
+                    Heures prévues (par pers.) : <strong>${formatDecimalHours(budgetPerPersonDecimal)}</strong>
                 </div>`;
         } else {
-             // S'il n'y a pas d'équipe, on affiche comme avant
+             // MODIFIÉ : Utilisation de formatDecimalHours
              projectBudgetHTML = `
                 <div class="text-xs mt-1" style="color: var(--color-text-muted);">
-                    Heures prévues (seul) : <strong>${totalBudget}h</strong>
+                    Heures prévues (seul) : <strong>${formatDecimalHours(totalBudget)}</strong>
                 </div>`;
         }
     }

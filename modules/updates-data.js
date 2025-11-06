@@ -1,5 +1,14 @@
 export const updatesLog = [
     {
+        version: 'v3.5.1',
+        date: '6 novembre 2025',
+        changes: [
+            "### Améliorations du Planning Employé",
+            "✨ **Détails du chantier accessibles** : Dans \"Mon Planning\", cliquer sur une tâche ouvre désormais une fenêtre de détails (similaire à celle de la page \"Chantiers\") affichant l'adresse, les codes d'accès et les infos supplémentaires.",
+            "✨ **Format des heures amélioré** : L'affichage des heures planifiées (total de la semaine et par tâche) est maintenant au format \"HHh MMm\" (ex: `26h 48m`) au lieu du format décimal (ex: `26.8h`) pour une meilleure lisibilité."
+        ]
+    },
+    {
         version: 'v3.5.0',
         date: '4 novembre 2025',
         changes: [
