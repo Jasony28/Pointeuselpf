@@ -21,11 +21,11 @@ export async function render() {
                 <div class="rounded-lg shadow-sm p-4" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                     
                     <div class="flex justify-between items-center">
-                        <button id="prevWeekBtn" class="px-4 py-2 rounded-lg hover:opacity-80" style="background-color: var(--color-background);">&lt;</button>
+                        <button id="prevWeekBtn" class="px-4 py-2 rounded-lg hover:opacity-80" style="background-color: var(--color-background);"><</button>
                         <div class="text-center"> <div id="currentPeriodDisplay" class="font-semibold text-lg"></div>
                             <div id="currentWeekTotalHours" class="text-sm font-bold" style="color: var(--color-primary);"></div>
                         </div>
-                        <button id="nextWeekBtn" class="px-4 py-2 rounded-lg hover:opacity-80" style="background-color: var(--color-background);">&gt;</button>
+                        <button id="nextWeekBtn" class="px-4 py-2 rounded-lg hover:opacity-80" style="background-color: var(--color-background);">></button>
                     </div>
                     </div>
                 <div id="schedule-grid" class="grid grid-cols-1 md:grid-cols-7 gap-2 mt-4"></div>
@@ -528,7 +528,13 @@ function displayWeekView() {
             const dayColumn = document.createElement('div');
             dayColumn.className = 'rounded-lg p-2 min-h-[100px]';
             dayColumn.style.backgroundColor = 'var(--color-background)';
-            dayColumn.innerHTML = `<h4 class="font-bold text-center border-b pb-1 mb-2" style="border-color: var(--color-border);"><span style="color: var(--color-text-base);">${days[i]}</span> <span class="text-sm font-normal" style="color: var(--color-text-muted);">${dayDate.getUTCDate()}</span></h4><div id="day-col-${i}" class="space-y-2"></div>`;
+            // MODIFIÉ : Ajout d'un conteneur pour le total journalier
+            dayColumn.innerHTML = `<h4 class="font-bold text-center border-b pb-1 mb-2" style="border-color: var(--color-border);">
+                                        <span style="color: var(--color-text-base);">${days[i]}</span> 
+                                        <span class="text-sm font-normal" style="color: var(--color-text-muted);">${dayDate.getUTCDate()}</span>
+                                        <div id="day-total-${i}" class="text-sm font-bold mt-1" style="color: var(--color-primary); min-height: 1.25rem;"></div>
+                                    </h4>
+                                    <div id="day-col-${i}" class="space-y-2"></div>`;
             scheduleGrid.appendChild(dayColumn);
         }
         loadUserScheduleForWeek(startOfWeek, endOfWeek);
@@ -559,18 +565,15 @@ async function loadUserScheduleForWeek(start, end) {
     const scheduleData = planningSnapshot.docs.map(doc => doc.data());
     const userSchedule = scheduleData.filter(task => task.teamNames && task.teamNames.includes(currentUser.displayName));
 
-    const plannedHoursByChantier = {}; 
+    // MODIFIÉ : Ajout du calcul pour les totaux journaliers
+    let dailyTotals = [0, 0, 0, 0, 0, 0, 0]; // 7 jours
     let totalWeekHours = 0;
 
     userSchedule.forEach(task => {
-        const chantierName = task.chantierName;
-        
-        const duration = parseFloat(task.duration) || 0;
-        if (!plannedHoursByChantier[chantierName]) {
-            plannedHoursByChantier[chantierName] = 0;
-        }
-        plannedHoursByChantier[chantierName] += duration;
-        
+        // MODIFIÉ : Calcul de l'index du jour et ajout au total journalier
+        const utcDate = new Date(task.date + 'T12:00:00Z');
+        const dayIndex = (utcDate.getUTCDay() + 6) % 7;
+
         const chantierDetails = chantiersCache.find(c => c.id === task.chantierId);
         const teamCount = (task.teamNames || []).length;
         
@@ -579,12 +582,21 @@ async function loadUserScheduleForWeek(start, end) {
             const budgetPerPerson = (totalBudget / teamCount);
             
             totalWeekHours += budgetPerPerson;
+            dailyTotals[dayIndex] += budgetPerPerson; // Ajout au total du jour
         }
     });
     
     if (totalHoursElement) {
         // MODIFIÉ : On utilise la nouvelle fonction de formatage
         totalHoursElement.textContent = `Total semaine prevues : ${formatDecimalHours(totalWeekHours)}`;
+    }
+
+    // NOUVEL AJOUT : Affichage des totaux journaliers
+    for (let i = 0; i < 7; i++) {
+        const dayTotalEl = document.getElementById(`day-total-${i}`);
+        if (dayTotalEl && dailyTotals[i] > 0) {
+            dayTotalEl.textContent = formatDecimalHours(dailyTotals[i]);
+        }
     }
 
     for (let i = 0; i < 7; i++) {
@@ -597,14 +609,15 @@ async function loadUserScheduleForWeek(start, end) {
         const dayIndex = (utcDate.getUTCDay() + 6) % 7;
         const container = document.getElementById(`day-col-${dayIndex}`);
         if (container) {
-            const totalPlannedHours = plannedHoursByChantier[data.chantierName] || 0;
+            // MODIFIÉ : 'totalPlannedHours' n'est plus nécessaire ici
             const chantierDetails = chantiersCache.find(c => c.id === data.chantierId);
-            container.appendChild(createTaskElement(data, totalPlannedHours, chantierDetails));
+            container.appendChild(createTaskElement(data, chantierDetails));
         }
     });
 }
 
-function createTaskElement(task, totalPlannedHours, chantierDetails) {
+// MODIFIÉ : Signature de la fonction changée (totalPlannedHours retiré)
+function createTaskElement(task, chantierDetails) {
     const el = document.createElement('div');
     // MODIFIÉ : Ajout de classes pour le curseur et le survol
     el.className = 'p-3 rounded-lg shadow-sm border-l-4 text-sm cursor-pointer hover:shadow-md transition-shadow';
@@ -624,14 +637,8 @@ function createTaskElement(task, totalPlannedHours, chantierDetails) {
     // --- 2. Get Note Info ---
     const note = task.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-primary);"><strong>Note:</strong> ${task.notes}</div>` : '';
 
-    // --- 3. Get Weekly Planned Hours (for this chantier) ---
-    let plannedHoursHTML = '';
-    if (totalPlannedHours > 0) {
-        // MODIFIÉ : Utilisation de formatDecimalHours
-        plannedHoursHTML = `<div class="text-xs mt-1" style="color: var(--color-text-muted);">
-                               Total planifié (semaine) : <strong>${formatDecimalHours(totalPlannedHours)}</strong>
-                            </div>`;
-    }
+    // --- 3. SUPPRIMÉ ---
+    // Le bloc "Total planifié (semaine)" a été retiré.
 
     // --- 4. Get Project Budget Hours (and divide it) ---
     let projectBudgetHTML = '';
@@ -658,11 +665,12 @@ function createTaskElement(task, totalPlannedHours, chantierDetails) {
         }
     }
 
+    // MODIFIÉ : `plannedHoursHTML` retiré de l'innerHTML
     el.innerHTML = `<div class="font-semibold" style="color: var(--color-text-base);">${task.chantierName}</div>
                     
                     <div class="text-xs mt-1" style="color: var(--color-text-muted);">${team}</div>
                     <div class="mt-2 pt-2 border-t" style="border-color: var(--color-border);">
-                        ${plannedHoursHTML} ${projectBudgetHTML} </div>
+                        ${projectBudgetHTML} </div>
                     ${note}`;
     return el;
 }

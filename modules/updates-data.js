@@ -1,5 +1,16 @@
 export const updatesLog = [
     {
+        version: 'v3.5.2',
+        date: '9 novembre 2025',
+        changes: [
+            "### Nouvelle Page : 📊 Mes Statistiques",
+            "✨ **Toute nouvelle page \"Mes Stats\"** : Une nouvelle section (disponible dans le menu) vous permet de consulter vos statistiques de prestation.",
+            "✨ **Navigation par mois** : Consultez vos performances mois par mois à l'aide des flèches de navigation.",
+            "✨ **Calcul du Solde Mensuel** : L'application calcule automatiquement votre solde d'heures. En se basant sur votre **contrat hebdomadaire** (défini par l'admin), elle affiche si vous avez des **heures supplémentaires** (en vert) ou des **heures manquantes** (en orange) pour le mois sélectionné.",
+            "✨ **Top 5 Chantiers** : Visualisez instantanément les 5 chantiers sur lesquels vous avez passé le plus de temps durant le mois sélectionné, avec une barre de progression visuelle."
+        ]
+    },
+    {
         version: 'v3.5.1',
         date: '6 novembre 2025',
         changes: [

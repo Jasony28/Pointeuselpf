@@ -1,5 +1,5 @@
 import { updatesLog } from './modules/updates-data.js';
-const APP_VERSION ='v3.5.1';
+const APP_VERSION ='v3.5.2';
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
@@ -58,6 +58,7 @@ const userTabs = [
     { id: 'user-leave', name: 'Mes Congés' },
     { id: 'chantiers', name: 'Infos Chantiers' },
     { id: 'user-history', name: 'Mon Historique' },
+    { id: 'user-stats', name: 'Mes Stats' },
     { id: 'settings', name: 'Paramètres' },
 ];
 
