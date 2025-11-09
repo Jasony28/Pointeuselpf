@@ -1,5 +1,15 @@
 export const updatesLog = [
     {
+        version: 'v3.5.3',
+        date: '9 novembre 2025',
+        changes: [
+            "### Améliorations de la Page \"Paramètres\"",
+            "✨ **Export PDF Professionnel** : Téléchargez l'intégralité de votre historique de pointages dans un fichier PDF clair et professionnel. L'export regroupe vos prestations jour par jour et inclut un total d'heures pour chaque journée.",
+            "✨ **Changement de Mot de Passe** : Vous pouvez désormais demander un e-mail de réinitialisation de votre mot de passe directement depuis la page des paramètres.",
+            "✨ **Donner un Feedback** : Une nouvelle section vous permet d'écrire une idée ou un rapport de bug et de l'envoyer directement par e-mail au développeur."
+        ]
+    },
+    {
         version: 'v3.5.2',
         date: '9 novembre 2025',
         changes: [
