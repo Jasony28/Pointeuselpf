@@ -5,21 +5,49 @@ import { db, pageContent, showConfirmationModal, showInfoModal } from "../app.js
 let timers = {};
 let unsubscribe = null; // Pour arrêter l'écoute en temps réel quand on quitte la page
 
-function formatElapsedTime(startTime) {
+function formatElapsedTime(data) {
     const now = new Date();
-    const start = new Date(startTime);
-    const diffMs = now - start;
+    const start = new Date(data.timestamp);
+    
+    // Calculer le temps de pause total terminé
+    let totalPauseMs = (data.pauses || []).reduce((acc, p) => {
+        if (p.end) {
+            return acc + (new Date(p.end) - new Date(p.start));
+        }
+        return acc; 
+    }, 0);
 
-    if (diffMs < 0) return "00:00:00";
+    let effectiveElapsedTime;
+    
+    if (data.status === 'paused') {
+        // Si en pause, le temps "effectif" est figé au moment où la pause a commencé
+        const lastPause = data.pauses.slice(-1)[0];
+        // S'assurer qu'il y a bien une pause active
+        if (lastPause && !lastPause.end) {
+             const lastPauseStart = new Date(lastPause.start);
+             effectiveElapsedTime = (lastPauseStart - start) - totalPauseMs;
+        } else {
+            // Cas où status="paused" mais pas d'entrée de pause (ne devrait pas arriver, mais sécurité)
+            // On fige au temps actuel - pauses
+            effectiveElapsedTime = (now - start) - totalPauseMs; 
+        }
+       
+    } else {
+        // Si en cours, c'est (maintenant - début) - (temps de pause total)
+        effectiveElapsedTime = (now - start) - totalPauseMs;
+    }
 
-    const hours = String(Math.floor(diffMs / 3600000)).padStart(2, '0');
-    const minutes = String(Math.floor((diffMs % 3600000) / 60000)).padStart(2, '0');
-    const seconds = String(Math.floor((diffMs % 60000) / 1000)).padStart(2, '0');
+    if (effectiveElapsedTime < 0) effectiveElapsedTime = 0;
+
+    const hours = String(Math.floor(effectiveElapsedTime / 3600000)).padStart(2, '0');
+    const minutes = String(Math.floor((effectiveElapsedTime % 3600000) / 60000)).padStart(2, '0');
+    const seconds = String(Math.floor((effectiveElapsedTime % 60000) / 1000)).padStart(2, '0');
     
     return `${hours}:${minutes}:${seconds}`;
 }
 
 async function forceStopPointage(docId, userName) {
+    // ... (Aucun changement dans cette fonction)
     const confirmed = await showConfirmationModal(
         "Forcer l'arrêt",
         `Voulez-vous vraiment forcer l'arrêt du pointage de ${userName} ? L'heure de fin sera l'heure actuelle.`
@@ -49,13 +77,25 @@ function renderLivePointageCard(docId, data) {
         card = document.createElement('div');
         card.id = cardId;
         card.className = "p-4 rounded-lg shadow-sm relative transition-all duration-300";
-        card.style.backgroundColor = 'var(--color-surface)';
-        card.style.border = '1px solid var(--color-border)';
+        // Style géré ci-dessous
         document.getElementById('live-pointages-list').appendChild(card);
     }
 
     const startTime = new Date(data.timestamp);
     const timeString = startTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    
+    const isPaused = data.status === 'paused';
+
+    // Appliquer le style en fonction de l'état de pause
+    // Note: 'var(--color-warning)' et 'var(--color-surface-muted)'
+    // devraient être définis dans votre CSS pour un meilleur rendu.
+    if (isPaused) {
+        card.style.backgroundColor = 'var(--color-surface-muted, #fefce8)'; // Fallback jaune très clair
+        card.style.border = '1px solid var(--color-warning, #f59e0b)'; // Fallback orange/jaune
+    } else {
+        card.style.backgroundColor = 'var(--color-surface)';
+        card.style.border = '1px solid var(--color-border)';
+    }
 
     card.innerHTML = `
         <div class="flex justify-between items-start">
@@ -65,7 +105,8 @@ function renderLivePointageCard(docId, data) {
                 <p class="text-xs mt-1" style="color: var(--color-text-muted);">Démarré à ${timeString}</p>
             </div>
             <div class="text-right">
-                <p class="font-mono text-2xl font-bold" id="timer-${docId}">${formatElapsedTime(data.timestamp)}</p>
+                ${isPaused ? '<p class="font-bold text-lg" style="color: var(--color-warning, #f59e0b);">EN PAUSE</p>' : ''}
+                <p class="font-mono text-2xl font-bold ${isPaused ? 'opacity-70' : ''}" id="timer-${docId}">${formatElapsedTime(data)}</p>
                 <button class="stop-btn text-xs bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded mt-1">Forcer l'arrêt</button>
             </div>
         </div>
@@ -75,14 +116,21 @@ function renderLivePointageCard(docId, data) {
 
     // Démarrer ou mettre à jour le timer
     if (timers[docId]) clearInterval(timers[docId]);
-    timers[docId] = setInterval(() => {
-        const timerEl = document.getElementById(`timer-${docId}`);
-        if (timerEl) {
-            timerEl.textContent = formatElapsedTime(data.timestamp);
-        } else {
-            clearInterval(timers[docId]);
-        }
-    }, 1000);
+    
+    // On ne lance le minuteur "visuel" que si l'utilisateur n'est pas en pause
+    if (!isPaused) {
+        timers[docId] = setInterval(() => {
+            const timerEl = document.getElementById(`timer-${docId}`);
+            if (timerEl) {
+                // On passe 'data' pour que formatElapsedTime recalcule
+                // le temps écoulé à chaque seconde
+                timerEl.textContent = formatElapsedTime(data);
+            } else {
+                clearInterval(timers[docId]);
+                delete timers[docId]; // Nettoyer
+            }
+        }, 1000);
+    }
 }
 
 function removeLivePointageCard(docId) {

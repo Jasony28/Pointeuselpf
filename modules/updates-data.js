@@ -1,5 +1,15 @@
 export const updatesLog = [
     {
+        version: 'v3.5.4',
+        date: '12 novembre 2025',
+        changes: [
+            "### Améliorations du Tableau de Bord",
+            "✨ **Accès rapide aux détails du chantier en cours** : Sur le tableau de bord, le nom du chantier sur lequel vous pointez actuellement est désormais **cliquable**. Cela ouvre la fenêtre de détails (adresse, codes, infos) sans avoir à chercher le chantier dans la liste.",
+            "### Pour l'Administrateur",
+            "✨ **Visualisation des pauses en temps réel** : La page \"Pointages en Temps Réel\" (📡) affiche désormais un indicateur visuel **\"EN PAUSE\"** lorsqu'un employé suspend son pointage. La carte de l'employé est mise en surbrillance et son chronomètre est figé, donnant une vision plus juste de l'activité sur le terrain."
+        ]
+    },
+    {
         version: 'v3.5.3',
         date: '9 novembre 2025',
         changes: [

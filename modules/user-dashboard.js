@@ -150,12 +150,27 @@ function initLiveTracker() {
     const container = document.getElementById('live-tracker-container');
     if (!container) return;
     const activePointage = JSON.parse(localStorage.getItem('activePointage'));
+
     if (activePointage && activePointage.uid === currentUser.uid) {
         const isPaused = activePointage.status === 'paused';
+
+        // --- MODIFICATION DÉBUT ---
+        // Rendre le nom du chantier cliquable s'il y a un ID
+        let chantierHTML = `<p class="text-2xl font-bold my-2" style="color: var(--color-primary);">${activePointage.chantier}</p>`; // Fallback
+        
+        if (activePointage.chantierId) {
+            chantierHTML = `
+                <p id="liveChantierName" class="text-2xl font-bold my-2 cursor-pointer hover:underline" style="color: var(--color-primary);">
+                    ${activePointage.chantier}
+                </p>
+            `;
+        }
+        // --- MODIFICATION FIN ---
+
         container.innerHTML = `
             <div class="text-center">
                 <p style="color: var(--color-text-muted);">Pointage en cours sur :</p>
-                <p class="text-2xl font-bold my-2" style="color: var(--color-primary);">${activePointage.chantier}</p>
+                ${chantierHTML} 
                 <div id="timer" class="text-5xl font-mono my-4 tracking-wider ${isPaused ? 'text-yellow-500' : ''}">00:00:00</div>
                 ${isPaused ? '<p class="text-yellow-600 font-semibold mb-4">PAUSE</p>' : ''}
                 <div class="flex flex-col sm:flex-row gap-4 justify-center">
@@ -163,6 +178,18 @@ function initLiveTracker() {
                     <button id="stopBtn" class="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold px-8 py-4 rounded-lg text-lg shadow-lg">Arrêter</button>
                 </div>
             </div>`;
+
+        // --- MODIFICATION DÉBUT ---
+        // Ajouter l'écouteur de clic
+        if (activePointage.chantierId) {
+            const chantierNameEl = document.getElementById('liveChantierName');
+            if(chantierNameEl) {
+                // Fait appel à la fonction qui existe déjà pour ouvrir la modale
+                chantierNameEl.onclick = () => dbShowDetailsModal(activePointage.chantierId);
+            }
+        }
+        // --- MODIFICATION FIN ---
+
         updateTimerUI();
         if (!isPaused) timerInterval = setInterval(updateTimerUI, 1000);
         document.getElementById('pauseResumeBtn').onclick = isPaused ? resumePointage : pausePointage;
@@ -215,16 +242,29 @@ function resumePointage() {
     updateDoc(pointageRef, { status: 'running', pauses: activePointage.pauses });
     initLiveTracker();
 }
-async function startPointage(chantierName, colleagues) {
+async function startPointage(chantierId, chantierName, colleagues) {
+// --- MODIFICATION FIN ---
+
     const isDriver = document.getElementById('isDriverCheckbox').checked;
+    
+    // --- MODIFICATION DÉBUT ---
+    // Ajout de chantierId aux données
     const newPointageData = {
-        uid: currentUser.uid, userName: currentUser.displayName, chantier: chantierName, colleagues,
+        uid: currentUser.uid, userName: currentUser.displayName, 
+        chantier: chantierName, 
+        chantierId: chantierId, // <-- AJOUT IMPORTANT
+        colleagues,
         timestamp: new Date().toISOString(), endTime: null, status: 'running', pauses: [], createdAt: serverTimestamp(),
         isDriver: isDriver
     };
+    // --- MODIFICATION FIN ---
+
     try {
         const newPointageRef = await addDoc(collection(db, "pointages"), newPointageData);
+        
+        // localStorage contiendra maintenant 'chantierId'
         localStorage.setItem('activePointage', JSON.stringify({ docId: newPointageRef.id, ...newPointageData }));
+        
         const lastPointageQuery = query(collection(db, "pointages"), where("uid", "==", currentUser.uid), where("endTime", "!=", null), orderBy("endTime", "desc"), limit(1));
         const lastPointageSnapshot = await getDocs(lastPointageQuery);
         let startAddressForTravel = HOME_BASE_ADDRESS;
@@ -240,14 +280,18 @@ async function startPointage(chantierName, colleagues) {
                 }
             }
         }
-        const newChantierQuery = query(collection(db, "chantiers"), where("name", "==", chantierName), limit(1));
-        const newChantierSnapshot = await getDocs(newChantierQuery);
-        if (!newChantierSnapshot.empty) {
-            const newChantierAddress = newChantierSnapshot.docs[0].data().address;
+        
+        // --- MODIFICATION DÉBUT ---
+        // Optimisation : utilise chantiersCache (déjà chargé) au lieu de refaire une requête
+        const newChantier = chantiersCache.find(c => c.id === chantierId);
+        if (newChantier && newChantier.address) {
+            const newChantierAddress = newChantier.address;
             if (newChantierAddress !== startAddressForTravel) {
                 calculateAndSaveTravel(startAddressForTravel, newChantierAddress, newPointageRef.id, isDriver);
             }
         }
+        // --- MODIFICATION FIN ---
+
         initLiveTracker();
     } catch (error) {
         console.error("Erreur de démarrage du pointage:", error);
@@ -318,32 +362,49 @@ async function openStartModal() {
     chantierSelect.innerHTML = '<option>Chargement du planning...</option>';
     colleaguesContainer.innerHTML = `<p class="text-sm" style="color: var(--color-text-muted);">Chargement...</p>`;
     modal.classList.remove('hidden');
+    
     const { weeklyChantiers, todaysColleagues, todaysChantiers } = await getContextualLists();
     const weeklyChantiersOnly = new Set([...weeklyChantiers].filter(chantier => !todaysChantiers.has(chantier)));
     
     const otherChantiers = chantiersCache.filter(chantier => !weeklyChantiers.has(chantier.name));
     
     let chantierOptionsHTML = '';
+
+    // --- MODIFICATION DÉBUT ---
+    // Helper pour trouver le chantier dans le cache et créer une option avec l'ID
+    const findAndBuildOption = (name) => {
+        const chantier = chantiersCache.find(c => c.name === name);
+        if (chantier) {
+            return `<option value="${chantier.id}">${chantier.name}</option>`;
+        }
+        return '';
+    };
+
     if (todaysChantiers.size > 0) {
         chantierOptionsHTML += '<optgroup label="Chantiers du jour">';
-        todaysChantiers.forEach(name => { chantierOptionsHTML += `<option value="${name}">${name}</option>`; });
+        // Utilise l'helper pour obtenir <option value="ID">Nom</option>
+        todaysChantiers.forEach(name => { chantierOptionsHTML += findAndBuildOption(name); });
         chantierOptionsHTML += '</optgroup>';
     }
     if (weeklyChantiersOnly.size > 0) {
         chantierOptionsHTML += '<optgroup label="Autres chantiers de la semaine">';
-        weeklyChantiersOnly.forEach(name => { chantierOptionsHTML += `<option value="${name}">${name}</option>`; });
+        weeklyChantiersOnly.forEach(name => { chantierOptionsHTML += findAndBuildOption(name); });
         chantierOptionsHTML += '</optgroup>';
     }
     if (otherChantiers.length > 0) {
         chantierOptionsHTML += '<optgroup label="Tous les autres chantiers">';
-        otherChantiers.forEach(chantier => { chantierOptionsHTML += `<option value="${chantier.name}">${chantier.name}</option>`; });
+        // Utilise l'ID du chantier comme 'value'
+        otherChantiers.forEach(chantier => { chantierOptionsHTML += `<option value="${chantier.id}">${chantier.name}</option>`; });
         chantierOptionsHTML += '</optgroup>';
     }
     chantierSelect.innerHTML = chantierOptionsHTML;
+    
     if (!chantierSelect.innerHTML) {
          chantierSelect.innerHTML = '<option value="" disabled selected>-- Choisissez un chantier --</option>';
-         chantiersCache.forEach(chantier => { chantierSelect.innerHTML += `<option value="${chantier.name}">${chantier.name}</option>`; });
+         // Fallback pour utiliser l'ID
+         chantiersCache.forEach(chantier => { chantierSelect.innerHTML += `<option value="${chantier.id}">${chantier.name}</option>`; });
     }
+    // --- MODIFICATION FIN ---
     
     const otherColleagues = colleaguesCache.filter(colleague => !todaysColleagues.has(colleague.name) && colleague.name !== currentUser.displayName);
     const createColleagueElement = (name) => `<label class="flex items-center gap-2 p-1 rounded w-full"><input type="checkbox" value="${name}" name="colleagues" /><span>${name}</span></label>`;
@@ -366,14 +427,28 @@ async function openStartModal() {
         };
         colleaguesContainer.appendChild(showAllButton);
     }
+
+    // --- MODIFICATION DÉBUT ---
+    // Gérer la soumission du formulaire
     form.onsubmit = (e) => {
         e.preventDefault();
-        const chantier = chantierSelect.value;
-        if (!chantier) { showInfoModal("Attention", "Veuillez choisir un chantier."); return; }
+        const chantierId = chantierSelect.value; // Ceci est maintenant un ID
+        if (!chantierId) { showInfoModal("Attention", "Veuillez choisir un chantier."); return; }
+        
+        // Retrouver le nom du chantier à partir de l'ID pour le passer à startPointage
+        const chantierName = chantiersCache.find(c => c.id === chantierId)?.name;
+        if (!chantierName) {
+            showInfoModal("Erreur", "Chantier sélectionné non trouvé."); return;
+        }
+
         const selectedColleagues = Array.from(document.querySelectorAll('input[name="colleagues"]:checked')).map(el => el.value);
-        startPointage(chantier, selectedColleagues);
+        
+        // Passer l'ID et le Nom
+        startPointage(chantierId, chantierName, selectedColleagues);
         closeStartModal();
     };
+    // --- MODIFICATION FIN ---
+
     document.getElementById('cancelStartPointage').onclick = closeStartModal;
 }
 async function getContextualLists() {
