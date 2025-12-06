@@ -1,6 +1,8 @@
-import { db, currentUser } from '../app.js';
+// AJOUT DE 'showConfirmationModal' DANS LES IMPORTS
+import { db, currentUser, showConfirmationModal } from '../app.js'; 
 import { 
-    collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, getDocs, doc, updateDoc, getDoc, setDoc 
+    collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, 
+    getDocs, doc, updateDoc, setDoc, increment, arrayUnion 
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 
 let activeChatListener = null;
@@ -9,7 +11,6 @@ let conversationsListener = null;
 export async function render() {
     const container = document.getElementById('page-content');
     
-    // On utilise les variables CSS pour le background et les bordures
     container.innerHTML = `
         <div class="h-[calc(100vh-140px)] flex flex-col md:flex-row rounded-lg shadow overflow-hidden relative" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
             
@@ -35,9 +36,9 @@ export async function render() {
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                         </svg>
                     </button>
-                    <div class="flex items-center">
+                    <div class="flex items-center flex-1">
                         <div class="w-10 h-10 rounded-full text-white flex items-center justify-center font-bold mr-3 shadow-sm" style="background-color: var(--color-primary);" id="chat-header-avatar">?</div>
-                        <h3 class="font-bold" style="color: var(--color-text-base);" id="chat-header-name">Sélectionnez une discussion</h3>
+                        <h3 class="font-bold" style="color: var(--color-text-base);" id="chat-header-name">Discussion</h3>
                     </div>
                 </div>
 
@@ -45,7 +46,7 @@ export async function render() {
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                     </svg>
-                    <p>Sélectionnez ou commencez une discussion</p>
+                    <p>Sélectionnez une discussion</p>
                 </div>
 
                 <div id="messages-area" class="flex-1 overflow-y-auto p-4 space-y-4 hidden" style="background-color: var(--color-background);"></div>
@@ -69,8 +70,7 @@ export async function render() {
                     <h3 class="font-bold text-lg" style="color: var(--color-text-base);">Nouvelle discussion</h3>
                     <button id="close-modal" class="text-2xl hover:opacity-70" style="color: var(--color-text-muted);">&times;</button>
                 </div>
-                <div id="users-list" class="h-80 overflow-y-auto p-2">
-                    </div>
+                <div id="users-list" class="h-80 overflow-y-auto p-2"></div>
             </div>
         </div>
     `;
@@ -93,7 +93,6 @@ function setupEventListeners() {
         };
     }
 
-    // Modal
     const modal = document.getElementById('new-chat-modal');
     const newChatBtn = document.getElementById('new-chat-btn');
     if(newChatBtn) {
@@ -105,7 +104,6 @@ function setupEventListeners() {
     
     document.getElementById('close-modal').onclick = () => modal.classList.add('hidden');
 
-    // Envoi Message
     const form = document.getElementById('message-form');
     if(form) {
         form.addEventListener('submit', async (e) => {
@@ -120,12 +118,24 @@ function setupEventListeners() {
                     await addDoc(collection(db, `chats/${chatId}/messages`), {
                         text: text,
                         senderId: currentUser.uid,
-                        createdAt: serverTimestamp()
+                        createdAt: serverTimestamp(),
+                        deleted: false
                     });
-                    await updateDoc(doc(db, "chats", chatId), {
+
+                    const participants = chatId.split('_');
+                    const otherUserId = participants.find(id => id !== currentUser.uid);
+
+                    const updateData = {
                         lastMessage: text,
-                        lastMessageTime: serverTimestamp()
-                    });
+                        lastMessageTime: serverTimestamp(),
+                        hiddenFor: [] 
+                    };
+
+                    if (otherUserId) {
+                        updateData[`unreadCounts.${otherUserId}`] = increment(1);
+                    }
+
+                    await updateDoc(doc(db, "chats", chatId), updateData);
                 } catch (error) {
                     console.error("Erreur envoi:", error);
                 }
@@ -137,7 +147,6 @@ function setupEventListeners() {
 function loadConversations() {
     if (conversationsListener) conversationsListener();
 
-    // NOTE : CETTE REQUÊTE NÉCESSITE L'INDEX QUE TU DOIS CRÉER
     const q = query(
         collection(db, "chats"), 
         where("participants", "array-contains", currentUser.uid),
@@ -148,25 +157,33 @@ function loadConversations() {
 
     conversationsListener = onSnapshot(q, (snapshot) => {
         container.innerHTML = '';
-        if (snapshot.empty) {
-            container.innerHTML = `<div class="text-center mt-10 text-sm" style="color: var(--color-text-muted);">Aucune conversation.<br>Cliquez sur le +</div>`;
-            return;
-        }
+        
+        let hasVisibleChats = false;
 
         snapshot.forEach(docSnap => {
             const data = docSnap.data();
+            
+            if (data.hiddenFor && data.hiddenFor.includes(currentUser.uid)) {
+                return;
+            }
+
+            hasVisibleChats = true;
             const otherUserName = data.participantNames.find(n => n !== (currentUser.displayName || 'Moi')) || data.participantNames[0];
             
+            const myUnreadCount = (data.unreadCounts && data.unreadCounts[currentUser.uid]) ? data.unreadCounts[currentUser.uid] : 0;
+            const hasUnread = myUnreadCount > 0;
+
             const div = document.createElement('div');
-            // Style de la liste des conversations
-            div.className = "p-3 rounded-lg cursor-pointer transition flex items-center mb-1 border";
-            div.style.borderColor = 'transparent';
-            div.style.backgroundColor = 'transparent';
+            div.className = "group p-3 rounded-lg cursor-pointer transition flex items-center mb-1 border relative";
+            div.style.borderColor = hasUnread ? 'var(--color-primary)' : 'transparent';
+            div.style.backgroundColor = hasUnread ? 'rgba(0,0,0,0.02)' : 'transparent';
             
             div.onmouseover = () => { div.style.backgroundColor = 'var(--color-background)'; div.style.borderColor = 'var(--color-border)'; };
-            div.onmouseout = () => { div.style.backgroundColor = 'transparent'; div.style.borderColor = 'transparent'; };
+            div.onmouseout = () => { 
+                div.style.backgroundColor = hasUnread ? 'rgba(0,0,0,0.02)' : 'transparent';
+                div.style.borderColor = hasUnread ? 'var(--color-primary)' : 'transparent';
+            };
 
-            // Format date
             let timeStr = '';
             if (data.lastMessageTime) {
                 const date = data.lastMessageTime.toDate();
@@ -176,26 +193,81 @@ function loadConversations() {
                     : date.toLocaleDateString();
             }
 
+            const badgeHtml = hasUnread 
+                ? `<div class="absolute top-3 right-8 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm animate-pulse">${myUnreadCount}</div>` 
+                : '';
+
             div.innerHTML = `
-                <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold mr-3 text-sm flex-shrink-0" style="background-color: var(--color-border); color: var(--color-text-muted);">
+                <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold mr-3 text-sm flex-shrink-0 relative" style="background-color: var(--color-border); color: var(--color-text-muted);">
                     ${otherUserName.substring(0,2).toUpperCase()}
                 </div>
-                <div class="flex-1 min-w-0">
+                <div class="flex-1 min-w-0 pr-6">
                     <div class="flex justify-between items-baseline">
-                        <h4 class="font-bold truncate text-sm" style="color: var(--color-text-base);">${otherUserName}</h4>
+                        <h4 class="truncate text-sm ${hasUnread ? 'font-bold' : ''}" style="color: var(--color-text-base);">${otherUserName}</h4>
                         <span class="text-xs" style="color: var(--color-text-muted);">${timeStr}</span>
                     </div>
-                    <p class="text-xs truncate" style="color: var(--color-text-muted); opacity: 0.8;">${data.lastMessage || 'Nouvelle conversation'}</p>
+                    <p class="text-xs truncate ${hasUnread ? 'font-semibold text-gray-800' : ''}" style="color: var(--color-text-muted); opacity: ${hasUnread ? '1' : '0.8'};">${data.lastMessage || 'Nouvelle conversation'}</p>
                 </div>
+                ${badgeHtml}
+                <button class="delete-chat-btn absolute right-2 top-1/2 transform -translate-y-1/2 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition p-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </button>
             `;
             
-            div.onclick = () => openChat(docSnap.id, otherUserName);
+            div.onclick = (e) => {
+                if (e.target.closest('.delete-chat-btn')) return;
+                openChat(docSnap.id, otherUserName);
+            };
+
+            const deleteBtn = div.querySelector('.delete-chat-btn');
+            
+            // MODIFICATION ICI : Utilisation de la Modale Custom
+            deleteBtn.onclick = async (e) => {
+                e.stopPropagation();
+                const confirmed = await showConfirmationModal(
+                    "Supprimer la conversation", 
+                    "Voulez-vous retirer cette conversation de votre liste ?"
+                );
+                
+                if(confirmed) {
+                    deleteConversation(docSnap.id);
+                }
+            };
+
             container.appendChild(div);
         });
+
+        if (!hasVisibleChats) {
+            container.innerHTML = `<div class="text-center mt-10 text-sm" style="color: var(--color-text-muted);">Aucune conversation active.<br>Cliquez sur le +</div>`;
+        }
+
     }, (error) => {
-        console.error("Erreur Index probable:", error);
+        console.error(error);
         container.innerHTML = `<div class="text-red-500 p-2 text-xs">Erreur: Index manquant (voir console)</div>`;
     });
+}
+
+async function deleteConversation(chatId) {
+    try {
+        await updateDoc(doc(db, "chats", chatId), {
+            hiddenFor: arrayUnion(currentUser.uid)
+        });
+    } catch (error) {
+        console.error("Erreur suppression conversation:", error);
+    }
+}
+
+async function deleteMessage(chatId, messageId) {
+    try {
+        await updateDoc(doc(db, `chats/${chatId}/messages`, messageId), {
+            text: "🚫 Message supprimé",
+            deleted: true
+        });
+    } catch (error) {
+        console.error("Erreur suppression message:", error);
+    }
 }
 
 async function loadUsersForNewChat() {
@@ -231,32 +303,26 @@ async function loadUsersForNewChat() {
 async function startConversation(targetUserId, targetUserName) {
     document.getElementById('new-chat-modal').classList.add('hidden');
 
-    // On crée un ID unique basé sur les deux IDs triés (ex: "uid1_uid2")
-    // Comme ça, on retombe toujours sur la même conversation entre 2 personnes.
     const participants = [currentUser.uid, targetUserId].sort();
     const chatId = participants.join('_');
     const chatRef = doc(db, "chats", chatId);
 
     try {
-        // CORRECTION : On ne fait plus de 'getDoc' (lecture) qui bloquait.
-        // On force l'écriture/mise à jour directement.
-        // 'merge: true' permet de ne pas effacer les messages existants si le chat existe déjà.
         await setDoc(chatRef, {
             participants: participants,
             participantNames: [
                participants[0] === currentUser.uid ? (currentUser.displayName || 'Moi') : targetUserName,
                participants[1] === currentUser.uid ? (currentUser.displayName || 'Moi') : targetUserName
             ], 
-            // On met à jour l'heure pour faire remonter la conversation en haut de la liste
-            lastMessageTime: serverTimestamp()
+            lastMessageTime: serverTimestamp(),
+            hiddenFor: [] 
         }, { merge: true });
 
-        // Une fois l'écriture validée (les permissions sont OK car on s'est ajouté), on ouvre le chat.
         openChat(chatId, targetUserName);
 
     } catch (error) {
-        console.error("Erreur lors de la création du chat:", error);
-        alert("Impossible de lancer la conversation. Vérifiez votre connexion.");
+        console.error(error);
+        alert("Impossible de lancer la conversation.");
     }
 }
 
@@ -277,22 +343,41 @@ function openChat(chatId, chatName) {
     messagesArea.classList.remove('hidden');
     messagesArea.innerHTML = '';
 
+    const chatRef = doc(db, "chats", chatId);
+    const updateReset = {};
+    updateReset[`unreadCounts.${currentUser.uid}`] = 0;
+    
+    updateDoc(chatRef, updateReset).catch(err => console.log(err));
+
     if (activeChatListener) activeChatListener();
 
     const q = query(collection(db, `chats/${chatId}/messages`), orderBy("createdAt", "asc"));
 
     activeChatListener = onSnapshot(q, (snapshot) => {
         snapshot.docChanges().forEach((change) => {
-            if (change.type === "added") {
+            if (change.type === "added" || change.type === "modified") {
                 const msg = change.doc.data();
+                const msgId = change.doc.id;
                 const isMe = msg.senderId === currentUser.uid;
                 
+                if (change.type === "modified") {
+                    const existingMsgDiv = document.getElementById(`msg-${msgId}`);
+                    if (existingMsgDiv) {
+                        const bubbleText = existingMsgDiv.querySelector('.msg-text');
+                        if (msg.deleted) {
+                            bubbleText.textContent = msg.text;
+                            bubbleText.classList.add('italic', 'opacity-70');
+                            const delBtn = existingMsgDiv.querySelector('.delete-msg-btn');
+                            if(delBtn) delBtn.remove();
+                        }
+                    }
+                    return;
+                }
+
                 const msgDiv = document.createElement('div');
-                msgDiv.className = `flex w-full ${isMe ? 'justify-end' : 'justify-start'}`;
+                msgDiv.id = `msg-${msgId}`;
+                msgDiv.className = `flex w-full ${isMe ? 'justify-end' : 'justify-start'} group`;
                 
-                // Style des bulles de chat
-                // MOI : Couleur Primaire
-                // AUTRE : Couleur Surface + Bordure
                 const bubbleStyle = isMe 
                     ? `background-color: var(--color-primary); color: #ffffff;` 
                     : `background-color: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-text-base);`;
@@ -300,12 +385,39 @@ function openChat(chatId, chatName) {
                 let timeStr = '';
                 if(msg.createdAt) timeStr = msg.createdAt.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
+                const isDeleted = msg.deleted === true;
+                const textStyle = isDeleted ? 'italic opacity-70' : '';
+
+                const trashBtn = (isMe && !isDeleted) ? `
+                    <button class="delete-msg-btn opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 mr-2 transition" onclick="this.dispatchEvent(new CustomEvent('delete-msg', {bubbles: true, detail: '${msgId}'}))">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                    </button>
+                ` : '';
+
                 msgDiv.innerHTML = `
-                    <div class="max-w-[75%] px-4 py-2 my-1 rounded-lg shadow-sm group relative" style="${bubbleStyle}">
-                        <div class="text-sm break-words">${msg.text}</div>
-                        <div class="text-[10px] text-right mt-1 opacity-70">${timeStr}</div>
+                    <div class="flex items-center">
+                        ${trashBtn}
+                        <div class="max-w-[280px] md:max-w-[400px] px-4 py-2 my-1 rounded-lg shadow-sm relative" style="${bubbleStyle}">
+                            <div class="msg-text text-sm break-words ${textStyle}">${msg.text}</div>
+                            <div class="text-[10px] text-right mt-1 opacity-70 select-none">${timeStr}</div>
+                        </div>
                     </div>
                 `;
+
+                // MODIFICATION ICI : Utilisation de la Modale Custom
+                msgDiv.addEventListener('delete-msg', async (e) => {
+                    const confirmed = await showConfirmationModal(
+                        "Supprimer le message", 
+                        "Supprimer ce message pour tout le monde ?"
+                    );
+                    
+                    if(confirmed) {
+                        deleteMessage(chatId, e.detail);
+                    }
+                });
+
                 messagesArea.appendChild(msgDiv);
             }
         });

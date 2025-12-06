@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 
 // --- MISE À JOUR DE LA VERSION (Important pour le cache) ---
-const APP_VERSION = 'v3.5.5'; 
+const APP_VERSION = 'v3.5.6'; 
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
@@ -63,7 +63,7 @@ const userTabs = [
     { id: 'user-dashboard', name: 'Planning' },
     { id: 'user-leave', name: 'Mes Congés' },
     { id: 'chantiers', name: 'Infos Chantiers' },
-    { id: 'user-chat', name: 'Messagerie' }, // <--- NOUVEL ONGLET AJOUTÉ ICI
+    { id: 'user-chat', name: 'Messagerie' },
     { id: 'user-history', name: 'Mon Historique' },
     { id: 'user-stats', name: 'Mes Stats' },
     { id: 'settings', name: 'Paramètres' },
@@ -170,6 +170,13 @@ export async function navigateTo(pageId, params = {}) {
 document.addEventListener('DOMContentLoaded', () => {
     // Références Modales
     genericModal = document.getElementById('genericModal');
+    
+    // --- CORRECTION Z-INDEX POUR QUE LA MODALE SOIT DEVANT LE CHAT ---
+    if(genericModal) {
+        genericModal.classList.add('z-50');
+    }
+    // ------------------------------------------------------------------
+
     modalTitle = document.getElementById('modalTitle');
     modalMessage = document.getElementById('modalMessage');
     modalConfirmBtn = document.getElementById('modalConfirmBtn');
@@ -407,8 +414,6 @@ function checkForUpdates(userData, userRef) {
     const currentVersion = APP_VERSION;
 
     if (lastSeenVersion !== currentVersion) {
-        // Logique simplifiée : si version différente, on montre la dernière
-        // (Pour être plus précis, il faudrait importer le updatesLog et filtrer)
         const updatesToShow = updatesLog ? updatesLog.filter(u => u.version > (lastSeenVersion || 'v0.0.0')) : [];
         
         if (updatesToShow.length > 0) {
@@ -430,7 +435,10 @@ export function showConfirmationModal(title, message) {
         modalMessage.textContent = message;
         modalConfirmBtn.style.display = 'inline-block';
         modalCancelBtn.textContent = 'Annuler';
+        
+        // La modale est déjà z-50 grâce à l'initialisation
         genericModal.classList.remove('hidden');
+        
         modalConfirmBtn.onclick = () => { genericModal.classList.add('hidden'); resolve(true); };
         modalCancelBtn.onclick = () => { genericModal.classList.add('hidden'); resolve(false); };
     });
@@ -443,6 +451,9 @@ export function showInfoModal(title, message) {
     modalMessage.style.whiteSpace = 'pre-wrap';
     document.getElementById('modalConfirmBtn').style.display = 'none';
     document.getElementById('modalCancelBtn').textContent = 'OK';
+    
+    // La modale est déjà z-50 grâce à l'initialisation
     document.getElementById('genericModal').classList.remove('hidden');
+    
     document.getElementById('modalCancelBtn').onclick = () => { document.getElementById('genericModal').classList.add('hidden'); };
 }

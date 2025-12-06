@@ -1,5 +1,16 @@
 export const updatesLog = [
     {
+        version: 'v3.5.6',
+        date: '6 décembre 2025',
+        changes: [
+            "### Améliorations de la Messagerie",
+            "🔴 **Messages Non Lus** : Ne manquez plus rien ! Une pastille rouge s'affiche désormais sur les conversations contenant des nouveaux messages, et le texte apparaît en gras.",
+            "🗑️ **Suppression de Messages** : Vous pouvez maintenant supprimer vos propres messages (en cas d'erreur). Le message sera remplacé par une mention de suppression pour tous les participants.",
+            "🗂️ **Gestion des Conversations** : Il est désormais possible de supprimer (masquer) une conversation de votre liste pour faire du tri. Elle réapparaîtra automatiquement si vous recevez un nouveau message dedans.",
+            "✨ **Interface Modernisée** : Les fenêtres de confirmation (suppression, etc.) sont maintenant parfaitement intégrées au design de l'application (et au mode sombre), remplaçant les alertes classiques du navigateur."
+        ]
+    },
+    {
         version: 'v3.5.5',
         date: '6 décembre 2025',
         changes: [
