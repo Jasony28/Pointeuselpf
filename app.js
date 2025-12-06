@@ -1,10 +1,13 @@
 import { updatesLog } from './modules/updates-data.js';
-const APP_VERSION ='v3.5.4';
+
+// --- MISE À JOUR DE LA VERSION (Important pour le cache) ---
+const APP_VERSION = 'v3.5.5'; 
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, serverTimestamp, updateDoc, deleteField, collection, query, where, getDocs, orderBy, limit, addDoc, initializeFirestore, CACHE_SIZE_UNLIMITED } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, serverTimestamp, updateDoc, deleteField, initializeFirestore, CACHE_SIZE_UNLIMITED } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 
+// --- GESTION DES THÈMES ---
 export const themes = {
     neutre: { name: 'Neutre', preview: '#e2e8f0', colors: { '--color-primary': '#475569', '--color-primary-hover': '#334155', '--color-background': '#f1f5f9', '--color-surface': '#ffffff', '--color-text-base': '#0f172a', '--color-text-muted': '#475569', '--color-border': '#e2e8f0', } },
     magenta: { name: 'Magenta', preview: '#f5d0fe', colors: { '--color-primary': '#d946ef', '--color-primary-hover': '#c026d3', '--color-background': '#fdf4ff', '--color-surface': '#fae8ff', '--color-text-base': '#581c87', '--color-text-muted': '#86198f', '--color-border': '#f5d0fe', } },
@@ -25,6 +28,7 @@ export function applyTheme(themeName) {
 }
 applyTheme(localStorage.getItem('appTheme') || 'neutre');
 
+// --- CONFIGURATION FIREBASE ---
 const firebaseConfig = {
   apiKey: "AIzaSyDm-C8VDT1Td85WUBWR7MxlrjDkY78eoHs",
   authDomain: "pointeuse-lpf.firebaseapp.com",
@@ -39,6 +43,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 export const db = initializeFirestore(app, { cacheSizeBytes: CACHE_SIZE_UNLIMITED });
 
+// --- VARIABLES GLOBALES ---
 export const pageContent = document.getElementById('page-content');
 export let currentUser = null;
 export let isAdmin = false;
@@ -53,10 +58,12 @@ export function isEffectiveAdmin() {
     return isAdmin && !isMasqueradingAsUser;
 }
 
+// --- CONFIGURATION DES ONGLETS ---
 const userTabs = [
     { id: 'user-dashboard', name: 'Planning' },
     { id: 'user-leave', name: 'Mes Congés' },
     { id: 'chantiers', name: 'Infos Chantiers' },
+    { id: 'user-chat', name: 'Messagerie' }, // <--- NOUVEL ONGLET AJOUTÉ ICI
     { id: 'user-history', name: 'Mon Historique' },
     { id: 'user-stats', name: 'Mes Stats' },
     { id: 'settings', name: 'Paramètres' },
@@ -75,6 +82,7 @@ const adminTabs = [
     { id: 'admin-team', name: 'Équipe' },
 ];
 
+// --- LOGIQUE DE NAVIGATION ---
 function toggleView() {
     isMasqueradingAsUser = !isMasqueradingAsUser;
     setupNavigation();
@@ -86,7 +94,9 @@ function setupNavigation() {
     const tabs = isEffectiveAdmin() ? adminTabs : userTabs;
     const mainNavList = document.querySelector('#main-nav-list');
     if (!mainNavList) return;
+    
     mainNavList.innerHTML = '';
+    
     tabs.forEach(tab => {
         const listItem = document.createElement('li');
         const tabLink = document.createElement('a');
@@ -97,6 +107,7 @@ function setupNavigation() {
         tabLink.onclick = (e) => {
             e.preventDefault();
             navigateTo(tab.id);
+            // Fermeture menu mobile si ouvert
             const mobileMenuButton = document.querySelector('[data-collapse-toggle="navbar-default"]');
             const mobileMenu = document.getElementById('navbar-default');
             if (mobileMenu && !mobileMenu.classList.contains('hidden')) {
@@ -106,6 +117,7 @@ function setupNavigation() {
         listItem.appendChild(tabLink);
         mainNavList.appendChild(listItem);
     });
+
     const switchBtn = document.getElementById('switchViewBtn');
     if (isAdmin) {
         switchBtn.classList.remove('hidden');
@@ -117,8 +129,10 @@ function setupNavigation() {
 }
 
 export async function navigateTo(pageId, params = {}) {
+    // Redirections spéciales
     if (pageId === 'user-details') pageId = 'user-history';
 
+    // Mise à jour classe active navigation
     document.querySelectorAll('#main-nav-list a').forEach(link => {
         if (link.id === `nav-${pageId}`) {
             link.classList.add('nav-active');
@@ -131,43 +145,55 @@ export async function navigateTo(pageId, params = {}) {
 
     pageContent.classList.add('page-exit');
     
+    // Délai pour l'animation
     setTimeout(async () => {
+        // Loader interne
         pageContent.innerHTML = `<div class="w-full flex justify-center p-8"><svg class="animate-spin h-8 w-8" style="color: var(--color-primary);" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></div>`;
         
         try {
+            // Import dynamique du module
             const pageModule = await import(`./modules/${pageId}.js`);
+            // Appel de la fonction render du module
             await pageModule.render(params);
         } catch (error) {
             console.error(`Erreur de chargement du module ${pageId}:`, error);
-            pageContent.innerHTML = `<p class="text-red-500 text-center mt-8">Erreur: Impossible de charger la page "${pageId}".</p>`;
+            let errorMsg = "Impossible de charger la page.";
+            if (error.message.includes('404')) errorMsg = "Le fichier du module est introuvable.";
+            pageContent.innerHTML = `<div class="p-8 text-center"><p class="text-red-500 font-bold">Erreur</p><p>${errorMsg}</p><p class="text-xs text-gray-400 mt-2">${error.message}</p></div>`;
         }
         
         pageContent.classList.remove('page-exit');
     }, 200);
 }
 
+// --- INITIALISATION AU CHARGEMENT ---
 document.addEventListener('DOMContentLoaded', () => {
+    // Références Modales
     genericModal = document.getElementById('genericModal');
     modalTitle = document.getElementById('modalTitle');
     modalMessage = document.getElementById('modalMessage');
     modalConfirmBtn = document.getElementById('modalConfirmBtn');
     modalCancelBtn = document.getElementById('modalCancelBtn');
 
+    // Références DOM principales
     const loader = document.getElementById('app-loader');
     const authContainer = document.getElementById('auth-container');
     const pendingContainer = document.getElementById('pending-approval-container');
     const appContainer = document.getElementById('app-container');
 
+    // Formulaires Auth
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');
     const resetForm = document.getElementById('reset-form');
 
+    // Gestion liens bascule Auth
     document.getElementById('show-register-link').onclick = (e) => { e.preventDefault(); loginForm.style.display = 'none'; registerForm.style.display = 'block'; };
     document.getElementById('show-reset-link').onclick = (e) => { e.preventDefault(); loginForm.style.display = 'none'; resetForm.style.display = 'block'; };
     document.getElementById('show-login-link-from-register').onclick = (e) => { e.preventDefault(); registerForm.style.display = 'none'; loginForm.style.display = 'block'; };
     document.getElementById('show-login-link-from-reset').onclick = (e) => { e.preventDefault(); resetForm.style.display = 'none'; loginForm.style.display = 'block'; };
     document.getElementById('logoutPendingBtn').onclick = () => signOut(auth);
 
+    // Inscription
     registerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const name = document.getElementById('register-name').value;
@@ -180,9 +206,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 displayName: name, email: user.email, uid: user.uid,
                 status: 'pending', role: 'user', createdAt: serverTimestamp()
             });
-        } catch (error) { showInfoModal("Erreur", "Impossible de créer le compte."); }
+        } catch (error) { showInfoModal("Erreur", "Impossible de créer le compte : " + error.message); }
     });
 
+    // Connexion
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const email = document.getElementById('login-email').value;
@@ -191,6 +218,7 @@ document.addEventListener('DOMContentLoaded', () => {
         catch (error) { showInfoModal("Erreur", "Email ou mot de passe incorrect."); }
     });
 
+    // Reset mot de passe
     resetForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const email = document.getElementById('reset-email').value;
@@ -202,11 +230,13 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { showInfoModal("Erreur", "Impossible d'envoyer l'email."); }
     });
 
+    // État d'authentification
     onAuthStateChanged(auth, async (user) => {
         authContainer.style.display = 'none';
         pendingContainer.style.display = 'none';
         appContainer.style.display = 'none';
         loader.style.display = 'flex';
+        
         if (user) {
             const userRef = doc(db, "users", user.uid);
             try {
@@ -215,7 +245,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     const userData = userDoc.data();
                     currentUser = { ...user, ...userData };
                     isAdmin = userData.role === 'admin';
-                    isMasqueradingAsUser = isAdmin; 
+                    isMasqueradingAsUser = isAdmin; // Par défaut admin voit vue employée pour tester, modifiable via toggle
+
                     switch (userData.status) {
                         case 'pending': pendingContainer.style.display = 'flex'; break;
                         case 'banned': showInfoModal("Compte Banni", "Votre compte a été banni."); signOut(auth); break;
@@ -225,16 +256,18 @@ document.addEventListener('DOMContentLoaded', () => {
                             setupNavigation();
 
                             await checkPersonalNotifications(userRef, userData);
-                            
                             checkForUpdates(userData, userRef);
 
-                            navigateTo('user-dashboard');
+                            navigateTo('user-dashboard'); // Page par défaut
                             appContainer.style.display = 'block';
                             break;
                         default: showInfoModal("Erreur de Compte", "Statut inconnu."); signOut(auth);
                     }
                 } else { showInfoModal("Erreur de Compte", "Compte non trouvé."); signOut(auth); }
-            } catch (error) { authContainer.style.display = 'flex'; }
+            } catch (error) { 
+                console.error(error);
+                authContainer.style.display = 'flex'; // Retour au login si erreur lecture DB
+            }
         } else {
             currentUser = null;
             isAdmin = false;
@@ -247,11 +280,10 @@ document.addEventListener('DOMContentLoaded', () => {
         loader.style.display = 'none';
     });
     
+    // Modal PIN / Stealth Mode
     const pinModal = document.getElementById('pinModal');
     const pinForm = document.getElementById('pinForm');
     const pinInput = document.getElementById('pinInput');
-
-    // Le 'stealth-trigger' a été supprimé
 
     document.getElementById('pinCancelBtn').onclick = () => {
         pinModal.classList.add('hidden');
@@ -272,23 +304,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- C'EST ICI LA MODIFICATION ---
-    // Gère le clic sur le logo "Pointeuse Lpf"
+    // Clic Logo Navbar
     document.getElementById('home-nav-link').addEventListener('click', (e) => {
         e.preventDefault();
-        
-        // Si l'utilisateur est en mode Admin (isEffectiveAdmin() est true)
         if (isEffectiveAdmin()) {
-            // On bascule en mode Employé.
-            // toggleView() s'occupe de changer le state, le menu, et de naviguer.
             toggleView(); 
         } else {
-            // Si l'utilisateur est déjà en mode Employé,
-            // on s'assure juste qu'il est sur la page principale du planning.
             navigateTo('user-dashboard');
         }
     });
     
+    // Service Worker (Mises à jour)
     if ('serviceWorker' in navigator) {
         const { Workbox } = window;
         if (Workbox) {
@@ -317,6 +343,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// --- FONCTIONS UTILITAIRES ---
+
 async function checkPersonalNotifications(userRef, userData) {
     if (userData.pendingChanges && userData.pendingChanges.length > 0) {
         const changesByDay = userData.pendingChanges.reduce((acc, change) => {
@@ -343,11 +371,6 @@ async function checkPersonalNotifications(userRef, userData) {
     }
 }
 
-/**
- * Affiche la fenêtre modale avec une liste de mises à jour.
- * @param {Array} updatesToShow - Le tableau des mises à jour à afficher.
- * @param {Function|null} [callbackOnClose=null] - Une fonction à exécuter lors de la fermeture de la modale.
- */
 export function showUpdatesModal(updatesToShow, callbackOnClose = null) {
     const updatesModal = document.getElementById('updatesModal');
     const updatesContent = document.getElementById('updates-content');
@@ -358,9 +381,7 @@ export function showUpdatesModal(updatesToShow, callbackOnClose = null) {
         return;
     }
 
-    if (!updatesToShow || updatesToShow.length === 0) {
-        return;
-    }
+    if (!updatesToShow || updatesToShow.length === 0) return;
 
     updatesContent.innerHTML = updatesToShow.map(update => `
         <div>
@@ -386,10 +407,10 @@ function checkForUpdates(userData, userRef) {
     const currentVersion = APP_VERSION;
 
     if (lastSeenVersion !== currentVersion) {
-        const updatesToShow = lastSeenVersion 
-            ? updatesLog.filter(u => u.version > lastSeenVersion) 
-            : [updatesLog[0]]; // Montre la dernière nouveauté si c'est la 1ère visite
-
+        // Logique simplifiée : si version différente, on montre la dernière
+        // (Pour être plus précis, il faudrait importer le updatesLog et filtrer)
+        const updatesToShow = updatesLog ? updatesLog.filter(u => u.version > (lastSeenVersion || 'v0.0.0')) : [];
+        
         if (updatesToShow.length > 0) {
             const markVersionAsSeen = async () => {
                 try {
@@ -402,7 +423,6 @@ function checkForUpdates(userData, userRef) {
         }
     }
 }
-
 
 export function showConfirmationModal(title, message) {
     return new Promise((resolve) => {

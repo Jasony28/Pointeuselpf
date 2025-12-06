@@ -1,5 +1,15 @@
 export const updatesLog = [
     {
+        version: 'v3.5.5',
+        date: '6 décembre 2025',
+        changes: [
+            "### Nouvelle Fonctionnalité : Messagerie 💬",
+            "✨ **Messagerie Privée** : Un nouvel onglet 'Messagerie' est désormais disponible ! Vous pouvez discuter en direct avec vos collègues directement depuis l'application.",
+            "🔒 **Confidentialité Garantie** : Vos conversations sont strictement privées. Seuls les participants à la discussion peuvent lire les messages (même les administrateurs n'y ont pas accès).",
+            "📱 **Interface Intuitive** : Cliquez simplement sur le bouton `+` pour lancer une nouvelle conversation. L'interface est optimisée pour fonctionner aussi bien sur votre téléphone que sur ordinateur."
+        ]
+    },
+    {
         version: 'v3.5.4',
         date: '12 novembre 2025',
         changes: [

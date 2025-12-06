@@ -4,7 +4,7 @@ const { precaching, routing, strategies, core } = workbox;
 core.setCacheNameDetails({ prefix: 'pointeuse-lpf-cache' });
 
 // Version synchronisée avec app.js
-const APP_VERSION = 'v3.5.4';
+const APP_VERSION = 'v3.5.5'; // <--- CHANGEMENT ICI
 
 precaching.precacheAndRoute([
     { url: './', revision: APP_VERSION },
@@ -15,7 +15,7 @@ precaching.precacheAndRoute([
     // Modules principaux
     { url: 'modules/utils.js', revision: APP_VERSION },
     { url: 'modules/data-service.js', revision: APP_VERSION },
-    { url: 'modules/updates-data.js', revision: APP_VERSION }, // Fichier ajouté
+    { url: 'modules/updates-data.js', revision: APP_VERSION },
     { url: 'modules/settings.js', revision: APP_VERSION },
     { url: 'modules/chantiers.js', revision: APP_VERSION },
 
@@ -24,6 +24,8 @@ precaching.precacheAndRoute([
     { url: 'modules/user-history.js', revision: APP_VERSION },
     { url: 'modules/user-leave.js', revision: APP_VERSION },
     { url: 'modules/user-stats.js', revision: APP_VERSION },
+    { url: 'modules/user-chat.js', revision: APP_VERSION }, // <--- AJOUT IMPORTANT DU FICHIER CHAT
+
     // Modules Admin
     { url: 'modules/admin-chantiers.js', revision: APP_VERSION },
     { url: 'modules/admin-chantier-details.js', revision: APP_VERSION },
