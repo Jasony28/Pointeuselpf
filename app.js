@@ -61,7 +61,6 @@ export function isEffectiveAdmin() {
 // --- CONFIGURATION DES ONGLETS ---
 const userTabs = [
     { id: 'user-dashboard', name: 'Planning' },
-    { id: 'route-optimizer', name: '✨ Optimiseur' },
     { id: 'user-leave', name: 'Mes Congés' },
     { id: 'chantiers', name: 'Infos Chantiers' },
     { id: 'user-chat', name: 'Messagerie' },
