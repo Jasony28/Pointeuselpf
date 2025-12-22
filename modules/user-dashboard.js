@@ -1,5 +1,5 @@
-import { collection, query, where, getDocs, orderBy, doc, getDoc, addDoc, serverTimestamp, updateDoc, limit } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, currentUser, pageContent, showInfoModal } from "../app.js";
+import { collection, query, where, getDocs, orderBy, doc, getDoc, addDoc, serverTimestamp, updateDoc, limit, onSnapshot } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { db, currentUser, pageContent, showInfoModal, navigateTo } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 import { getActiveChantiers, getTeamMembers } from "./data-service.js";
 
@@ -10,12 +10,22 @@ let timerInterval = null;
 let chantiersCache = [];
 let colleaguesCache = [];
 let currentWeekOffset = 0;
+let unreadListener = null;
 
 export async function render() {
+    if (unreadListener) {
+        unreadListener();
+        unreadListener = null;
+    }
+
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto space-y-8">
             <div id="live-tracker-container" class="p-6 rounded-lg shadow-lg" style="background-color: var(--color-surface); border: 1px solid var(--color-border);"></div>
+            
             <div id="missed-pointage-suggestions" class="space-y-4"></div>
+
+            <div id="unread-messages-container" class="hidden transform transition-all duration-300 hover:scale-[1.01] cursor-pointer"></div>
+
             <div>
                 <h2 class="text-xl font-bold mb-2">🗓️ Mon Planning de la Semaine</h2>
                 <div class="rounded-lg shadow-sm p-4" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
@@ -106,6 +116,7 @@ export async function render() {
         try {
             await cacheDataForModals();
             await checkForOpenPointage();
+            initUnreadMessagesListener();
             if (!localStorage.getItem('activePointage')) {
                 checkForMissedPointages();
             }
@@ -801,4 +812,77 @@ async function handleSuggestionClick(e) {
         }
     }
     button.closest('div.border-l-4').remove();
+}
+
+function initUnreadMessagesListener() {
+    const container = document.getElementById('unread-messages-container');
+    if (!container) return;
+
+    const q = query(
+        collection(db, "chats"), 
+        where("participants", "array-contains", currentUser.uid)
+    );
+
+    unreadListener = onSnapshot(q, (snapshot) => {
+        let totalUnread = 0;
+        let senders = new Set();
+        let lastMessagePreview = "";
+
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.hiddenFor && data.hiddenFor.includes(currentUser.uid)) return;
+
+            const myUnreadCount = (data.unreadCounts && data.unreadCounts[currentUser.uid]) ? data.unreadCounts[currentUser.uid] : 0;
+            
+            if (myUnreadCount > 0) {
+                totalUnread += myUnreadCount;
+                const otherName = data.participantNames.find(n => n !== (currentUser.displayName || 'Moi')) || 'Collègue';
+                senders.add(otherName);
+                lastMessagePreview = data.lastMessage;
+            }
+        });
+
+        if (totalUnread > 0) {
+            const senderNames = Array.from(senders).join(', ');
+            const isMultiple = senders.size > 1;
+            
+            container.innerHTML = `
+                <div class="bg-white border-l-4 p-4 rounded-r-lg shadow-md flex items-center justify-between group" style="background-color: var(--color-surface); border-color: var(--color-primary);">
+                    <div class="flex items-center gap-4">
+                        <div class="relative">
+                            <div class="w-12 h-12 rounded-full flex items-center justify-center text-white shadow-sm" style="background-color: var(--color-primary);">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                                </svg>
+                            </div>
+                            <span class="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white ring-2 ring-white animate-pulse">
+                                ${totalUnread}
+                            </span>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-lg" style="color: var(--color-text-base);">
+                                ${isMultiple ? 'Nouveaux messages' : `Message de ${senderNames}`}
+                            </h3>
+                            <p class="text-sm text-gray-500 line-clamp-1" style="color: var(--color-text-muted);">
+                                ${isMultiple ? `Vous avez des messages de : ${senderNames}` : `"${lastMessagePreview}"`}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="text-gray-400 group-hover:translate-x-1 transition-transform">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </div>
+                </div>
+            `;
+            container.classList.remove('hidden');
+            
+            container.onclick = () => {
+                navigateTo('user-chat');
+            };
+        } else {
+            container.classList.add('hidden');
+            container.innerHTML = '';
+        }
+    });
 }

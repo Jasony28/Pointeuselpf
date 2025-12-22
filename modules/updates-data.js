@@ -1,5 +1,15 @@
 export const updatesLog = [
     {
+        version: 'v3.5.7',
+        date: '22 décembre 2025',
+        changes: [
+            "### Améliorations du Tableau de Bord",
+            "🔔 **Notifications de Messages** : Une nouvelle carte de notification s'affiche désormais directement sur votre tableau de bord (au-dessus du planning) lorsque vous avez des messages non lus.",
+            "👀 **Aperçu Rapide** : Visualisez en un coup d'œil l'expéditeur et un extrait du dernier message reçu sans avoir à changer de page.",
+            "🚀 **Accès Direct** : Cliquez simplement sur la notification pour être redirigé instantanément vers la messagerie."
+        ]
+    },
+    {
         version: 'v3.5.6',
         date: '6 décembre 2025',
         changes: [
