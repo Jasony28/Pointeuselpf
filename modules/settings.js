@@ -1,7 +1,6 @@
 // DANS : modules/settings.js
 
 import { pageContent, currentUser, showInfoModal, db, themes, applyTheme, showUpdatesModal } from "../app.js";
-// MODIFIÉ : Ajout des fonctions de re-authentification et de mise à jour d'e-mail
 import { getAuth, signOut, sendPasswordResetEmail, updateEmail, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { doc, updateDoc, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { updatesLog } from "./updates-data.js";
@@ -50,7 +49,7 @@ export async function render() {
 
             <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                 <h3 class="text-xl font-semibold mb-4 border-b pb-2" style="color: var(--color-text-base); border-color: var(--color-border);">🗂️ Gestion des Données</h3>
-                <p class="text-sm" style="color: var(--color-text-muted); margin-bottom: 1rem;">Télécharger l'intégralité de votre historique de pointages.</p>
+                <p class="text-sm" style="color: var(--color-text-muted); margin-bottom: 1rem;">Télécharger l'intégralité de votre historique (Heures & KM).</p>
                 <div class="flex">
                     <button id="exportPdfBtn" class="font-bold w-full px-6 py-2 rounded transition-colors" style="background-color: var(--color-background); border: 1px solid var(--color-primary); color: var(--color-primary);">
                         Exporter mon historique (PDF)
@@ -146,7 +145,7 @@ function setupEventListeners() {
         }
     };
 
-    // --- SÉCURITÉ : E-MAIL (NOUVEAU) ---
+    // --- SÉCURITÉ : E-MAIL ---
     const emailModal = document.getElementById('changeEmailModal');
     document.getElementById('changeEmailBtn').onclick = () => {
         emailModal.classList.remove('hidden');
@@ -178,7 +177,7 @@ function setupEventListeners() {
             confirmBtn.textContent = "Mise à jour...";
             await updateEmail(auth.currentUser, newEmail);
             
-            // 3. Mettre à jour Firestore (bonne pratique)
+            // 3. Mettre à jour Firestore
             await updateDoc(doc(db, "users", currentUser.uid), {
                 email: newEmail
             });
@@ -187,11 +186,9 @@ function setupEventListeners() {
             showInfoModal("Succès !", "Votre e-mail a été mis à jour. Vous devrez l'utiliser lors de votre prochaine connexion.");
             emailModal.classList.add('hidden');
             document.getElementById('changeEmailForm').reset();
-            // Mettre à jour l'objet currentUser localement
             currentUser.email = newEmail; 
 
         } catch (error) {
-            // Gérer les erreurs
             console.error("Erreur de mise à jour e-mail:", error.code);
             if (error.code === 'auth/wrong-password') {
                 showInfoModal("Erreur", "Le mot de passe actuel est incorrect.");
@@ -207,7 +204,6 @@ function setupEventListeners() {
             confirmBtn.textContent = "Valider";
         }
     };
-
 
     // --- EXPORT PDF ---
     document.getElementById('exportPdfBtn').onclick = async (e) => {
@@ -236,7 +232,7 @@ function setupEventListeners() {
 
     // --- NOUVEAUTÉS ---
     document.getElementById('showUpdatesBtn').onclick = () => {
-        showUpdatesModal(updatesLog); // Affiche toutes les mises à jour
+        showUpdatesModal(updatesLog);
     };
 
     // --- FEEDBACK ---
@@ -275,9 +271,6 @@ function updateThemeSelectionUI(selectedKey) {
     });
 }
 
-/**
- * Formate des millisecondes en "Xh YYm"
- */
 function formatMsToHHm(ms) {
     if (!ms || ms <= 0) return '0h 00m';
     const totalMinutes = Math.floor(ms / 60000); 
@@ -287,13 +280,13 @@ function formatMsToHHm(ms) {
 }
 
 /**
- * Récupère tous les pointages et les groupe par jour (formaté).
+ * Récupère tous les pointages, les groupe par jour et calcule les totaux (heures + km).
  */
 async function fetchAndGroupPointages() {
     const q = query(
         collection(db, "pointages"),
         where("uid", "==", currentUser.uid),
-        orderBy("timestamp", "asc") // Tri ascendant pour le PDF
+        orderBy("timestamp", "asc")
     );
     const querySnapshot = await getDocs(q);
 
@@ -307,165 +300,131 @@ async function fetchAndGroupPointages() {
     
     const groupedData = new Map();
     let totalExportMs = 0;
+    let totalExportKm = 0;
 
     querySnapshot.forEach(doc => {
         const data = doc.data();
-        if (!data.endTime) return; // Ignorer les pointages non terminés
+        if (!data.endTime) return;
 
         const start = new Date(data.timestamp);
         const end = new Date(data.endTime);
         const pauseMs = data.pauseDurationMs || 0;
         const durationMs = (end - start) - pauseMs;
+        const km = parseFloat(data.distanceKm) || 0; // On récupère les KM
+
         if (durationMs <= 0) return;
 
-        const dateKey = start.toISOString().split('T')[0]; // Clé "YYYY-MM-DD"
+        const dateKey = start.toISOString().split('T')[0];
         
         if (!groupedData.has(dateKey)) {
             groupedData.set(dateKey, {
                 dateDisplay: start.toLocaleDateString('fr-FR', dateFormat),
                 entries: [],
-                totalDayMs: 0
+                totalDayMs: 0,
+                totalDayKm: 0
             });
         }
 
         const dayData = groupedData.get(dateKey);
-        
         dayData.totalDayMs += durationMs; 
+        dayData.totalDayKm += km;
         totalExportMs += durationMs; 
+        totalExportKm += km;
 
         dayData.entries.push({
             chantier: data.chantier || '',
             startTime: start.toLocaleTimeString('fr-FR', timeFormat),
             endTime: end.toLocaleTimeString('fr-FR', timeFormat),
             duration: formatMsToHHm(durationMs), 
-            colleagues: (data.colleagues || []).join(', '),
+            km: km > 0 ? `${km} km` : '-', 
             notes: (data.notes || '').replace(/\n/g, ' ') 
         });
     });
     
-    if (groupedData.size === 0) {
-         showInfoModal("Info", "Aucun pointage complet à exporter.");
-        return null;
-    }
-
-    return { groupedData, totalExportMs };
+    return { groupedData, totalExportMs, totalExportKm };
 }
 
 /**
- * Exporte l'historique complet de l'utilisateur en PDF.
+ * Exporte l'historique complet en PDF avec correction des superpositions et support KM.
  */
 async function exportUserHistoryToPDF() {
     const exportData = await fetchAndGroupPointages();
     if (!exportData) return; 
 
-    const { groupedData, totalExportMs } = exportData;
+    const { groupedData, totalExportMs, totalExportKm } = exportData;
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'a4');
-    let startY = 20; 
+    let currentY = 20; 
 
-    // --- 1. TITRE GÉNÉRAL ---
-    doc.setFontSize(18);
+    // --- 1. ENTÊTE ---
+    doc.setFontSize(18).setFont(undefined, 'bold');
+    doc.text("Rapport d'Activité & Kilométrage", 14, currentY);
+    currentY += 10;
+
+    doc.setFontSize(11).setFont(undefined, 'normal');
+    doc.text(`Employé : ${currentUser.displayName}`, 14, currentY);
+    currentY += 6;
+    doc.text(`Période : Historique complet au ${new Date().toLocaleDateString('fr-FR')}`, 14, currentY);
+    currentY += 10;
+
+    // --- RÉCAPITULATIF TOTAL ---
+    doc.setDrawColor(41, 128, 185).setLineWidth(0.5);
+    doc.rect(14, currentY, 182, 15);
     doc.setFont(undefined, 'bold');
-    doc.text("Mon Historique de Pointages", 14, startY);
-    startY += 8;
+    doc.text(`TOTAL CUMULÉ : ${formatMsToHHm(totalExportMs)}`, 20, currentY + 10);
+    doc.text(`DISTANCE TOTALE : ${totalExportKm.toFixed(2)} km`, 120, currentY + 10);
+    currentY += 25;
 
-    doc.setFontSize(11);
-    doc.setFont(undefined, 'normal');
-    doc.text(`Export pour : ${currentUser.displayName}`, 14, startY);
-    startY += 5;
-    doc.text(`Date de l'export : ${new Date().toLocaleDateString('fr-FR')}`, 14, startY);
-    startY += 5;
-    doc.setFont(undefined, 'bold');
-    doc.text(`Total des heures exportées : ${formatMsToHHm(totalExportMs)}`, 14, startY);
-    startY += 12; 
-
-    // --- 2. DÉFINITION DES COLONNES DU TABLEAU ---
-    const tableHeaders = ["Chantier", "Début", "Fin", "Durée", "Collègues", "Notes"];
+    // --- 2. TABLEAUX PAR JOUR ---
+    const tableHeaders = ["Chantier", "Début", "Fin", "Durée", "KM", "Notes"];
     
-    // --- 3. BOUCLE SUR CHAQUE JOURNÉE ---
     for (const [dateKey, dayData] of groupedData.entries()) {
         
-        if (startY > 240) { 
+        // Vérifier s'il reste assez de place pour le titre + 1 ligne
+        if (currentY > 250) { 
             doc.addPage();
-            startY = 20; 
+            currentY = 20; 
         }
 
-        // --- Titre du Jour ---
-        doc.setFontSize(14);
-        doc.setFont(undefined, 'bold');
-        doc.text(dayData.dateDisplay, 14, startY);
-        startY += 8;
+        doc.setFontSize(12).setFont(undefined, 'bold');
+        doc.text(dayData.dateDisplay, 14, currentY);
+        currentY += 5;
 
-        // --- Préparation des données du tableau ---
-        const tableBody = dayData.entries.map(e => [
-            e.chantier,
-            e.startTime,
-            e.endTime,
-            e.duration,
-            e.colleagues,
-            e.notes
-        ]);
-        
-        // --- Génération du Tableau ---
+        // Génération du tableau
         doc.autoTable({
             head: [tableHeaders],
-            body: tableBody,
-            startY: startY,
+            body: dayData.entries.map(e => [e.chantier, e.startTime, e.endTime, e.duration, e.km, e.notes]),
+            startY: currentY,
             theme: 'striped',
-            headStyles: { fillColor: [41, 128, 185] }, 
-            styles: { fontSize: 8 },
+            headStyles: { fillColor: [41, 128, 185] },
+            styles: { fontSize: 8, cellPadding: 2 },
             columnStyles: {
                 0: { cellWidth: 35 }, // Chantier
                 1: { cellWidth: 15 }, // Début
                 2: { cellWidth: 15 }, // Fin
                 3: { cellWidth: 18 }, // Durée
-                4: { cellWidth: 35 }, // Collègues
+                4: { cellWidth: 15 }, // KM
                 5: { cellWidth: 'auto'} // Notes
             },
-            
+            margin: { left: 14, right: 14 },
             didDrawPage: (data) => {
-                const pageNum = doc.internal.getNumberOfPages();
-                const pageHeight = doc.internal.pageSize.getHeight();
-                
-                doc.setFontSize(10);
-                doc.setFont(undefined, 'normal');
-                
-                doc.text(
-                    `Page ${pageNum}`, 
-                    105, 
-                    pageHeight - 10, 
-                    { align: 'center' } 
-                );
+                doc.setFontSize(8).setFont(undefined, 'normal');
+                doc.text(`Page ${doc.internal.getNumberOfPages()}`, 105, 287, { align: 'center' });
             }
         });
 
-        if (doc.autoTable.previous) {
-            startY = doc.autoTable.previous.finalY;
-        } else {
-            startY += 10; 
-        }
+        // --- CORRECTION DU BUG ICI ---
+        // Utilisation de doc.lastAutoTable.finalY qui est plus robuste sur toutes les versions
+        const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY : (doc.autoTable.previous ? doc.autoTable.previous.finalY : currentY + 20);
+        
+        // Mise à jour de la position pour éviter la superposition
+        currentY = finalY + 8;
 
-        // --- Total de la Journée ---
-        doc.setFontSize(10);
-        doc.setFont(undefined, 'bold');
-        
-        let totalY = startY + 10;
-        
-        if (totalY > 280) {
-            doc.addPage();
-            totalY = 20;
-        }
-
-        doc.text(
-            `Total Journée : ${formatMsToHHm(dayData.totalDayMs)}`,
-            196, 
-            totalY, 
-            { align: 'right' }
-        );
-        
-        startY = totalY + 10; 
+        // Total journalier
+        doc.setFontSize(9).setFont(undefined, 'bold');
+        doc.text(`Total Jour : ${formatMsToHHm(dayData.totalDayMs)} | ${dayData.totalDayKm.toFixed(2)} km`, 196, currentY - 3, { align: 'right' });
+        currentY += 5;
     }
 
-    // --- 4. SAUVEGARDE DU FICHIER ---
     doc.save(`Historique_Pointages_${currentUser.displayName}.pdf`);
 }

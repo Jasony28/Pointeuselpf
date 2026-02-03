@@ -1,5 +1,17 @@
 export const updatesLog = [
     {
+        version: 'v3.5.8',
+        date: '3 février 2026',
+        changes: [
+            "### Gestion des Chantiers",
+            "📄 **Export PDF de la liste** : Un nouveau bouton permet de télécharger la liste complète de tous les chantiers (actifs et archivés) en PDF, incluant adresses, heures prévues et codes d'accès.",
+            "💶 **Statut TVA** : Vous pouvez désormais indiquer si un chantier est 'Assujetti TVA' lors de sa création ou modification. Un badge visuel 'TVA' apparaît dans les listes pour une identification immédiate.",
+            "🗑️ **Suppression définitive** : L'administrateur peut maintenant supprimer définitivement un chantier (avec une fenêtre de confirmation de sécurité), en plus de l'option d'archivage existante.",
+            "### Améliorations du Planning",
+            "🕒 **Date de publication** : Le planning affiche désormais la date et l'heure exactes de la dernière publication envoyée à l'équipe, permettant de savoir si le planning est à jour."
+        ]
+    },
+    {
         version: 'v3.5.7',
         date: '22 décembre 2025',
         changes: [

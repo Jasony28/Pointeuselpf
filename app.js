@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 
 // --- MISE À JOUR DE LA VERSION (Important pour le cache) ---
-const APP_VERSION = 'v3.5.7'; 
+const APP_VERSION = 'v3.5.8'; 
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
@@ -61,7 +61,6 @@ export function isEffectiveAdmin() {
 // --- CONFIGURATION DES ONGLETS ---
 const userTabs = [
     { id: 'user-dashboard', name: 'Planning' },
-    { id: 'route-optimizer', name: '✨ Optimiseur' },
     { id: 'user-leave', name: 'Mes Congés' },
     { id: 'chantiers', name: 'Infos Chantiers' },
     { id: 'user-chat', name: 'Messagerie' },

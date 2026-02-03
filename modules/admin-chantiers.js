@@ -1,8 +1,7 @@
-import { collection, query, orderBy, getDocs, addDoc, updateDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { collection, query, orderBy, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, showInfoModal, showConfirmationModal } from "../app.js";
 import { getGoogleMapsUrl } from "./utils.js";
 
-// Token Mapbox
 const MAPBOX_TOKEN = "pk.eyJ1IjoiamFzb255MjgiLCJhIjoiY21lMDcyYWhzMDIyODJsczl0cmM0aTVjciJ9.V14cJXdBNoq3yAQTDeUg-A";
 
 let chantiersCache = [];
@@ -10,7 +9,10 @@ let chantiersCache = [];
 export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-6xl mx-auto">
-            <h2 class="text-2xl font-bold mb-4" style="color: var(--color-text-base);">⚙️ Gestion des Chantiers & Contraintes</h2>
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                <h2 class="text-2xl font-bold" style="color: var(--color-text-base);">⚙️ Gestion des Chantiers & Contraintes</h2>
+                <button id="exportChantiersPdf" class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-4 py-2 rounded-lg text-sm">Exporter Liste PDF</button>
+            </div>
             
             <div class="p-6 rounded-lg shadow-sm mb-6" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                 <form id="addChantierForm" class="space-y-4">
@@ -25,6 +27,11 @@ export async function render() {
                             <label for="chantierTotalHoursInput" class="text-sm font-medium" style="color: var(--color-text-base);">Heures totales prévues (Estimation)</label>
                             <input id="chantierTotalHoursInput" type="number" step="0.5" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);">
                         </div>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="chantierTvaInput" class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500">
+                        <label for="chantierTvaInput" class="text-sm font-medium" style="color: var(--color-text-base);">Assujetti TVA</label>
                     </div>
 
                     <div>
@@ -86,7 +93,7 @@ export async function render() {
         
         <div id="detailsModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-20 p-4">
             <div class="p-6 rounded-lg shadow-xl w-full max-w-lg space-y-4 relative" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                 <button id="closeDetailsBtn" class="absolute top-2 right-3 text-2xl font-bold" style="color: var(--color-text-muted);">&times;</button>
+                 <button id="closeDetailsBtn" class="absolute top-2 right-3 text-2xl font-bold" style="color: var(--color-text-muted);">×</button>
                  <h3 id="modalChantierName" class="text-2xl font-bold border-b pb-2" style="color: var(--color-text-base); border-color: var(--color-border);"></h3>
                  
                  <div id="modalTimeConstraints" class="hidden p-3 rounded border text-sm" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);"></div>
@@ -120,6 +127,10 @@ export async function render() {
                  <div>
                     <label for="editChantierTotalHours" class="text-sm font-medium" style="color: var(--color-text-base);">Heures totales prévues</label>
                     <input id="editChantierTotalHours" type="number" step="0.5" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);">
+                 </div>
+                 <div class="flex items-center gap-2">
+                    <input type="checkbox" id="editChantierTva" class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500">
+                    <label for="editChantierTva" class="text-sm font-medium" style="color: var(--color-text-base);">Assujetti TVA</label>
                  </div>
                  <div>
                     <label for="editChantierAddress" class="text-sm font-medium" style="color: var(--color-text-base);">Adresse</label>
@@ -169,7 +180,6 @@ export async function render() {
     }, 0);
 }
 
-// Fonction pour convertir l'adresse en coordonnées GPS via Mapbox
 async function geocodeAddress(address) {
     if (!address) return null;
     try {
@@ -214,7 +224,6 @@ function createChantierElement(chantier) {
     div.style.backgroundColor = 'var(--color-surface)';
     div.style.borderColor = 'var(--color-border)';
     
-    // Badge si contraintes horaires
     let timeBadge = '';
     if (chantier.fixedAppointment) {
         timeBadge = `<span class="ml-2 text-xs text-white px-2 py-0.5 rounded-full font-bold" style="background-color: #ef4444;">RDV ${chantier.fixedAppointment}</span>`;
@@ -227,6 +236,7 @@ function createChantierElement(chantier) {
     const buttonsWrapper = document.createElement('div');
     buttonsWrapper.className = 'flex items-center gap-2 flex-shrink-0';
     
+    // Bouton Détails
     const detailsBtn = document.createElement('button');
     detailsBtn.textContent = 'Détails';
     detailsBtn.className = 'px-3 py-1 text-sm rounded text-white';
@@ -234,6 +244,7 @@ function createChantierElement(chantier) {
     detailsBtn.onclick = () => showDetailsModal(chantier);
     buttonsWrapper.appendChild(detailsBtn);
     
+    // Bouton Archive/Active
     const archiveBtn = document.createElement('button');
     archiveBtn.className = 'px-3 py-1 text-sm rounded';
     if (chantier.status === 'active') {
@@ -246,6 +257,14 @@ function createChantierElement(chantier) {
         archiveBtn.onclick = () => updateChantierStatus(chantier.id, 'active');
     }
     buttonsWrapper.appendChild(archiveBtn);
+
+    // Bouton Supprimer
+    const deleteBtn = document.createElement('button');
+    deleteBtn.textContent = 'Supprimer';
+    deleteBtn.className = 'px-3 py-1 text-sm rounded bg-red-600 hover:bg-red-700 text-white';
+    deleteBtn.onclick = () => deleteChantier(chantier.id, chantier.name);
+    buttonsWrapper.appendChild(deleteBtn);
+
     div.appendChild(buttonsWrapper);
     return div;
 }
@@ -260,7 +279,52 @@ async function updateChantierStatus(id, newStatus) {
     }
 }
 
+async function deleteChantier(id, name) {
+    if (await showConfirmationModal("Attention", `Êtes-vous sûr de vouloir supprimer DÉFINITIVEMENT le chantier "${name}" ? \nCette action est irréversible.`)) {
+        try {
+            await deleteDoc(doc(db, "chantiers", id));
+            showInfoModal("Succès", "Chantier supprimé.");
+            await loadChantiers();
+        } catch (e) {
+            console.error(e);
+            showInfoModal("Erreur", "Impossible de supprimer le chantier.");
+        }
+    }
+}
+
+async function exportChantiersToPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape' });
+    
+    doc.setFontSize(18);
+    doc.text("Liste Complète des Chantiers", 14, 20);
+    doc.setFontSize(10);
+    doc.text(`Exporté le ${new Date().toLocaleDateString('fr-FR')}`, 14, 28);
+    
+    const tableData = chantiersCache.map(c => [
+        c.name,
+        c.address || '-',
+        c.isTva ? 'OUI' : 'NON',
+        c.totalHeuresPrevues ? `${c.totalHeuresPrevues}h` : '-',
+        c.keyboxCodes?.join(', ') || '-',
+        c.status === 'active' ? 'Actif' : 'Archivé'
+    ]);
+
+    doc.autoTable({
+        startY: 35,
+        head: [['Nom', 'Adresse', 'TVA', 'Heures', 'Codes', 'Statut']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: { fillColor: [41, 128, 185] },
+        styles: { fontSize: 8 }
+    });
+
+    doc.save(`Liste_Chantiers_${new Date().toISOString().split('T')[0]}.pdf`);
+}
+
 function setupEventListeners() {
+    document.getElementById("exportChantiersPdf").onclick = exportChantiersToPDF;
+    
     const addChantierForm = document.getElementById("addChantierForm");
     
     addChantierForm.onsubmit = async (e) => {
@@ -268,6 +332,7 @@ function setupEventListeners() {
         const name = document.getElementById("chantierNameInput").value.trim();
         const address = document.getElementById("chantierAddressInput").value.trim();
         const totalHeuresPrevues = parseFloat(document.getElementById("chantierTotalHoursInput").value) || 0;
+        const isTva = document.getElementById("chantierTvaInput").checked;
         
         const timeWindowStart = document.getElementById("timeWindowStartInput").value;
         const timeWindowEnd = document.getElementById("timeWindowEndInput").value;
@@ -282,6 +347,7 @@ function setupEventListeners() {
                 await addDoc(collection(db, "chantiers"), {
                     name, 
                     totalHeuresPrevues,
+                    isTva,
                     address,
                     coordinates, 
                     timeWindowStart,
@@ -318,6 +384,7 @@ function setupEventListeners() {
         const data = {
             name: document.getElementById('editChantierName').value, 
             totalHeuresPrevues: parseFloat(document.getElementById("editChantierTotalHours").value) || 0,
+            isTva: document.getElementById('editChantierTva').checked,
             address: address,
             timeWindowStart: document.getElementById("editTimeWindowStart").value,
             timeWindowEnd: document.getElementById("editTimeWindowEnd").value,
@@ -386,6 +453,7 @@ function showEditModal(chantier) {
     document.getElementById('editChantierId').value = chantier.id;
     document.getElementById('editChantierName').value = chantier.name;
     document.getElementById('editChantierTotalHours').value = chantier.totalHeuresPrevues || '';
+    document.getElementById('editChantierTva').checked = chantier.isTva || false;
     document.getElementById('editChantierAddress').value = chantier.address || '';
     
     document.getElementById('editTimeWindowStart').value = chantier.timeWindowStart || '';

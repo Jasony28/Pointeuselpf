@@ -14,7 +14,10 @@ export async function render() {
         <div id="detailsModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-20 p-4">
             <div class="p-6 rounded-lg shadow-xl w-full max-w-lg space-y-4 relative" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                 <button id="closeDetailsBtn" class="absolute top-2 right-3 text-2xl font-bold" style="color: var(--color-text-muted);">×</button>
-                <h3 id="modalChantierName" class="text-2xl font-bold border-b pb-2" style="border-color: var(--color-border);"></h3>
+                <div class="border-b pb-2 flex items-center gap-2" style="border-color: var(--color-border);">
+                    <h3 id="modalChantierName" class="text-2xl font-bold"></h3>
+                    <span id="modalTvaBadge" class="hidden text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-bold">TVA</span>
+                </div>
                 <div>
                     <h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">ADRESSE</h4>
                     <p id="modalChantierAddress" class="hover:underline text-lg cursor-pointer" style="color: var(--color-primary);"></p>
@@ -31,6 +34,10 @@ export async function render() {
                 <h3 class="text-2xl font-bold">Modifier le chantier</h3>
                 <input type="hidden" id="editChantierId">
                 <div><label for="editChantierName" class="text-sm font-medium">Nom</label><input id="editChantierName" type="text" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);" required /></div>
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="editChantierTva" class="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500">
+                    <label for="editChantierTva" class="text-sm font-medium">Assujetti TVA</label>
+                </div>
                 <div><label for="editChantierAddress" class="text-sm font-medium">Adresse</label><input id="editChantierAddress" type="text" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);" /></div>
                 <div>
                     <label class="text-sm font-medium">Codes</label>
@@ -90,7 +97,10 @@ function displayChantierCards() {
         card.className = 'p-4 rounded-lg shadow-sm cursor-pointer hover:shadow-md transition-shadow';
         card.style.backgroundColor = 'var(--color-surface)';
         card.style.border = '1px solid var(--color-border)';
-        card.innerHTML = `<h3 class="font-bold text-lg truncate">${chantier.name}</h3>`;
+        
+        const tvaBadge = chantier.isTva ? `<span class="ml-2 text-[9px] bg-blue-100 text-blue-800 px-1 rounded font-bold align-middle">TVA</span>` : '';
+        card.innerHTML = `<h3 class="font-bold text-lg truncate flex items-center">${chantier.name}${tvaBadge}</h3>`;
+        
         card.onclick = () => showDetailsModal(chantier.id);
         listContainer.appendChild(card);
     });
@@ -101,6 +111,11 @@ function showDetailsModal(chantierId) {
     if (!chantier) return;
 
     document.getElementById('modalChantierName').textContent = chantier.name;
+    const badge = document.getElementById('modalTvaBadge');
+    if (badge) {
+        if (chantier.isTva) badge.classList.remove('hidden');
+        else badge.classList.add('hidden');
+    }
     
     const addressTrigger = document.getElementById('modalChantierAddress');
     if (chantier.address) {
@@ -156,6 +171,7 @@ function showEditModal(chantier) {
     document.getElementById('detailsModal').classList.add('hidden');
     document.getElementById('editChantierId').value = chantier.id;
     document.getElementById('editChantierName').value = chantier.name;
+    document.getElementById('editChantierTva').checked = chantier.isTva || false;
     document.getElementById('editChantierAddress').value = chantier.address || '';
     document.getElementById('editChantierInfo').value = chantier.additionalInfo || '';
     const editList = document.getElementById('editKeyCodesList');
@@ -223,6 +239,7 @@ function setupEventListeners() {
                 const keyboxCodes = Array.from(editList.querySelectorAll('li span')).map(span => span.textContent);
                 const updatedData = {
                     name: document.getElementById('editChantierName').value,
+                    isTva: document.getElementById('editChantierTva').checked,
                     address: document.getElementById('editChantierAddress').value,
                     keyboxCodes: keyboxCodes,
                     additionalInfo: document.getElementById('editChantierInfo').value
