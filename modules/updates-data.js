@@ -1,5 +1,14 @@
 export const updatesLog = [
     {
+        version: 'v3.5.9',
+        date: '27 février 2026',
+        changes: [
+            "### Améliorations du Planning",
+            "🕒 **Heure de rendez-vous** : L'heure de début planifiée par l'administrateur est désormais visible directement sur votre tableau de bord. Un badge affiche l'heure précise (ex: 08:00) à côté du nom de chaque chantier.",
+            "🔒 **Sécurité Firestore** : Mise à jour globale des règles de sécurité de la base de données pour garantir un chargement instantané du planning tout en protégeant vos conversations privées."
+        ]
+    },
+    {
         version: 'v3.5.8',
         date: '3 février 2026',
         changes: [

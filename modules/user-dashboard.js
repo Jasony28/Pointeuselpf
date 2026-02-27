@@ -675,15 +675,18 @@ function createTaskElement(task, chantierDetails) {
     const teamCount = teamNames.length;
     const team = teamCount > 0 ? `Équipe : ${teamNames.join(', ')}` : 'Pas d\'équipe';
     
+    // --- AJOUT DE L'HEURE DE DÉBUT ---
+    const startTimeHTML = task.startTime ? 
+        `<span class="ml-2 px-2 py-0.5 rounded text-xs font-bold" style="background-color: var(--color-background); color: var(--color-primary);">${task.startTime}</span>` 
+        : '';
+
     const note = task.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-primary);"><strong>Note:</strong> ${task.notes}</div>` : '';
 
     let projectBudgetHTML = '';
     if (chantierDetails && chantierDetails.totalHeuresPrevues > 0) {
         const totalBudget = chantierDetails.totalHeuresPrevues;
-        
         if (teamCount > 0) {
             const budgetPerPersonDecimal = (totalBudget / teamCount);
-            
             projectBudgetHTML = `
                 <div class="text-xs mt-1" style="color: var(--color-text-muted);">
                     Heures prévues (projet) : <strong>${formatDecimalHours(totalBudget)}</strong>
@@ -692,19 +695,21 @@ function createTaskElement(task, chantierDetails) {
                     Heures prévues (par pers.) : <strong>${formatDecimalHours(budgetPerPersonDecimal)}</strong>
                 </div>`;
         } else {
-             projectBudgetHTML = `
-                <div class="text-xs mt-1" style="color: var(--color-text-muted);">
-                    Heures prévues (seul) : <strong>${formatDecimalHours(totalBudget)}</strong>
-                </div>`;
+             projectBudgetHTML = `<div class="text-xs mt-1" style="color: var(--color-text-muted);">Heures prévues (seul) : <strong>${formatDecimalHours(totalBudget)}</strong></div>`;
         }
     }
 
-    el.innerHTML = `<div class="font-semibold" style="color: var(--color-text-base);">${task.chantierName}</div>
-                    
-                    <div class="text-xs mt-1" style="color: var(--color-text-muted);">${team}</div>
-                    <div class="mt-2 pt-2 border-t" style="border-color: var(--color-border);">
-                        ${projectBudgetHTML} </div>
-                    ${note}`;
+    el.innerHTML = `
+        <div class="flex justify-between items-start">
+            <div class="font-semibold" style="color: var(--color-text-base);">${task.chantierName}</div>
+            ${startTimeHTML}
+        </div>
+        
+        <div class="text-xs mt-1" style="color: var(--color-text-muted);">${team}</div>
+        <div class="mt-2 pt-2 border-t" style="border-color: var(--color-border);">
+            ${projectBudgetHTML} 
+        </div>
+        ${note}`;
     return el;
 }
 
