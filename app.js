@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 
 // --- MISE À JOUR DE LA VERSION (Important pour le cache) ---
-const APP_VERSION = 'v3.5.9'; 
+const APP_VERSION = 'v3.6.0'; 
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";

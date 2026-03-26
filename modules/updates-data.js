@@ -1,5 +1,16 @@
 export const updatesLog = [
     {
+        version: 'v3.6.0',
+        date: '26 mars 2026',
+        changes: [
+            "### Gestion de l'Équipe",
+            "🗄️ **Archivage des employés (Nouveau)** : Vous pouvez désormais archiver un ancien employé au lieu de le supprimer brutalement. Cela permet de conserver son historique de pointages pour la comptabilité (pendant 1 an, 3 ans ou 5 ans), tout en le retirant de l'application.",
+            "🗑️ **Suppression totale** : L'option de suppression définitive et irréversible d'un compte ET de la totalité de ses pointages associés reste disponible lors de l'archivage.",
+            "### Améliorations du Planning",
+            "⚙️ **Affichage de l'équipe sur mesure** : Un nouveau bouton ⚙️ (engrenage) fait son apparition à côté de la liste d'équipe. Il vous permet de masquer ou d'afficher temporairement certains collègues de la liste latérale (très pratique pour les arrêts maladie ou les longs congés) sans avoir à toucher à leur compte."
+        ]
+    },
+    {
         version: 'v3.5.9',
         date: '27 février 2026',
         changes: [
