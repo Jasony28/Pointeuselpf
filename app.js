@@ -63,7 +63,7 @@ const userTabs = [
     { id: 'user-dashboard', name: 'Planning' },
     { id: 'user-leave', name: 'Mes Congés' },
     { id: 'chantiers', name: 'Infos Chantiers' },
-    { id: 'user-chat', name: 'Messagerie' },
+   
     { id: 'user-history', name: 'Mon Historique' },
     { id: 'user-stats', name: 'Mes Stats' },
     { id: 'settings', name: 'Paramètres' },
