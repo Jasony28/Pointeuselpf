@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 
 // --- MISE À JOUR DE LA VERSION (Important pour le cache) ---
-const APP_VERSION = 'v3.6.0'; 
+const APP_VERSION = 'v3.6.1'; 
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
@@ -80,6 +80,7 @@ const adminTabs = [
     { id: 'admin-travel-report', name: 'Rapports Trajets' },
     { id: 'admin-hours-report', name: 'Rapports Heures' },
     { id: 'admin-team', name: 'Équipe' },
+    { id: 'admin-missing-hours', name: 'Écarts Heures' } // <-- NOUVEL ONGLET AJOUTÉ ICI
 ];
 
 // --- LOGIQUE DE NAVIGATION ---

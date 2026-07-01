@@ -1,5 +1,14 @@
 export const updatesLog = [
     {
+        version: 'v3.6.1',
+        date: '28 juin 2026',
+        changes: [
+            "### Nouvelle Fonctionnalité : Audit & Sauvegarde 🔐",
+            "📊 **Audit des heures perdues** : Nouveau système de calcul automatique pour identifier l'écart entre les heures prévues par chantier (quotas par passage) et les heures réellement prestées. Génération de rapports PDF",
+            "💾 **Transfert de données sécurisé** : Ajout d'une fonctionnalité permettant de sauvegarder l'intégralité de votre historique de pointages et vos paramètres en cas de changement de compte ou de perte de profil."
+        ]
+    },
+    {
         version: 'v3.6.0',
         date: '26 mars 2026',
         changes: [
