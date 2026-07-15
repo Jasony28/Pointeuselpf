@@ -1,5 +1,13 @@
 export const updatesLog = [
     {
+        version: 'v3.6.2',
+        date: '15 juillet 2026',
+        changes: [
+            "Miaou",
+            
+        ]
+    },
+    {
         version: 'v3.6.1',
         date: '28 juin 2026',
         changes: [

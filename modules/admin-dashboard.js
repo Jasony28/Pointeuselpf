@@ -1,5 +1,5 @@
 import { collection, query, where, orderBy, getDocs, doc, deleteDoc, limit } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, pageContent, showConfirmationModal, navigateTo } from "../app.js";
+import { db, pageContent, showConfirmationModal, navigateTo, isShowingAllHours } from "../app.js"; // <-- isShowingAllHours IMPORTÉ ICI
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 import { getUsers } from "./data-service.js";
 
@@ -157,23 +157,54 @@ async function loadGlobalStats() {
     
     try {
         const [weekSnapshot, monthSnapshot] = await Promise.all([ getDocs(weekQuery), getDocs(monthQuery) ]);
+        const users = await getUsers();
         
-        let weekMs = 0;
+        // --- Calcul du total de la Semaine avec ou sans plafonnement (selon bouton rouge) ---
+        let weekUserStats = {};
         weekSnapshot.forEach(doc => { 
             const data = doc.data();
             if (data.endTime) {
-                weekMs += (new Date(data.endTime) - new Date(data.timestamp)) - (data.pauseDurationMs || 0); 
+                if (!weekUserStats[data.uid]) weekUserStats[data.uid] = 0;
+                weekUserStats[data.uid] += (new Date(data.endTime) - new Date(data.timestamp)) - (data.pauseDurationMs || 0); 
             }
         });
+
+        let weekMs = 0;
+        for (const uid in weekUserStats) {
+            let ms = weekUserStats[uid];
+            if (!isShowingAllHours) {
+                const user = users.find(u => u.uid === uid);
+                if (user && user.contractHours > 0) {
+                    const cap = (user.contractHours + 2) * 3600000;
+                    ms = Math.min(ms, cap);
+                }
+            }
+            weekMs += ms;
+        }
         if (weekTotal) { weekTotal.textContent = formatMilliseconds(weekMs); weekTotal.classList.remove('animate-pulse'); }
         
-        let monthMs = 0;
+        // --- Calcul du total du Mois avec ou sans plafonnement (selon bouton rouge) ---
+        let monthUserStats = {};
         monthSnapshot.forEach(doc => { 
             const data = doc.data();
             if (data.endTime) {
-                monthMs += (new Date(data.endTime) - new Date(data.timestamp)) - (data.pauseDurationMs || 0); 
+                if (!monthUserStats[data.uid]) monthUserStats[data.uid] = 0;
+                monthUserStats[data.uid] += (new Date(data.endTime) - new Date(data.timestamp)) - (data.pauseDurationMs || 0); 
             }
         });
+
+        let monthMs = 0;
+        for (const uid in monthUserStats) {
+            let ms = monthUserStats[uid];
+            if (!isShowingAllHours) {
+                const user = users.find(u => u.uid === uid);
+                if (user && user.contractHours > 0) {
+                    const cap = (user.contractHours + 2) * 4 * 3600000; // Approximation de 4 semaines/mois
+                    ms = Math.min(ms, cap);
+                }
+            }
+            monthMs += ms;
+        }
         if (monthTotal) { monthTotal.textContent = formatMilliseconds(monthMs); monthTotal.classList.remove('animate-pulse'); }
 
     } catch (error) { console.error("Erreur de chargement des statistiques globales:", error); }
@@ -247,13 +278,16 @@ async function loadUserStats() {
             }
         });
 
+        // Application de la limite Contrat + 2h si le bouton n'est pas activé
         for (const uid in userStats) {
             const user = users.find(u => u.uid === uid);
-            if (user && user.contractHours === 12) {
+            if (!isShowingAllHours && user && user.contractHours > 0) {
                 let contractLimitMs = 0;
-                if (userInfo.period === 'week') contractLimitMs = 12 * 3600000;
-                else if (userInfo.period === 'month') contractLimitMs = 48 * 3600000;
-                else if (userInfo.period === 'year') contractLimitMs = 12 * 52 * 3600000;
+                const weeklyCap = (user.contractHours + 2) * 3600000;
+                
+                if (userInfo.period === 'week') contractLimitMs = weeklyCap;
+                else if (userInfo.period === 'month') contractLimitMs = weeklyCap * 4;
+                else if (userInfo.period === 'year') contractLimitMs = weeklyCap * 52;
                 
                 if (contractLimitMs > 0) userStats[uid].totalMs = Math.min(userStats[uid].totalMs, contractLimitMs);
             }

@@ -1,5 +1,5 @@
 import { collection, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc, addDoc, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, currentUser, pageContent, showConfirmationModal, showInfoModal, isStealthMode } from "../app.js";
+import { db, currentUser, pageContent, showConfirmationModal, showInfoModal, isStealthMode, isShowingAllHours } from "../app.js"; 
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 import { getUsers } from "./data-service.js";
 
@@ -28,6 +28,67 @@ function toISODateString(date) {
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
 }
+
+// ▼▼▼ FONCTIONS POUR LE CAPPING VISUEL DES HEURES (ANCIENNES SEMAINES) ▼▼▼
+function getWeekKey(date) {
+    const d = new Date(date.getTime());
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+    const week1 = new Date(d.getFullYear(), 0, 4);
+    return d.getFullYear() + '-W' + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+}
+
+async function filterPointagesByContractLimit(rawPointages) {
+    // CORRECTION ICI : Ajout des () à isStealthMode()
+    if (currentUser.role === 'admin' && !isStealthMode() && isShowingAllHours) {
+        return rawPointages; 
+    }
+
+    try {
+        const users = await getUsers();
+        const fullUser = users.find(u => u.uid === targetUser.uid);
+        const contractHours = fullUser ? (fullUser.contractHours || 0) : 0;
+        
+        if (contractHours <= 0) return rawPointages; 
+
+        const maxMsPerWeek = (contractHours + 2) * 3600000; 
+        const msPerWeek = {};
+        const filteredPointages = [];
+
+        const now = new Date();
+        const dayOfWeek = now.getDay() === 0 ? 6 : now.getDay() - 1; 
+        const startOfCurrentWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
+        startOfCurrentWeek.setHours(0, 0, 0, 0);
+
+        for (const p of rawPointages) {
+            const date = new Date(p.timestamp);
+            const isPastWeek = date.getTime() < startOfCurrentWeek.getTime();
+            
+            if (isPastWeek) {
+                const weekKey = getWeekKey(date); 
+                
+                if (!msPerWeek[weekKey]) msPerWeek[weekKey] = 0;
+
+                if (msPerWeek[weekKey] >= maxMsPerWeek) {
+                    continue; 
+                }
+
+                const pEnd = p.endTime ? new Date(p.endTime) : null;
+                if (pEnd) {
+                    const duration = (pEnd - date) - (p.pauseDurationMs || 0);
+                    msPerWeek[weekKey] += duration;
+                }
+            }
+            
+            filteredPointages.push(p);
+        }
+        return filteredPointages;
+    } catch (e) {
+        console.error("Erreur lors du filtrage par contrat:", e);
+        return rawPointages; 
+    }
+}
+// ▲▲▲ FIN NOUVELLES FONCTIONS ▲▲▲
 
 async function logAction(pointageId, action, details = {}) {
     try {
@@ -181,8 +242,6 @@ function setupReassignModalListeners() {
         const userConfirmed = await showConfirmationModal("Confirmation de Duplication", confirmationMessage);
 
         if (userConfirmed) {
-            // ▼▼▼ CORRECTION ICI ▼▼▼
-            // Remplacez 'reassignPointage' par 'duplicatePointage'
             await duplicatePointage(pointageId, newUserId, newUserName, pointageToDuplicate);
         }
     });
@@ -191,7 +250,6 @@ function setupReassignModalListeners() {
         reassignModal.classList.add('hidden');
     });
 }
-
 
 async function cacheModalData() {
     const chantiersQuery = query(collection(db, "chantiers"), where("status", "==", "active"), orderBy("name"));
@@ -237,9 +295,12 @@ async function getPointages(startDate, endDate, chantierFilter = null) {
 
 async function displayHistoryList(startDate, endDate, chantierFilter = null) {
     const historyList = document.getElementById("historyList");
+    if(!historyList) return;
     historyList.innerHTML = `<p class='text-center p-4' style='color: var(--color-text-muted);'>Chargement...</p>`;
     
-    const { pointages, trajetsMap } = await getPointages(startDate, endDate, chantierFilter);
+    const { pointages: rawPointages, trajetsMap } = await getPointages(startDate, endDate, chantierFilter);
+    const pointages = await filterPointagesByContractLimit(rawPointages);
+
     allPointages = pointages;
     pointagesPourPdf = pointages;
 
@@ -288,7 +349,7 @@ async function displayHistoryList(startDate, endDate, chantierFilter = null) {
             <div class="flex justify-between items-center border-b pb-2 mb-3" style="border-color: var(--color-border);">
                 <div class="flex items-center gap-4">
                     <h3 class="font-bold text-lg">${daysOfWeek[dayDate.getDay()]} ${dayDate.toLocaleDateString('fr-FR', {day: 'numeric', month: 'long'})}</h3>
-                    ${currentUser.role === 'admin' ? `<button class="add-pointage-btn text-sm font-semibold" style="color: var(--color-primary);" data-date="${dateString}">+ Ajouter</button>` : ''}
+                    ${currentUser.role === 'admin' && !isStealthMode() ? `<button class="add-pointage-btn text-sm font-semibold" style="color: var(--color-primary);" data-date="${dateString}">+ Ajouter</button>` : ''}
                 </div>
                 <div class="text-right">
                     <div class="font-bold" style="color: var(--color-primary);">${formatMilliseconds(dayData.dailyTotalMs)}</div>
@@ -320,11 +381,15 @@ async function displayHistoryList(startDate, endDate, chantierFilter = null) {
 async function renderCalendar() {
     const year = currentCalendarDate.getFullYear();
     const month = currentCalendarDate.getMonth();
-    document.getElementById("calendarMonthYear").textContent = currentCalendarDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    const monthYearEl = document.getElementById("calendarMonthYear");
+    if(!monthYearEl) return;
+    monthYearEl.textContent = currentCalendarDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
 
     const firstDayOfMonth = new Date(year, month, 1);
     const lastDayOfMonth = new Date(year, month + 1, 0);
-    const { pointages } = await getPointages(firstDayOfMonth, lastDayOfMonth);
+    
+    const { pointages: rawPointages } = await getPointages(firstDayOfMonth, lastDayOfMonth);
+    const pointages = await filterPointagesByContractLimit(rawPointages);
 
     const pointagesByDate = pointages.reduce((acc, p) => {
         const localDate = new Date(p.timestamp);
@@ -384,6 +449,19 @@ function setupEventListeners() {
     document.getElementById('nextMonthBtn').onclick = () => { currentCalendarDate.setMonth(currentCalendarDate.getMonth() + 1); renderCalendar(); };
     const pdfBtn = document.getElementById("downloadPdfBtn");
     if (pdfBtn) pdfBtn.onclick = generateHistoryPDF;
+
+    document.removeEventListener('hoursViewToggled', window.refreshHistoryView);
+    window.refreshHistoryView = () => {
+        if (!document.getElementById('list-view')) return;
+        if (!document.getElementById('calendar-view').classList.contains('hidden')) {
+            renderCalendar();
+        } else if (document.getElementById('weekly-nav').style.display === 'none') {
+            applyFilters();
+        } else {
+            loadHistoryForWeek();
+        }
+    };
+    document.addEventListener('hoursViewToggled', window.refreshHistoryView);
 }
 
 function switchView(view) {
@@ -414,8 +492,8 @@ function switchView(view) {
 }
 
 function applyFilters() {
-    document.getElementById('weekly-nav').style.display = 'none'; // Cache la navigation par semaine
-    document.getElementById('totalsDisplay').style.display = 'grid'; // S'assure que les totaux sont visibles
+    document.getElementById('weekly-nav').style.display = 'none'; 
+    document.getElementById('totalsDisplay').style.display = 'grid'; 
     const startDate = document.getElementById('filterStartDate').value;
     const endDate = document.getElementById('filterEndDate').value;
     const chantier = document.getElementById('filterChantier').value;
@@ -448,10 +526,9 @@ function applyFilters() {
     displayHistoryList(sDate, eDate, chantier || null);
 }
 
-
 function resetFilters() {
-    document.getElementById('weekly-nav').style.display = 'block'; // Réaffiche la navigation par semaine
-    document.getElementById('totalsDisplay').style.display = 'grid'; // S'assure que les totaux sont visibles
+    document.getElementById('weekly-nav').style.display = 'block'; 
+    document.getElementById('totalsDisplay').style.display = 'grid'; 
     document.getElementById('filterStartDate').value = '';
     document.getElementById('filterEndDate').value = '';
     document.getElementById('filterChantier').selectedIndex = 0;
@@ -461,7 +538,8 @@ function resetFilters() {
 
 async function loadHistoryForWeek() {
     const { startOfWeek, endOfWeek } = getWeekDateRange(currentWeekOffset);
-    document.getElementById("currentPeriodDisplay").textContent = `Semaine du ${startOfWeek.toLocaleDateString('fr-FR', {timeZone: 'UTC', day: 'numeric', month: 'long'})}`;
+    const displayEl = document.getElementById("currentPeriodDisplay");
+    if(displayEl) displayEl.textContent = `Semaine du ${startOfWeek.toLocaleDateString('fr-FR', {timeZone: 'UTC', day: 'numeric', month: 'long'})}`;
     await displayHistoryList(startOfWeek, endOfWeek);
 }
 
@@ -476,7 +554,8 @@ function updatePdfButtonState(hasData) {
 }
 
 function handleHistoryClick(e) {
-    if (currentUser.role !== 'admin') return;
+    // CORRECTION ICI : Ajout des () à isStealthMode()
+    if (currentUser.role !== 'admin' || isStealthMode()) return; 
     const target = e.target;
     if (target.closest('.add-pointage-btn')) {
         openEntryModal({ isEditing: false, date: target.closest('.add-pointage-btn').dataset.date });
@@ -517,7 +596,8 @@ function createHistoryEntryElement(d, trajetData) {
     }
     wrapper.innerHTML = `<div class="pr-20"><div class="font-bold">${d.chantier}</div><div class="text-sm" style="color: var(--color-text-muted);">${timeDisplay}</div>${trajetDisplay}<div class="text-xs mt-1" style="color: var(--color-text-muted);">Collègues : ${Array.isArray(d.colleagues) && d.colleagues.length > 0 ? d.colleagues.join(", ") : 'Aucun'}</div></div>${d.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-text-muted);"><strong>Notes:</strong> ${d.notes}</div>` : ""}`;
     
-    if (currentUser.role === 'admin') {
+    // CORRECTION ICI : Ajout des () à isStealthMode()
+    if (currentUser.role === 'admin' && !isStealthMode()) {
         const controlsWrapper = document.createElement("div");
         controlsWrapper.className = "absolute top-2 right-3 flex flex-col items-end text-right"; 
         const buttonsDiv = document.createElement('div');
@@ -540,7 +620,8 @@ function createHistoryEntryElement(d, trajetData) {
 }
 
 async function deletePointage(pointageId) {
-    if (currentUser.role !== 'admin') return;
+    // CORRECTION ICI : Ajout des () à isStealthMode()
+    if (currentUser.role !== 'admin' || isStealthMode()) return;
     if (await showConfirmationModal("Confirmation", "Supprimer ce pointage ?")) {
         const pointageRef = doc(db, "pointages", pointageId);
         const pointageSnap = await getDoc(pointageRef);
@@ -585,35 +666,24 @@ async function openReassignModal(pointageId) {
 
 async function duplicatePointage(pointageId, newUserId, newUserName, originalPointage) {
     try {
-        // 1. Créer une copie des données originales.
         const newData = { ...originalPointage };
-        delete newData.id; // L'ID sera auto-généré pour le nouveau document.
+        delete newData.id;
 
-        // 2. Mettre à jour les informations du nouveau propriétaire (le collègue).
         newData.uid = newUserId;
         newData.userName = newUserName;
         
-        // 3. Ajouter une note pour la traçabilité.
         const originalNotes = originalPointage.notes || '';
         newData.notes = `(Dupliqué depuis ${currentUser.displayName}) ${originalNotes}`.trim();
-        
-        // 4. Mettre à jour la date de création pour refléter l'action de copie.
         newData.createdAt = serverTimestamp();
 
-        // 5. Ajouter le nouveau document (la copie) dans la base de données.
         const newDocRef = await addDoc(collection(db, "pointages"), newData);
 
-        // 6. Enregistrer l'action dans le journal d'audit du NOUVEAU pointage.
         await logAction(newDocRef.id, "Création par Duplication", {
             fromUser: { uid: currentUser.uid, name: currentUser.displayName },
             originalPointageId: pointageId
         });
         
-        // --- L'ÉTAPE DE SUPPRESSION DE L'ORIGINAL A ÉTÉ RETIRÉE ---
-        
         showInfoModal("Succès", `Le pointage a été dupliqué pour ${newUserName}. Votre pointage original est conservé.`);
-        // Pas besoin de rafraîchir la vue car rien ne change pour l'utilisateur actuel.
-        // resetFilters(); 
 
     } catch (error) {
         console.error("Erreur lors de la duplication:", error);
@@ -725,7 +795,8 @@ function handleWizardNext() {
 
 async function saveEntry(e) {
     e.preventDefault();
-    if (currentUser.role !== 'admin') return;
+    // CORRECTION ICI : Ajout des () à isStealthMode()
+    if (currentUser.role !== 'admin' || isStealthMode()) return;
 
     const entryId = document.getElementById('entryId').value;
     const isEditing = !!entryId;

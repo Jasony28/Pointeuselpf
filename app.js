@@ -48,6 +48,7 @@ export const pageContent = document.getElementById('page-content');
 export let currentUser = null;
 export let isAdmin = false;
 export let isMasqueradingAsUser = false;
+export let isShowingAllHours = false; // <-- VARIABLE DU BOUTON ROUGE
 let genericModal, modalTitle, modalMessage, modalConfirmBtn, modalCancelBtn;
 
 const STEALTH_PIN = "1801";
@@ -63,7 +64,7 @@ const userTabs = [
     { id: 'user-dashboard', name: 'Planning' },
     { id: 'user-leave', name: 'Mes Congés' },
     { id: 'chantiers', name: 'Infos Chantiers' },
-   
+    { id: 'user-chat', name: 'Messagerie' },
     { id: 'user-history', name: 'Mon Historique' },
     { id: 'user-stats', name: 'Mes Stats' },
     { id: 'settings', name: 'Paramètres' },
@@ -80,7 +81,7 @@ const adminTabs = [
     { id: 'admin-travel-report', name: 'Rapports Trajets' },
     { id: 'admin-hours-report', name: 'Rapports Heures' },
     { id: 'admin-team', name: 'Équipe' },
-    { id: 'admin-missing-hours', name: 'Écarts Heures' } // <-- NOUVEL ONGLET AJOUTÉ ICI
+    { id: 'admin-missing-hours', name: 'Écarts Heures' } 
 ];
 
 // --- LOGIQUE DE NAVIGATION ---
@@ -108,7 +109,6 @@ function setupNavigation() {
         tabLink.onclick = (e) => {
             e.preventDefault();
             navigateTo(tab.id);
-            // Fermeture menu mobile si ouvert
             const mobileMenuButton = document.querySelector('[data-collapse-toggle="navbar-default"]');
             const mobileMenu = document.getElementById('navbar-default');
             if (mobileMenu && !mobileMenu.classList.contains('hidden')) {
@@ -124,16 +124,39 @@ function setupNavigation() {
         switchBtn.classList.remove('hidden');
         switchBtn.textContent = isMasqueradingAsUser ? 'Vue Admin' : 'Vue Employé';
         switchBtn.onclick = toggleView;
+
+        let toggleAllHoursBtn = document.getElementById('globalToggleAllHoursBtn');
+        if (!toggleAllHoursBtn) {
+            toggleAllHoursBtn = document.createElement('button');
+            toggleAllHoursBtn.id = 'globalToggleAllHoursBtn';
+            toggleAllHoursBtn.className = 'w-4 h-4 rounded-full transition-colors shadow-sm ml-3 mr-2'; 
+            toggleAllHoursBtn.style.backgroundColor = isShowingAllHours ? '#22c55e' : '#ef4444';
+            toggleAllHoursBtn.title = isShowingAllHours ? "Masquer les dépassements de contrat" : "Afficher toutes les heures (avec dépassements)";
+            
+            toggleAllHoursBtn.onclick = () => {
+                isShowingAllHours = !isShowingAllHours;
+                toggleAllHoursBtn.style.backgroundColor = isShowingAllHours ? '#22c55e' : '#ef4444';
+                toggleAllHoursBtn.title = isShowingAllHours ? "Masquer les dépassements de contrat" : "Afficher toutes les heures (avec dépassements)";
+                
+                // Déclenche un événement silencieux pour rafraîchir la vue actuelle sans quitter la page
+                document.dispatchEvent(new Event('hoursViewToggled'));
+            };
+            
+            switchBtn.parentNode.insertBefore(toggleAllHoursBtn, switchBtn);
+        } else {
+            toggleAllHoursBtn.style.backgroundColor = isShowingAllHours ? '#22c55e' : '#ef4444';
+            toggleAllHoursBtn.title = isShowingAllHours ? "Masquer les dépassements de contrat" : "Afficher toutes les heures (avec dépassements)";
+        }
     } else {
         switchBtn.classList.add('hidden');
+        const btn = document.getElementById('globalToggleAllHoursBtn');
+        if(btn) btn.remove();
     }
 }
 
 export async function navigateTo(pageId, params = {}) {
-    // Redirections spéciales
     if (pageId === 'user-details') pageId = 'user-history';
 
-    // Mise à jour classe active navigation
     document.querySelectorAll('#main-nav-list a').forEach(link => {
         if (link.id === `nav-${pageId}`) {
             link.classList.add('nav-active');
@@ -146,15 +169,11 @@ export async function navigateTo(pageId, params = {}) {
 
     pageContent.classList.add('page-exit');
     
-    // Délai pour l'animation
     setTimeout(async () => {
-        // Loader interne
         pageContent.innerHTML = `<div class="w-full flex justify-center p-8"><svg class="animate-spin h-8 w-8" style="color: var(--color-primary);" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></div>`;
         
         try {
-            // Import dynamique du module
             const pageModule = await import(`./modules/${pageId}.js`);
-            // Appel de la fonction render du module
             await pageModule.render(params);
         } catch (error) {
             console.error(`Erreur de chargement du module ${pageId}:`, error);
@@ -169,39 +188,29 @@ export async function navigateTo(pageId, params = {}) {
 
 // --- INITIALISATION AU CHARGEMENT ---
 document.addEventListener('DOMContentLoaded', () => {
-    // Références Modales
     genericModal = document.getElementById('genericModal');
-    
-    // --- CORRECTION Z-INDEX POUR QUE LA MODALE SOIT DEVANT LE CHAT ---
-    if(genericModal) {
-        genericModal.classList.add('z-50');
-    }
-    // ------------------------------------------------------------------
+    if(genericModal) genericModal.classList.add('z-50');
 
     modalTitle = document.getElementById('modalTitle');
     modalMessage = document.getElementById('modalMessage');
     modalConfirmBtn = document.getElementById('modalConfirmBtn');
     modalCancelBtn = document.getElementById('modalCancelBtn');
 
-    // Références DOM principales
     const loader = document.getElementById('app-loader');
     const authContainer = document.getElementById('auth-container');
     const pendingContainer = document.getElementById('pending-approval-container');
     const appContainer = document.getElementById('app-container');
 
-    // Formulaires Auth
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');
     const resetForm = document.getElementById('reset-form');
 
-    // Gestion liens bascule Auth
     document.getElementById('show-register-link').onclick = (e) => { e.preventDefault(); loginForm.style.display = 'none'; registerForm.style.display = 'block'; };
     document.getElementById('show-reset-link').onclick = (e) => { e.preventDefault(); loginForm.style.display = 'none'; resetForm.style.display = 'block'; };
     document.getElementById('show-login-link-from-register').onclick = (e) => { e.preventDefault(); registerForm.style.display = 'none'; loginForm.style.display = 'block'; };
     document.getElementById('show-login-link-from-reset').onclick = (e) => { e.preventDefault(); resetForm.style.display = 'none'; loginForm.style.display = 'block'; };
     document.getElementById('logoutPendingBtn').onclick = () => signOut(auth);
 
-    // Inscription
     registerForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const name = document.getElementById('register-name').value;
@@ -217,7 +226,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { showInfoModal("Erreur", "Impossible de créer le compte : " + error.message); }
     });
 
-    // Connexion
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const email = document.getElementById('login-email').value;
@@ -226,7 +234,6 @@ document.addEventListener('DOMContentLoaded', () => {
         catch (error) { showInfoModal("Erreur", "Email ou mot de passe incorrect."); }
     });
 
-    // Reset mot de passe
     resetForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const email = document.getElementById('reset-email').value;
@@ -238,7 +245,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { showInfoModal("Erreur", "Impossible d'envoyer l'email."); }
     });
 
-    // État d'authentification
     onAuthStateChanged(auth, async (user) => {
         authContainer.style.display = 'none';
         pendingContainer.style.display = 'none';
@@ -253,7 +259,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     const userData = userDoc.data();
                     currentUser = { ...user, ...userData };
                     isAdmin = userData.role === 'admin';
-                    isMasqueradingAsUser = isAdmin; // Par défaut admin voit vue employée pour tester, modifiable via toggle
+                    isMasqueradingAsUser = isAdmin; 
+                    
+                    isShowingAllHours = false; // Reset au rouge à la connexion
 
                     switch (userData.status) {
                         case 'pending': pendingContainer.style.display = 'flex'; break;
@@ -266,7 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             await checkPersonalNotifications(userRef, userData);
                             checkForUpdates(userData, userRef);
 
-                            navigateTo('user-dashboard'); // Page par défaut
+                            navigateTo('user-dashboard');
                             appContainer.style.display = 'block';
                             break;
                         default: showInfoModal("Erreur de Compte", "Statut inconnu."); signOut(auth);
@@ -274,12 +282,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else { showInfoModal("Erreur de Compte", "Compte non trouvé."); signOut(auth); }
             } catch (error) { 
                 console.error(error);
-                authContainer.style.display = 'flex'; // Retour au login si erreur lecture DB
+                authContainer.style.display = 'flex'; 
             }
         } else {
             currentUser = null;
             isAdmin = false;
             isMasqueradingAsUser = false;
+            isShowingAllHours = false; 
             authContainer.style.display = 'block';
             loginForm.style.display = 'block';
             registerForm.style.display = 'none';
@@ -288,7 +297,6 @@ document.addEventListener('DOMContentLoaded', () => {
         loader.style.display = 'none';
     });
     
-    // Modal PIN / Stealth Mode
     const pinModal = document.getElementById('pinModal');
     const pinForm = document.getElementById('pinForm');
     const pinInput = document.getElementById('pinInput');
@@ -312,7 +320,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Clic Logo Navbar
     document.getElementById('home-nav-link').addEventListener('click', (e) => {
         e.preventDefault();
         if (isEffectiveAdmin()) {
@@ -322,7 +329,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    // Service Worker (Mises à jour)
     if ('serviceWorker' in navigator) {
         const { Workbox } = window;
         if (Workbox) {
@@ -385,7 +391,6 @@ export function showUpdatesModal(updatesToShow, callbackOnClose = null) {
     const closeUpdatesBtn = document.getElementById('closeUpdatesBtn');
 
     if (!updatesModal || !updatesContent || !closeUpdatesBtn) {
-        console.error("Éléments de la modale de mise à jour non trouvés.");
         return;
     }
 
@@ -437,7 +442,6 @@ export function showConfirmationModal(title, message) {
         modalConfirmBtn.style.display = 'inline-block';
         modalCancelBtn.textContent = 'Annuler';
         
-        // La modale est déjà z-50 grâce à l'initialisation
         genericModal.classList.remove('hidden');
         
         modalConfirmBtn.onclick = () => { genericModal.classList.add('hidden'); resolve(true); };
@@ -453,7 +457,6 @@ export function showInfoModal(title, message) {
     document.getElementById('modalConfirmBtn').style.display = 'none';
     document.getElementById('modalCancelBtn').textContent = 'OK';
     
-    // La modale est déjà z-50 grâce à l'initialisation
     document.getElementById('genericModal').classList.remove('hidden');
     
     document.getElementById('modalCancelBtn').onclick = () => { document.getElementById('genericModal').classList.add('hidden'); };
