@@ -1,5 +1,5 @@
 import { collection, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc, addDoc, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, currentUser, pageContent, showConfirmationModal, showInfoModal, isStealthMode, isShowingAllHours } from "../app.js"; 
+import { db, currentUser, pageContent, showConfirmationModal, showInfoModal, isStealthMode } from "../app.js"; 
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 import { getUsers } from "./data-service.js";
 
@@ -28,67 +28,6 @@ function toISODateString(date) {
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
 }
-
-// ▼▼▼ FONCTIONS POUR LE CAPPING VISUEL DES HEURES (ANCIENNES SEMAINES) ▼▼▼
-function getWeekKey(date) {
-    const d = new Date(date.getTime());
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
-    const week1 = new Date(d.getFullYear(), 0, 4);
-    return d.getFullYear() + '-W' + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
-}
-
-async function filterPointagesByContractLimit(rawPointages) {
-    // CORRECTION ICI : Ajout des () à isStealthMode()
-    if (currentUser.role === 'admin' && !isStealthMode() && isShowingAllHours) {
-        return rawPointages; 
-    }
-
-    try {
-        const users = await getUsers();
-        const fullUser = users.find(u => u.uid === targetUser.uid);
-        const contractHours = fullUser ? (fullUser.contractHours || 0) : 0;
-        
-        if (contractHours <= 0) return rawPointages; 
-
-        const maxMsPerWeek = (contractHours + 2) * 3600000; 
-        const msPerWeek = {};
-        const filteredPointages = [];
-
-        const now = new Date();
-        const dayOfWeek = now.getDay() === 0 ? 6 : now.getDay() - 1; 
-        const startOfCurrentWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
-        startOfCurrentWeek.setHours(0, 0, 0, 0);
-
-        for (const p of rawPointages) {
-            const date = new Date(p.timestamp);
-            const isPastWeek = date.getTime() < startOfCurrentWeek.getTime();
-            
-            if (isPastWeek) {
-                const weekKey = getWeekKey(date); 
-                
-                if (!msPerWeek[weekKey]) msPerWeek[weekKey] = 0;
-
-                if (msPerWeek[weekKey] >= maxMsPerWeek) {
-                    continue; 
-                }
-
-                const pEnd = p.endTime ? new Date(p.endTime) : null;
-                if (pEnd) {
-                    const duration = (pEnd - date) - (p.pauseDurationMs || 0);
-                    msPerWeek[weekKey] += duration;
-                }
-            }
-            
-            filteredPointages.push(p);
-        }
-        return filteredPointages;
-    } catch (e) {
-        console.error("Erreur lors du filtrage par contrat:", e);
-        return rawPointages; 
-    }
-}
-// ▲▲▲ FIN NOUVELLES FONCTIONS ▲▲▲
 
 async function logAction(pointageId, action, details = {}) {
     try {
@@ -298,8 +237,7 @@ async function displayHistoryList(startDate, endDate, chantierFilter = null) {
     if(!historyList) return;
     historyList.innerHTML = `<p class='text-center p-4' style='color: var(--color-text-muted);'>Chargement...</p>`;
     
-    const { pointages: rawPointages, trajetsMap } = await getPointages(startDate, endDate, chantierFilter);
-    const pointages = await filterPointagesByContractLimit(rawPointages);
+    const { pointages, trajetsMap } = await getPointages(startDate, endDate, chantierFilter);
 
     allPointages = pointages;
     pointagesPourPdf = pointages;
@@ -388,8 +326,7 @@ async function renderCalendar() {
     const firstDayOfMonth = new Date(year, month, 1);
     const lastDayOfMonth = new Date(year, month + 1, 0);
     
-    const { pointages: rawPointages } = await getPointages(firstDayOfMonth, lastDayOfMonth);
-    const pointages = await filterPointagesByContractLimit(rawPointages);
+    const { pointages } = await getPointages(firstDayOfMonth, lastDayOfMonth);
 
     const pointagesByDate = pointages.reduce((acc, p) => {
         const localDate = new Date(p.timestamp);
@@ -449,19 +386,6 @@ function setupEventListeners() {
     document.getElementById('nextMonthBtn').onclick = () => { currentCalendarDate.setMonth(currentCalendarDate.getMonth() + 1); renderCalendar(); };
     const pdfBtn = document.getElementById("downloadPdfBtn");
     if (pdfBtn) pdfBtn.onclick = generateHistoryPDF;
-
-    document.removeEventListener('hoursViewToggled', window.refreshHistoryView);
-    window.refreshHistoryView = () => {
-        if (!document.getElementById('list-view')) return;
-        if (!document.getElementById('calendar-view').classList.contains('hidden')) {
-            renderCalendar();
-        } else if (document.getElementById('weekly-nav').style.display === 'none') {
-            applyFilters();
-        } else {
-            loadHistoryForWeek();
-        }
-    };
-    document.addEventListener('hoursViewToggled', window.refreshHistoryView);
 }
 
 function switchView(view) {
@@ -554,7 +478,6 @@ function updatePdfButtonState(hasData) {
 }
 
 function handleHistoryClick(e) {
-    // CORRECTION ICI : Ajout des () à isStealthMode()
     if (currentUser.role !== 'admin' || isStealthMode()) return; 
     const target = e.target;
     if (target.closest('.add-pointage-btn')) {
@@ -596,7 +519,6 @@ function createHistoryEntryElement(d, trajetData) {
     }
     wrapper.innerHTML = `<div class="pr-20"><div class="font-bold">${d.chantier}</div><div class="text-sm" style="color: var(--color-text-muted);">${timeDisplay}</div>${trajetDisplay}<div class="text-xs mt-1" style="color: var(--color-text-muted);">Collègues : ${Array.isArray(d.colleagues) && d.colleagues.length > 0 ? d.colleagues.join(", ") : 'Aucun'}</div></div>${d.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-text-muted);"><strong>Notes:</strong> ${d.notes}</div>` : ""}`;
     
-    // CORRECTION ICI : Ajout des () à isStealthMode()
     if (currentUser.role === 'admin' && !isStealthMode()) {
         const controlsWrapper = document.createElement("div");
         controlsWrapper.className = "absolute top-2 right-3 flex flex-col items-end text-right"; 
@@ -620,7 +542,6 @@ function createHistoryEntryElement(d, trajetData) {
 }
 
 async function deletePointage(pointageId) {
-    // CORRECTION ICI : Ajout des () à isStealthMode()
     if (currentUser.role !== 'admin' || isStealthMode()) return;
     if (await showConfirmationModal("Confirmation", "Supprimer ce pointage ?")) {
         const pointageRef = doc(db, "pointages", pointageId);
@@ -795,7 +716,6 @@ function handleWizardNext() {
 
 async function saveEntry(e) {
     e.preventDefault();
-    // CORRECTION ICI : Ajout des () à isStealthMode()
     if (currentUser.role !== 'admin' || isStealthMode()) return;
 
     const entryId = document.getElementById('entryId').value;
