@@ -3,33 +3,42 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    
     <title>Pointeuse Lpf</title>
     <link rel="manifest" href="./manifest.json">
     <link rel="icon" href="./favicon.ico" type="image/x-icon">
     <link rel="apple-touch-icon" href="./icons/icon-192x192.png">
     <meta name="theme-color" content="#4f46e5"/>
-
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.css" rel="stylesheet" />
-
     <style>
         :root {
-            --color-primary: #4b5563; --color-primary-hover: #374151;
-            --color-background: #f3f4f6; --color-surface: #ffffff;
-            --color-text-base: #1f2937; --color-text-muted: #6b7280;
+            --color-primary: #4b5563;
+            --color-primary-hover: #374151;
+            --color-background: #f3f4f6;
+            --color-surface: #ffffff;
+            --color-text-base: #1f2937;
+            --color-text-muted: #6b7280;
             --color-border: #e5e7eb;
         }
         body { 
             font-family: 'Inter', sans-serif; 
             overscroll-behavior-y: contain;
             background-color: var(--color-background);
+            background-image: var(--bg-image, none);
+            background-size: var(--bg-size, auto);
+            background-position: var(--bg-position, 0 0);
+            background-attachment: var(--bg-attachment, scroll);
+            background-repeat: var(--bg-repeat, repeat);
             color: var(--color-text-base);
             transition: background-color 0.3s, color 0.3s;
+        }
+        [style*="var(--color-surface)"], nav, #update-toast {
+            backdrop-filter: var(--glass-blur, none);
+            -webkit-backdrop-filter: var(--glass-blur, none);
+            box-shadow: var(--glass-shadow, none) !important;
         }
         .hidden-by-default { display: none; }
         .nav-active {
@@ -57,7 +66,6 @@
             color: var(--color-text-base);
             padding: 1rem 1.5rem;
             border-radius: 0.5rem;
-            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
             border: 1px solid var(--color-border);
             display: flex;
             align-items: center;
@@ -72,18 +80,16 @@
     </style>
 </head>
 <body>
-
     <div id="app-loader" class="flex flex-col justify-center items-center min-h-screen text-center p-4">
-        <svg class="animate-spin h-8 w-8 text-purple-600 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <svg class="animate-spin h-8 w-8 mb-4" style="color: var(--color-primary);" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>
         <p class="text-lg font-semibold" style="color: var(--color-text-muted);">Chargement de l'application...</p>
     </div>
-
     <div id="auth-container" class="hidden-by-default">
         <div class="flex flex-col items-center justify-center px-6 py-8 mx-auto md:h-screen lg:py-0">
-            <div class="w-full rounded-lg shadow-xl md:mt-0 sm:max-w-md xl:p-0" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+            <div class="w-full rounded-lg md:mt-0 sm:max-w-md xl:p-0" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                 <div class="p-6 space-y-4 md:space-y-6 sm:p-8">
                     <form id="login-form" class="space-y-4 md:space-y-6">
                         <h1 class="text-xl font-bold leading-tight tracking-tight text-center md:text-2xl">Connectez-vous</h1>
@@ -138,21 +144,19 @@
             </div>
         </div>
     </div>
-
     <div id="pending-approval-container" class="hidden-by-default min-h-screen flex items-center justify-center p-4">
-        <div class="shadow-xl rounded-xl p-8 w-full max-w-sm space-y-4 text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+        <div class="rounded-xl p-8 w-full max-w-sm space-y-4 text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
             <h1 class="text-2xl font-bold">⌛ En attente d'approbation</h1>
             <p style="color: var(--color-text-muted);">Votre compte a bien été créé. Un administrateur doit maintenant valider votre accès.</p>
-            <button id="logoutPendingBtn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold px-4 py-2 rounded-lg w-full transition-colors">Se déconnecter</button>
+            <button id="logoutPendingBtn" class="text-white font-bold px-4 py-2 rounded-lg w-full transition-colors" style="background-color: var(--color-primary);">Se déconnecter</button>
         </div>
     </div>
-
     <div id="app-container" class="hidden-by-default">
-        <nav class="shadow-md sticky top-0 z-20" style="background-color: var(--color-surface); border-bottom: 1px solid var(--color-border);">
+        <nav class="sticky top-0 z-20" style="background-color: var(--color-surface); border-bottom: 1px solid var(--color-border);">
             <div class="max-w-screen-xl flex flex-wrap items-center justify-between mx-auto p-4">
                 <a href="#" id="home-nav-link" class="flex items-center space-x-3">
-    <span class="self-center text-2xl font-semibold whitespace-nowrap">Pointeuse Lpf</span>
-</a>
+                    <span class="self-center text-2xl font-semibold whitespace-nowrap">Pointeuse Lpf</span>
+                </a>
                 <div class="flex items-center md:order-2 space-x-2 md:space-x-4">
                     <button id="switchViewBtn" class="hidden text-sm px-3 py-1.5 rounded-md text-white" style="background-color: var(--color-primary);">Vue Admin</button>
                     <span id="currentUserDisplay" class="text-sm hidden sm:inline" style="color: var(--color-text-muted);"></span>
@@ -163,16 +167,15 @@
                     </button>
                 </div>
                 <div class="hidden w-full md:block md:w-auto" id="navbar-default">
-                  <ul id="main-nav-list" class="font-medium flex flex-col p-4 md:p-0 mt-4 border rounded-lg md:flex-row md:space-x-8 md:mt-0 md:border-0" style="background-color: var(--color-surface); border-color: var(--color-border);">
+                  <ul id="main-nav-list" class="font-medium flex flex-col p-4 md:p-0 mt-4 border rounded-lg md:flex-row md:space-x-8 md:mt-0 md:border-0" style="background-color: transparent; border-color: transparent;">
                   </ul>
                 </div>
             </div>
         </nav>
         <main id="page-content" class="p-4 md:p-6"></main>
     </div>
-
     <div id="genericModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-60 p-4" role="dialog" aria-modal="true">
-        <div class="p-6 rounded-lg shadow-xl w-full max-w-sm text-center" style="background-color: var(--color-surface);">
+        <div class="p-6 rounded-lg w-full max-w-sm text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
             <h3 id="modalTitle" class="text-xl font-bold mb-4"></h3>
             <p id="modalMessage" class="mb-6" style="color: var(--color-text-muted);"></p>
             <div id="modalActions" class="flex justify-center gap-4">
@@ -181,9 +184,8 @@
             </div>
         </div>
     </div>
-
     <div id="pinModal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" role="dialog" aria-modal="true">
-        <div class="p-6 rounded-lg shadow-xl w-full max-w-xs text-center" style="background-color: var(--color-surface);">
+        <div class="p-6 rounded-lg w-full max-w-xs text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
             <h3 class="text-lg font-bold mb-4">Mode Confidentiel</h3>
             <p class="mb-4" style="color: var(--color-text-muted);">Veuillez entrer le code PIN.</p>
             <form id="pinForm">
@@ -195,22 +197,20 @@
             </form>
         </div>
     </div>
-
     <div id="updatesModal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" role="dialog" aria-modal="true">
-        <div class="p-6 rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col" style="background-color: var(--color-surface);">
+        <div class="p-6 rounded-lg w-full max-w-lg max-h-[80vh] flex flex-col" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
             <div class="flex-shrink-0">
                 <h3 class="text-2xl font-bold mb-4">🎉 Nouveautés de l'application</h3>
             </div>
             <div id="updates-content" class="flex-grow overflow-y-auto pr-2 space-y-5">
-                </div>
+            </div>
             <div class="flex-shrink-0 mt-6 text-right">
                  <button id="closeUpdatesBtn" class="text-white font-bold px-6 py-2 rounded transition-colors" style="background-color: var(--color-primary);">Compris !</button>
             </div>
         </div>
     </div>
-
     <div id="reassignModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4" role="dialog" aria-modal="true">
-        <div class="p-6 rounded-lg shadow-xl w-full max-w-sm" style="background-color: var(--color-surface);">
+        <div class="p-6 rounded-lg w-full max-w-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
             <h3 id="reassignModalTitle" class="text-xl font-bold mb-4">Réattribuer le Pointage</h3>
             <p class="mb-4" style="color: var(--color-text-muted);">Sélectionnez le nouvel employé à qui attribuer cette entrée :</p>
             <select id="userSelect" class="w-full border p-2 rounded mb-6" style="background-color: var(--color-background); border-color: var(--color-border);"></select>
@@ -220,9 +220,6 @@
             </div>
         </div>
     </div>
-
-   
-
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/jspdf@latest/dist/jspdf.umd.min.js"></script>

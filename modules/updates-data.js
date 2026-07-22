@@ -1,5 +1,15 @@
 export const updatesLog = [
     {
+        version: 'v3.6.4',
+        date: '22 juillet 2026',
+        changes: [
+            "### Nouveaux Thèmes Exclusifs : Maine Coon 🐾",
+            "✨ **Design Glassmorphism** : Refonte visuelle avec une interface ultra-moderne. Les cartes de l'application se transforment en verre dépoli (translucide) pour un rendu haut de gamme.",
+            "☀️ **Maine Coon (Clair)** : Une ambiance lumineuse et élégante avec une superbe photo HD d'un Maine Coon blanc en arrière-plan.",
+            "🌙 **Maine Coon (Sombre)** : Un mode nuit luxueux et apaisant pour les yeux, mettant en valeur un majestueux Maine Coon noir avec des contrastes dorés."
+        ]
+    },
+    {
         version: 'v3.6.2',
         date: '15 juillet 2026',
         changes: [
