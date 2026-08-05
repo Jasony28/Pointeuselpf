@@ -1,6 +1,6 @@
 import { collection, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc, addDoc, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-// NOUVEAU : On a retiré "isStealthMode" de l'import. On gère ça localement pour 0 bug.
-import { db, currentUser, pageContent, showConfirmationModal, showInfoModal } from "../app.js";
+// AJOUT DE navigateTo ICI
+import { db, currentUser, pageContent, showConfirmationModal, showInfoModal, navigateTo } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 import { getUsers } from "./data-service.js";
 
@@ -15,10 +15,7 @@ let entryWizardStep = 1;
 let entryWizardData = {};
 
 let lastLoadedState = { start: null, end: null, chantier: null };
-
-// Variables pour le système Stealth et la correction du bug de synchronisation
 let localStealthMode = false; 
-let currentRenderId = 0; // NOUVEAU : ID pour éviter que les chargements rapides s'écrasent
 
 let reassignModal, userSelect, reassignConfirmBtn, reassignCancelBtn;
 
@@ -53,15 +50,30 @@ export async function render(params = {}) {
 
     try {
         const userDoc = await getDoc(doc(db, "users", targetUser.uid));
-        targetUser.contractHours = userDoc.data()?.contractHours || 38;
+        const uData = userDoc.data();
+        targetUser.contractHours = uData?.contractHours || 38;
+        targetUser.contractHistory = uData?.contractHistory || []; 
     } catch(e) {
         targetUser.contractHours = 38;
+        targetUser.contractHistory = [];
     }
 
     pageContent.innerHTML = `
         <div class="max-w-5xl mx-auto">
             <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
-                <h2 id="history-title" class="text-2xl font-bold">Historique de ${targetUser.name}</h2>
+                
+                <!-- NOUVEAU TITRE AVEC MENU DÉROULANT INTÉGRÉ POUR LES ADMINS -->
+                <div class="flex items-center gap-2">
+                    <h2 class="text-2xl font-bold">Historique de</h2>
+                    ${currentUser.role === 'admin' ? `
+                        <select id="userSwitchDropdown" class="text-2xl font-bold p-1 rounded cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-gray-800" style="color: var(--color-primary); background-color: transparent; border: 2px solid var(--color-primary); outline: none;">
+                            <option value="${targetUser.uid}">${targetUser.name}</option>
+                        </select>
+                    ` : `
+                        <h2 class="text-2xl font-bold" style="color: var(--color-primary);">${targetUser.name}</h2>
+                    `}
+                </div>
+
                 <div class="flex items-center gap-2">
                     <div id="view-toggle" class="p-1 rounded-lg flex" style="background-color: var(--color-background);">
                         <button id="showListViewBtn" class="px-3 py-1 text-sm rounded-md font-semibold view-toggle-btn active">Liste</button>
@@ -125,7 +137,6 @@ export async function render(params = {}) {
             </div>
         </div>
         
-        <!-- Code des modales inchangé... -->
         <div id="entryModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-start overflow-y-auto z-30 p-4">
             <div class="p-6 rounded-lg shadow-xl w-full max-w-lg my-8" style="background-color: var(--color-surface);">
                 <div class="flex justify-between items-center mb-4">
@@ -183,6 +194,35 @@ export async function render(params = {}) {
 
     setTimeout(async () => {
         await cacheModalData();
+        
+        // Remplissage dynamique du menu déroulant si l'utilisateur est admin
+        if (currentUser.role === 'admin') {
+            const dropdown = document.getElementById('userSwitchDropdown');
+            if (dropdown) {
+                try {
+                    const users = await getUsers();
+                    const activeUsers = users.filter(u => u.status !== 'banned');
+                    
+                    // On peuple le menu select
+                    dropdown.innerHTML = activeUsers.map(u => 
+                        `<option value="${u.id}" ${u.id === targetUser.uid ? 'selected' : ''}>${u.displayName}</option>`
+                    ).join('');
+                    
+                    // Quand l'admin choisit un autre utilisateur dans la liste
+                    dropdown.addEventListener('change', (e) => {
+                        const selectedOption = e.target.options[e.target.selectedIndex];
+                        // On utilise le routeur pour recharger silencieusement la même page avec le nouvel id !
+                        navigateTo('user-history', {
+                            userId: e.target.value,
+                            userName: selectedOption.text
+                        });
+                    });
+                } catch (error) {
+                    console.error("Erreur chargement menu utilisateurs:", error);
+                }
+            }
+        }
+
         setupEventListeners();
         setupReassignModalListeners();
         currentWeekOffset = 0;
@@ -248,28 +288,18 @@ async function cacheModalData() {
 }
 
 async function getPointages(startDate, endDate, chantierFilter = null) {
-    // On récupère les VRAIES dates envoyées (que ce soit 1 semaine ou 1 an)
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-    
-    // On prend la vraie date de fin choisie, et on la bloque à 23h59 précises
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
-
     let pointagesBaseQuery = [
         where("uid", "==", targetUser.uid),
-        where("timestamp", ">=", start.toISOString()),
-        where("timestamp", "<=", end.toISOString())
+        where("timestamp", ">=", startDate.toISOString()),
+        where("timestamp", "<", new Date(endDate.getTime() + 86400000).toISOString())
     ];
-    
     if (chantierFilter) {
         pointagesBaseQuery.push(where("chantier", "==", chantierFilter));
     }
     const pointagesQuery = query(collection(db, "pointages"), ...pointagesBaseQuery, orderBy("timestamp", "asc"));
     
-    const trajetsStartDate = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0);
-    const trajetsEndDate = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59);
-    
+    const trajetsStartDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+    const trajetsEndDate = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59);
     const trajetsQuery = query(collection(db, "trajets"),
         where("id_utilisateur", "==", targetUser.uid),
         where("date_creation", ">=", trajetsStartDate),
@@ -283,8 +313,8 @@ async function getPointages(startDate, endDate, chantierFilter = null) {
 
     return { pointages, trajetsMap };
 }
-function applyStealthSmoothing(rawPointages, contractHours) {
-    const contractMs = contractHours * 3600000;
+
+function applyStealthSmoothing(rawPointages) {
     const MAX_DAILY_MS = 9 * 3600000; 
     const hiddenChantiers = chantiersCache.filter(c => c.isHideable).map(c => c.name);
 
@@ -308,6 +338,29 @@ function applyStealthSmoothing(rawPointages, contractHours) {
     let displayPointages = [];
 
     for (const weekKey in byWeek) {
+        
+        let activeContractHours = targetUser.contractHours || 38;
+        
+        if (targetUser.contractHistory && targetUser.contractHistory.length > 0) {
+            const weekDate = new Date(parseInt(weekKey));
+            const yyyy = weekDate.getFullYear();
+            const mm = String(weekDate.getMonth() + 1).padStart(2, '0');
+            const dd = String(weekDate.getDate()).padStart(2, '0');
+            const weekDateStr = `${yyyy}-${mm}-${dd}`;
+            
+            const pastContracts = targetUser.contractHistory.filter(c => c.startDate <= weekDateStr);
+            
+            if (pastContracts.length > 0) {
+                pastContracts.sort((a,b) => new Date(a.startDate) - new Date(b.startDate));
+                activeContractHours = pastContracts[pastContracts.length - 1].hours;
+            } else {
+                const allSorted = [...targetUser.contractHistory].sort((a,b) => new Date(a.startDate) - new Date(b.startDate));
+                activeContractHours = allSorted[0].hours;
+            }
+        }
+        
+        const contractMs = activeContractHours * 3600000;
+
         let rawWeekPoints = byWeek[weekKey];
         rawWeekPoints.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
@@ -431,46 +484,18 @@ function applyStealthSmoothing(rawPointages, contractHours) {
 }
 
 async function displayHistoryList(startDate, endDate, chantierFilter = null) {
-    // NOUVEAU : On empêche les conflits si on clique très vite sur les flèches (Race condition)
-    const renderId = ++currentRenderId;
-    
     lastLoadedState = { start: startDate, end: endDate, chantier: chantierFilter };
 
     const historyList = document.getElementById("historyList");
     historyList.innerHTML = `<p class='text-center p-4' style='color: var(--color-text-muted);'>Chargement...</p>`;
     
     const { pointages, trajetsMap } = await getPointages(startDate, endDate, chantierFilter);
+    allPointages = pointages; 
     
-    // NOUVEAU : Si l'utilisateur a cliqué sur une autre semaine entre temps, on stoppe ce rendu.
-    if (renderId !== currentRenderId) return;
-
-    // NOUVEAU : Nettoyage des doublons stricts venant de la base de données (même heure, même fin, même chantier)
-    // Cela empêchera l'affichage de dédoubler et de fausser le total journalier à 9h maximum !
-    const uniquePointages = pointages.filter((p, index, self) =>
-        index === self.findIndex((t) => (
-            t.timestamp === p.timestamp && t.endTime === p.endTime && t.chantier === p.chantier
-        ))
-    );
-
-    allPointages = uniquePointages; 
-    
-    let displayPointages = [...uniquePointages];
+    let displayPointages = [...pointages];
     if (localStealthMode === true) {
-        displayPointages = applyStealthSmoothing(uniquePointages, targetUser.contractHours);
+        displayPointages = applyStealthSmoothing(pointages);
     }
-    
-    // NOUVEAU : On coupe strictement tout ce qui dépasse de la semaine (pour bloquer le lundi suivant)
-    const limitStart = new Date(startDate);
-    limitStart.setHours(0, 0, 0, 0);
-    const limitEnd = new Date(endDate);
-    limitEnd.setHours(23, 59, 59, 999);
-
-    displayPointages = displayPointages.filter(p => {
-        const pDate = new Date(p.timestamp);
-        return pDate >= limitStart && pDate <= limitEnd;
-    });
-
-    pointagesPourPdf = JSON.parse(JSON.stringify(displayPointages));
     
     pointagesPourPdf = JSON.parse(JSON.stringify(displayPointages)); 
 
@@ -559,7 +584,7 @@ async function renderCalendar() {
 
     let displayPointages = pointages;
     if (localStealthMode === true) {
-        displayPointages = applyStealthSmoothing(pointages, targetUser.contractHours);
+        displayPointages = applyStealthSmoothing(pointages);
     }
 
     const pointagesByDate = displayPointages.reduce((acc, p) => {
@@ -715,19 +740,11 @@ function resetFilters() {
 }
 
 async function loadHistoryForWeek() {
-    const range = getWeekDateRange(currentWeekOffset);
-    const startOfWeek = range.startOfWeek;
-    
-    // CORRECTION : On force la fin de semaine au dimanche strict (Lundi + 6 jours)
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-    
-    const startStr = startOfWeek.toLocaleDateString('fr-FR', {timeZone: 'UTC', day: 'numeric', month: 'long'});
-    const endStr = endOfWeek.toLocaleDateString('fr-FR', {timeZone: 'UTC', day: 'numeric', month: 'long'});
-    document.getElementById("currentPeriodDisplay").textContent = `Semaine du ${startStr} au ${endStr}`;
-    
+    const { startOfWeek, endOfWeek } = getWeekDateRange(currentWeekOffset);
+    document.getElementById("currentPeriodDisplay").textContent = `Semaine du ${startOfWeek.toLocaleDateString('fr-FR', {timeZone: 'UTC', day: 'numeric', month: 'long'})}`;
     await displayHistoryList(startOfWeek, endOfWeek);
 }
+
 function updatePdfButtonState(hasData) {
     const pdfBtn = document.getElementById("downloadPdfBtn");
     if (pdfBtn) {
@@ -1059,7 +1076,6 @@ async function saveEntry(e) {
 }
 
 function generateHistoryPDF() {
-    // CORRECTION : On utilise directement les données déjà filtrées et lissées affichées à l'écran
     const dataForPdf = pointagesPourPdf; 
     
     if (dataForPdf.length === 0) {
@@ -1077,8 +1093,8 @@ function generateHistoryPDF() {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
     const userName = targetUser.name === "Mon" ? currentUser.displayName : targetUser.name;
     
-    const periodStart = new Date(lastLoadedState.start);
-    const periodEnd = new Date(lastLoadedState.end);
+    const firstDate = new Date(dataForPdf[0].timestamp);
+    const lastDate = new Date(dataForPdf[dataForPdf.length - 1].timestamp);
 
     doc.setFontSize(18);
     doc.setFont(undefined, 'bold');
@@ -1087,7 +1103,7 @@ function generateHistoryPDF() {
     doc.setFont(undefined, 'normal');
     doc.setTextColor(100);
     doc.text(`Employé : ${userName}`, 40, 75);
-    doc.text(`Période du ${periodStart.toLocaleDateString('fr-FR')} au ${periodEnd.toLocaleDateString('fr-FR')}`, 40, 85);
+    doc.text(`Période du ${firstDate.toLocaleDateString('fr-FR')} au ${lastDate.toLocaleDateString('fr-FR')}`, 40, 85);
     
     const pointagesByDay = dataForPdf.reduce((acc, p) => {
         if (!p.endTime) return acc;
@@ -1146,6 +1162,6 @@ function generateHistoryPDF() {
     doc.text(`Total travail effectif de la période : ${formatMilliseconds(totalEffectiveMs)}`, 40, finalY + 20);
     const now = new Date();
     const timestamp = `${String(now.getHours()).padStart(2, '0')}h${String(now.getMinutes()).padStart(2, '0')}`;
-    const fileName = `Historique_${userName.replace(/ /g, '_')}_${periodStart.toISOString().split('T')[0]}_${timestamp}.pdf`;
+    const fileName = `Historique_${userName.replace(/ /g, '_')}_${firstDate.toISOString().split('T')[0]}_${timestamp}.pdf`;
     doc.save(fileName);
 }
