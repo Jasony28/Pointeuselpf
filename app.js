@@ -1,6 +1,6 @@
 import { updatesLog } from './modules/updates-data.js';
 
-const APP_VERSION = 'v3.6.4'; 
+const APP_VERSION = 'v3.6.5'; 
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
@@ -167,32 +167,8 @@ function setupNavigation() {
         switchBtn.classList.remove('hidden');
         switchBtn.textContent = isMasqueradingAsUser ? 'Vue Admin' : 'Vue Employé';
         switchBtn.onclick = toggleView;
-
-        let toggleAllHoursBtn = document.getElementById('globalToggleAllHoursBtn');
-        if (!toggleAllHoursBtn) {
-            toggleAllHoursBtn = document.createElement('button');
-            toggleAllHoursBtn.id = 'globalToggleAllHoursBtn';
-            toggleAllHoursBtn.className = 'w-4 h-4 rounded-full transition-colors shadow-sm ml-3 mr-2'; 
-            toggleAllHoursBtn.style.backgroundColor = isShowingAllHours ? '#22c55e' : '#ef4444';
-            toggleAllHoursBtn.title = isShowingAllHours ? "Masquer les dépassements de contrat" : "Afficher toutes les heures (avec dépassements)";
-            
-            toggleAllHoursBtn.onclick = () => {
-                isShowingAllHours = !isShowingAllHours;
-                toggleAllHoursBtn.style.backgroundColor = isShowingAllHours ? '#22c55e' : '#ef4444';
-                toggleAllHoursBtn.title = isShowingAllHours ? "Masquer les dépassements de contrat" : "Afficher toutes les heures (avec dépassements)";
-                
-                document.dispatchEvent(new Event('hoursViewToggled'));
-            };
-            
-            switchBtn.parentNode.insertBefore(toggleAllHoursBtn, switchBtn);
-        } else {
-            toggleAllHoursBtn.style.backgroundColor = isShowingAllHours ? '#22c55e' : '#ef4444';
-            toggleAllHoursBtn.title = isShowingAllHours ? "Masquer les dépassements de contrat" : "Afficher toutes les heures (avec dépassements)";
-        }
     } else {
         switchBtn.classList.add('hidden');
-        const btn = document.getElementById('globalToggleAllHoursBtn');
-        if(btn) btn.remove();
     }
 }
 

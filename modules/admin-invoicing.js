@@ -5,7 +5,7 @@ import { formatMilliseconds } from "./utils.js";
 // --- Variables pour la mise en cache des données ---
 let chantiersCache = [];
 let pointagesCache = new Map();
-let activeChantiersCache = []; // Cache pour les chantiers actifs ce mois-ci
+let activeChantiersCache = []; // Cache pour les chantiers actifs
 
 /**
  * Point d'entrée principal : Affiche la structure de la page.
@@ -27,7 +27,7 @@ export async function render() {
 
         <div class="max-w-5xl mx-auto space-y-6">
             <div id="chantier-list-view">
-                <h2 class="text-2xl font-bold mb-4">📊 Suivi des Heures (Chantiers actifs ce mois-ci)</h2>
+                <h2 class="text-2xl font-bold mb-4">📊 Suivi des Heures (Facturation)</h2>
                 <div class="relative">
                     <input type="search" id="search-chantier-input" placeholder="Rechercher un chantier..." class="w-full border p-2 pl-10 rounded" style="background-color: var(--color-background); border-color: var(--color-border);">
                     <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
@@ -66,42 +66,66 @@ export async function render() {
 }
 
 /**
- * Charge les données, filtre les chantiers avec des heures ce mois-ci et les affiche.
+ * Charge les données, contourne les problèmes de majuscules/minuscules et affiche les chantiers.
  */
 async function loadAndDisplayChantiers() {
     const listContainer = document.getElementById('chantiers-summary-list');
     listContainer.innerHTML = `<p class="col-span-full text-center py-8">Chargement des données...</p>`;
 
     try {
+        // 1. Récupération de tous les chantiers
         const chantiersQuery = query(collection(db, "chantiers"), orderBy("name", "asc"));
         const chantiersSnapshot = await getDocs(chantiersQuery);
         chantiersCache = chantiersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-
-        const pointagesQuery = query(collection(db, "pointages"),
-            where("timestamp", ">=", startOfMonth.toISOString()),
-            where("timestamp", "<=", endOfMonth.toISOString())
-        );
+        // 2. Récupération de TOUS les pointages pour éviter les bugs de dates manquantes
+        const pointagesQuery = query(collection(db, "pointages"), orderBy("timestamp", "desc"));
         const pointagesSnapshot = await getDocs(pointagesQuery);
 
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+
         const monthlyHoursMap = new Map();
+        const allPointagesMap = new Map(); // Permet de stocker l'historique complet
+
+        // 3. Regroupement intelligent (insensible à la casse)
         pointagesSnapshot.forEach(doc => {
             const data = doc.data();
+            // On convertit tout en minuscules pour ne plus avoir de problème entre "Hustuf" et "hustuf"
+            const normalizedName = (data.chantier || "").toLowerCase().trim();
             const durationMs = new Date(data.endTime) - new Date(data.timestamp) - (data.pauseDurationMs || 0);
-            const currentTotal = monthlyHoursMap.get(data.chantier) || 0;
-            monthlyHoursMap.set(data.chantier, currentTotal + durationMs);
+
+            // On met en cache tous les pointages pour la vue détaillée
+            if (!allPointagesMap.has(normalizedName)) {
+                allPointagesMap.set(normalizedName, []);
+            }
+            allPointagesMap.get(normalizedName).push(data);
+
+            // On calcule uniquement le total du mois en cours pour l'affichage sur la carte
+            const pDate = new Date(data.timestamp);
+            if (pDate.getMonth() === currentMonth && pDate.getFullYear() === currentYear) {
+                const currentTotal = monthlyHoursMap.get(normalizedName) || 0;
+                monthlyHoursMap.set(normalizedName, currentTotal + durationMs);
+            }
         });
 
-        const chantiersWithHours = chantiersCache.map(chantier => ({
-            ...chantier,
-            monthlyTotalMs: monthlyHoursMap.get(chantier.name) || 0
-        }));
+        // 4. On relie l'historique aux chantiers officiels
+        const chantiersWithHours = chantiersCache.map(chantier => {
+            const normalizedName = (chantier.name || "").toLowerCase().trim();
+            
+            // On sauvegarde l'historique complet de ce chantier dans notre cache global
+            pointagesCache.set(chantier.id, allPointagesMap.get(normalizedName) || []);
 
-        // *** MODIFICATION PRINCIPALE : On ne garde que les chantiers avec des heures > 0 ***
-        activeChantiersCache = chantiersWithHours;
+            return {
+                ...chantier,
+                monthlyTotalMs: monthlyHoursMap.get(normalizedName) || 0,
+                hasHistory: allPointagesMap.has(normalizedName) // Vrai si le chantier a déjà eu des heures un jour
+            };
+        });
+
+        // On ne garde que les chantiers qui ont au moins 1 pointage enregistré dans leur histoire
+        activeChantiersCache = chantiersWithHours.filter(c => c.hasHistory);
 
         displayChantierCards(activeChantiersCache);
     } catch (error) {
@@ -121,9 +145,9 @@ function displayChantierCards(chantiers) {
     if (chantiers.length === 0) {
         const searchTerm = document.getElementById('search-chantier-input').value;
         if (searchTerm) {
-            listContainer.innerHTML = `<p class="col-span-full text-center py-8">Aucun chantier actif ne correspond à votre recherche.</p>`;
+            listContainer.innerHTML = `<p class="col-span-full text-center py-8">Aucun chantier ne correspond à votre recherche.</p>`;
         } else {
-            listContainer.innerHTML = `<p class="col-span-full text-center py-8">Aucun chantier avec des heures enregistrées ce mois-ci.</p>`;
+            listContainer.innerHTML = `<p class="col-span-full text-center py-8">Aucun chantier n'a d'heures enregistrées.</p>`;
         }
         return;
     }
@@ -146,10 +170,10 @@ function displayChantierCards(chantiers) {
 }
 
 /**
- * Affiche la vue détaillée pour un chantier spécifique.
+ * Affiche la vue détaillée pour un chantier spécifique en utilisant le cache sans refaire de requête Firebase.
  * @param {string} chantierId - L'ID du chantier à afficher.
  */
-async function showChantierDetails(chantierId) {
+function showChantierDetails(chantierId) {
     document.getElementById('chantier-list-view').classList.add('hidden');
     document.getElementById('chantier-detail-view').classList.remove('hidden');
 
@@ -162,21 +186,9 @@ async function showChantierDetails(chantierId) {
     
     document.querySelectorAll('.period-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelector('.period-btn[data-period="month"]').classList.add('active');
-    document.getElementById('chantier-summary-content').innerHTML = `<p class="text-center py-4">Chargement des heures...</p>`;
-
-    let pointages = pointagesCache.get(chantier.id);
-    if (!pointages) {
-        try {
-            const q = query(collection(db, "pointages"), where("chantier", "==", chantier.name), orderBy("timestamp", "desc"));
-            const snapshot = await getDocs(q);
-            pointages = snapshot.docs.map(doc => doc.data());
-            pointagesCache.set(chantier.id, pointages);
-        } catch (error) {
-            console.error("Erreur de chargement des pointages:", error);
-            document.getElementById('chantier-summary-content').innerHTML = `<p class="text-center text-red-500 py-4">Erreur de chargement des heures.</p>`;
-            return;
-        }
-    }
+    
+    // On récupère directement les données préparées dans le cache (fini les bugs de majuscules !)
+    let pointages = pointagesCache.get(chantier.id) || [];
     
     generateSummary('month', pointages);
 }

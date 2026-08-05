@@ -8,7 +8,7 @@ export async function render() {
             <div>
                 <h2 class="text-3xl font-bold tracking-tight">👤 Fiches de l'Équipe</h2>
                 <p class="text-lg mt-1" style="color: var(--color-text-muted);">
-                    Consultez et modifiez les informations de chaque membre.
+                    Consultez et modifiez les informations de chaque membre, y compris l'historique des contrats.
                 </p>
             </div>
             <div id="user-cards-container" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -75,6 +75,21 @@ function renderCardView(cardElement, user) {
         gsmHtml = `<p><strong>📞 GSM :</strong> <span style="color: var(--color-text-muted);">Non défini</span></p>`;
     }
 
+    // --- AFFICHAGE DE L'HISTORIQUE DES CONTRATS ---
+    let contractHtml = '<div class="mt-2 p-2 rounded-lg" style="background-color: var(--color-background); border: 1px solid var(--color-border);">';
+    contractHtml += '<strong>🕒 Historique des contrats :</strong><ul class="ml-4 mt-1 space-y-1 list-disc">';
+    if (user.contractHistory && user.contractHistory.length > 0) {
+        // Trie pour afficher le plus récent en premier
+        const sorted = [...user.contractHistory].sort((a,b) => b.startDate.localeCompare(a.startDate));
+        sorted.forEach(c => {
+            const dateStr = new Date(c.startDate).toLocaleDateString('fr-FR');
+            contractHtml += `<li style="color: var(--color-text-muted);">Depuis le ${dateStr} : <strong style="color: var(--color-primary);">${c.hours}h/sem</strong></li>`;
+        });
+    } else {
+        contractHtml += `<li style="color: var(--color-text-muted);">Fixe : <strong style="color: var(--color-primary);">${user.contractHours || 0}h/sem</strong> (Ancien système)</li>`;
+    }
+    contractHtml += '</ul></div>';
+
     cardElement.innerHTML = `
         <h3 class="text-2xl font-bold mb-5">${user.displayName}</h3>
         <div class="space-y-3 text-sm">
@@ -82,10 +97,10 @@ function renderCardView(cardElement, user) {
             <p><strong>🏠 Adresse :</strong> ${address ? `<a href="${googleMapsUrl}" target="_blank" class="hover:underline" style="color: var(--color-primary);">${address}</a>` : '<span style="color: var(--color-text-muted);">Non définie</span>'}</p>
             <p><strong>💳 Registre Nat. :</strong> ${user.nationalRegistryNumber || '<span style="color: var(--color-text-muted);">Non défini</span>'}</p>
             <p><strong>🏦 IBAN :</strong> ${user.iban || '<span style="color: var(--color-text-muted);">Non défini</span>'}</p>
-            <p><strong>🕒 Contrat :</strong> ${user.contractHours || 0} heures/semaine</p>
+            ${contractHtml}
         </div>
         <div class="mt-6">
-            <button class="edit-btn w-full font-semibold py-2 px-4 rounded-lg" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Modifier</button>
+            <button class="edit-btn w-full font-semibold py-2 px-4 rounded-lg hover:opacity-80 transition-opacity" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Modifier le profil</button>
         </div>
         <style>
             .gsm-trigger:hover { background-color: rgba(128, 128, 128, 0.1); }
@@ -146,17 +161,61 @@ function renderCardEdit(cardElement, user) {
                 <label class="block text-xs font-medium mb-1">N° de compte (IBAN)</label>
                 <input id="iban-${user.id}" type="text" value="${user.iban || ''}" class="input-field" placeholder="BE00 0000 0000 0000">
             </div> 
-            <div>
-                <label class="block text-xs font-medium mb-1">Heures/semaine</label>
-                <input id="contractHours-${user.id}" type="number" value="${user.contractHours || 0}" class="input-field">
+            
+            <div class="p-3 rounded-lg mt-4" style="background-color: var(--color-background); border: 1px solid var(--color-border);">
+                <label class="block text-sm font-bold mb-2">Historique des contrats (H/sem)</label>
+                <div id="contractHistoryContainer-${user.id}" class="space-y-2 mb-3"></div>
+                <button type="button" id="addContractBtn-${user.id}" class="text-xs font-bold px-2 py-1 rounded" style="color: var(--color-primary); background-color: var(--color-surface); border: 1px solid var(--color-border);">+ Ajouter une période</button>
             </div>
         </div>
         <div class="mt-6 flex gap-3">
             <button class="cancel-btn w-full font-semibold py-2 px-4 rounded-lg" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Annuler</button>
             <button class="save-btn w-full font-bold text-white py-2 px-4 rounded-lg" style="background-color: var(--color-primary);">Enregistrer</button>
         </div>
-        <style>.input-field { width: 100%; border-radius: 0.5rem; padding: 0.5rem; background-color: var(--color-background); border: 1px solid var(--color-border); }</style>
+        <style>
+            .input-field { width: 100%; border-radius: 0.5rem; padding: 0.5rem; background-color: var(--color-background); border: 1px solid var(--color-border); }
+        </style>
     `;
+
+    // --- GESTION DYNAMIQUE DE L'HISTORIQUE ---
+    let currentHistory = user.contractHistory ? [...user.contractHistory] : [];
+    // Migration de l'ancien système vers le nouveau
+    if (currentHistory.length === 0 && user.contractHours) {
+        currentHistory.push({ startDate: '2024-01-01', hours: user.contractHours });
+    }
+
+    const historyContainer = document.getElementById(`contractHistoryContainer-${user.id}`);
+    
+    function drawHistory() {
+        historyContainer.innerHTML = currentHistory.map((c, index) => `
+            <div class="flex items-center gap-2">
+                <span class="text-xs">Dès le :</span>
+                <input type="date" class="input-field hist-date flex-1 !p-1 !text-xs" value="${c.startDate}" data-index="${index}">
+                <input type="number" class="input-field hist-hours w-16 !p-1 !text-xs text-center" value="${c.hours}" data-index="${index}" placeholder="Heures">
+                <button type="button" class="text-red-500 font-bold px-2 delete-hist-btn" data-index="${index}" title="Supprimer ce contrat">✖</button>
+            </div>
+        `).join('');
+
+        historyContainer.querySelectorAll('.hist-date').forEach(el => el.addEventListener('change', (e) => {
+            currentHistory[e.target.dataset.index].startDate = e.target.value;
+        }));
+        historyContainer.querySelectorAll('.hist-hours').forEach(el => el.addEventListener('change', (e) => {
+            currentHistory[e.target.dataset.index].hours = Number(e.target.value);
+        }));
+        historyContainer.querySelectorAll('.delete-hist-btn').forEach(el => el.addEventListener('click', (e) => {
+            currentHistory.splice(e.target.dataset.index, 1);
+            drawHistory();
+        }));
+    }
+    
+    drawHistory();
+
+    document.getElementById(`addContractBtn-${user.id}`).addEventListener('click', () => {
+        const today = new Date().toISOString().split('T')[0];
+        currentHistory.push({ startDate: today, hours: 38 }); // 38h par défaut
+        drawHistory();
+    });
+    // ----------------------------------------
 
     cardElement.querySelector('.cancel-btn').addEventListener('click', () => {
         renderCardView(cardElement, user);
@@ -167,13 +226,25 @@ function renderCardEdit(cardElement, user) {
         btn.disabled = true;
         btn.textContent = 'Sauvegarde...';
 
+        // Nettoyage et tri de l'historique
+        currentHistory = currentHistory.filter(c => c.startDate && c.hours); // Évite les cases vides
+        currentHistory.sort((a,b) => new Date(a.startDate) - new Date(b.startDate)); // Trie chronologiquement
+
+        // Déduit le contrat ACTUEL pour la rétrocompatibilité du reste de l'app
+        let currentHours = 0;
+        const today = new Date().toISOString().split('T')[0];
+        const activeContract = currentHistory.filter(c => c.startDate <= today).pop();
+        if (activeContract) currentHours = activeContract.hours;
+        else if (currentHistory.length > 0) currentHours = currentHistory[0].hours;
+
         const updatedData = {
             displayName: document.getElementById(`displayName-${user.id}`).value,
             gsm: document.getElementById(`gsm-${user.id}`).value,
             address: document.getElementById(`address-${user.id}`).value,
             nationalRegistryNumber: document.getElementById(`nationalRegistryNumber-${user.id}`).value,
-            iban: document.getElementById(`iban-${user.id}`).value, // AJOUTÉ : Récupération de l'IBAN pour la sauvegarde
-            contractHours: Number(document.getElementById(`contractHours-${user.id}`).value)
+            iban: document.getElementById(`iban-${user.id}`).value,
+            contractHistory: currentHistory, // Le nouveau système
+            contractHours: currentHours // Sécurité : on garde la variable classique à jour !
         };
 
         try {
