@@ -1,5 +1,15 @@
 export const updatesLog = [
     {
+        version: 'v3.6.7',
+        date: '6 août 2026',
+        changes: [
+            "👤 **Nouveau : Gérez votre profil utilisateur !**",
+            "Vous avez désormais la possibilité de mettre à jour vos informations personnelles directement depuis l'application.",
+            "👉 **Action requise :** Rendez-vous dans l'onglet **Mes Statistiques** pour compléter vos coordonnées : GSM, Adresse complète, Numéro de Registre National et votre numéro de compte (IBAN).",
+            "✨ *Merci de prendre 2 minutes pour remplir ces données, cela nous fera gagner un temps précieux pour l'administratif !*"
+        ]
+    },
+    {
         version: 'v3.6.5',
         date: '22 juillet 2026',
         changes: [

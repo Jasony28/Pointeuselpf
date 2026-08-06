@@ -1,5 +1,4 @@
 import { collection, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc, addDoc, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-// AJOUT DE navigateTo ICI
 import { db, currentUser, pageContent, showConfirmationModal, showInfoModal, navigateTo } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 import { getUsers } from "./data-service.js";
@@ -18,6 +17,40 @@ let lastLoadedState = { start: null, end: null, chantier: null };
 let localStealthMode = false; 
 
 let reassignModal, userSelect, reassignConfirmBtn, reassignCancelBtn;
+
+// --- CALCULATEUR DE JOURS FÉRIÉS BELGES ---
+function isBelgianHoliday(dateObj) {
+    const year = dateObj.getFullYear();
+    
+    const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+    const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const pMonth = Math.floor((h + l - 7 * m + 114) / 31) - 1; 
+    const pDay = ((h + l - 7 * m + 114) % 31) + 1;
+    
+    const easterMonday = new Date(year, pMonth, pDay + 1);
+    const ascension = new Date(year, pMonth, pDay + 39);
+    const pentecost = new Date(year, pMonth, pDay + 50);
+
+    const pad = n => String(n).padStart(2, '0');
+    const toStr = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+    const holidays = [
+        `${year}-01-01`, 
+        `${year}-05-01`, 
+        `${year}-07-21`, 
+        `${year}-08-15`, 
+        `${year}-11-01`, 
+        `${year}-11-11`, 
+        `${year}-12-25`, 
+        toStr(easterMonday),
+        toStr(ascension),
+        toStr(pentecost)
+    ];
+
+    return holidays.includes(toStr(dateObj));
+}
 
 function formatMinutes(totalMinutes) {
     if (!totalMinutes || totalMinutes < 0) return "0h 0min";
@@ -62,7 +95,6 @@ export async function render(params = {}) {
         <div class="max-w-5xl mx-auto">
             <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
                 
-                <!-- NOUVEAU TITRE AVEC MENU DÉROULANT INTÉGRÉ POUR LES ADMINS -->
                 <div class="flex items-center gap-2">
                     <h2 class="text-2xl font-bold">Historique de</h2>
                     ${currentUser.role === 'admin' ? `
@@ -195,7 +227,6 @@ export async function render(params = {}) {
     setTimeout(async () => {
         await cacheModalData();
         
-        // Remplissage dynamique du menu déroulant si l'utilisateur est admin
         if (currentUser.role === 'admin') {
             const dropdown = document.getElementById('userSwitchDropdown');
             if (dropdown) {
@@ -203,15 +234,12 @@ export async function render(params = {}) {
                     const users = await getUsers();
                     const activeUsers = users.filter(u => u.status !== 'banned');
                     
-                    // On peuple le menu select
                     dropdown.innerHTML = activeUsers.map(u => 
                         `<option value="${u.id}" ${u.id === targetUser.uid ? 'selected' : ''}>${u.displayName}</option>`
                     ).join('');
                     
-                    // Quand l'admin choisit un autre utilisateur dans la liste
                     dropdown.addEventListener('change', (e) => {
                         const selectedOption = e.target.options[e.target.selectedIndex];
-                        // On utilise le routeur pour recharger silencieusement la même page avec le nouvel id !
                         navigateTo('user-history', {
                             userId: e.target.value,
                             userName: selectedOption.text
@@ -321,6 +349,49 @@ function applyStealthSmoothing(rawPointages) {
     let validPointages = JSON.parse(JSON.stringify(rawPointages));
     validPointages = validPointages.filter(p => !hiddenChantiers.includes(p.chantier));
 
+    // --- FILTRE ANTI-DOUBLON INTELLIGENT (Tolérance 5 minutes) ---
+    validPointages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    let uniquePointages = [];
+    
+    for (let p of validPointages) {
+        if (!p.endTime) {
+            uniquePointages.push(p);
+            continue;
+        }
+        
+        let isDuplicate = false;
+        let pStart = new Date(p.timestamp).getTime();
+        let pEnd = new Date(p.endTime).getTime();
+        let pChantier = (p.chantier || "").toLowerCase().trim();
+
+        for (let u of uniquePointages) {
+            if (!u.endTime) continue;
+            let uStart = new Date(u.timestamp).getTime();
+            let uEnd = new Date(u.endTime).getTime();
+            let uChantier = (u.chantier || "").toLowerCase().trim();
+
+            if (pChantier === uChantier) {
+                // Si l'heure de début ET de fin ont moins de 5 min d'écart (300 000 ms)
+                if (Math.abs(pStart - uStart) <= 300000 && Math.abs(pEnd - uEnd) <= 300000) {
+                    isDuplicate = true;
+                    // On garde le plus long en mémoire
+                    if ((pEnd - pStart) > (uEnd - uStart)) {
+                        u.timestamp = p.timestamp;
+                        u.endTime = p.endTime;
+                        u.pauseDurationMs = p.pauseDurationMs;
+                    }
+                    break;
+                }
+            }
+        }
+
+        if (!isDuplicate) {
+            uniquePointages.push(p);
+        }
+    }
+    validPointages = uniquePointages;
+    // -----------------------------------------------------------
+
     const byWeek = {};
     validPointages.forEach(p => {
         if (!p.endTime) return;
@@ -418,14 +489,18 @@ function applyStealthSmoothing(rawPointages) {
                     
                     let availableSpace = MAX_DAILY_MS - dailyTotals[day];
                     if (availableSpace > 0) {
-                        let takeMs = Math.min(wpDuration, availableSpace, capacityMs);
-                        
-                        let fakeP = JSON.parse(JSON.stringify(wp)); 
                         
                         let targetDateObj = new Date(parseInt(weekKey));
                         targetDateObj.setDate(targetDateObj.getDate() + (day - 1));
                         targetDateObj.setHours(8, 0, 0, 0);
 
+                        if (isBelgianHoliday(targetDateObj)) {
+                            continue; 
+                        }
+
+                        let takeMs = Math.min(wpDuration, availableSpace, capacityMs);
+                        let fakeP = JSON.parse(JSON.stringify(wp)); 
+                        
                         weekdays.filter(p => new Date(p.timestamp).getDay() === day).forEach(p => {
                             let et = new Date(p.endTime);
                             if (et > targetDateObj) targetDateObj = et;
