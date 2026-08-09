@@ -111,10 +111,14 @@ export async function render(params = {}) {
                         <button id="showListViewBtn" class="px-3 py-1 text-sm rounded-md font-semibold view-toggle-btn active">Liste</button>
                         <button id="showCalendarViewBtn" class="px-3 py-1 text-sm rounded-md font-semibold view-toggle-btn">Calendrier</button>
                     </div>
-                    ${(targetUser.uid === currentUser.uid || currentUser.role === 'admin') ? `
+                    
+                    ${currentUser.role === 'admin' ? `
                     <button id="localStealthToggleBtn" class="px-3 py-1.5 rounded-md font-bold text-white transition-colors bg-green-500 text-sm shadow-sm flex items-center gap-2">
                         🟢 Heures Réelles
                     </button>
+                    ` : ''}
+
+                    ${(targetUser.uid === currentUser.uid || currentUser.role === 'admin') ? `
                     <button id="downloadPdfBtn" class="text-white font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition-opacity" style="background-color: var(--color-primary);">📄 PDF</button>
                     ` : ''}
                 </div>
@@ -371,10 +375,8 @@ function applyStealthSmoothing(rawPointages) {
             let uChantier = (u.chantier || "").toLowerCase().trim();
 
             if (pChantier === uChantier) {
-                // Si l'heure de début ET de fin ont moins de 5 min d'écart (300 000 ms)
                 if (Math.abs(pStart - uStart) <= 300000 && Math.abs(pEnd - uEnd) <= 300000) {
                     isDuplicate = true;
-                    // On garde le plus long en mémoire
                     if ((pEnd - pStart) > (uEnd - uStart)) {
                         u.timestamp = p.timestamp;
                         u.endTime = p.endTime;

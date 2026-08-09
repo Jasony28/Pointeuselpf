@@ -1,172 +1,170 @@
-import { collection, query, orderBy, getDocs, doc, updateDoc, writeBatch, where, serverTimestamp, deleteDoc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { collection, query, orderBy, getDocs, doc, writeBatch, where, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, showInfoModal, showConfirmationModal } from "../app.js";
 
 export async function render() {
     pageContent.innerHTML = `
-        <div class="max-w-4xl mx-auto space-y-6">
-            <div>
-                <h2 class="text-2xl font-bold">📬 Gestion des Demandes de Congés</h2>
-                <p style="color: var(--color-text-muted);">Approuvez ou refusez les demandes de congé de votre équipe.</p>
+        <div class="max-w-6xl mx-auto space-y-6">
+            <div class="mb-8">
+                <h2 class="text-3xl font-black tracking-tight" style="color: var(--color-text-base);">📬 Validation des Congés</h2>
+                <p class="text-lg mt-1" style="color: var(--color-text-muted);">Gérez les demandes de votre équipe en un coup d'œil.</p>
             </div>
-            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <div id="leave-requests-list" class="space-y-4">
-                    <p class="text-center">Chargement des demandes...</p>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- COLONNE 1 : EN ATTENTE -->
+                <div class="flex flex-col h-full">
+                    <h3 class="text-xl font-bold mb-4 flex items-center gap-2 text-amber-500">
+                        <span>⏳</span> Demandes à traiter
+                    </h3>
+                    <div id="pending-requests-list" class="space-y-4 flex-grow p-4 rounded-xl shadow-sm border" style="background-color: var(--color-surface); border-color: var(--color-border);">
+                        <p class="text-center py-4" style="color: var(--color-text-muted);">Chargement...</p>
+                    </div>
+                </div>
+
+                <!-- COLONNE 2 : HISTORIQUE -->
+                <div class="flex flex-col h-full">
+                    <h3 class="text-xl font-bold mb-4 flex items-center gap-2" style="color: var(--color-text-base);">
+                        <span>✅</span> Historique récent
+                    </h3>
+                    <div id="processed-requests-list" class="space-y-4 flex-grow p-4 rounded-xl shadow-sm border opacity-90" style="background-color: var(--color-surface); border-color: var(--color-border);">
+                        <p class="text-center py-4" style="color: var(--color-text-muted);">Chargement...</p>
+                    </div>
                 </div>
             </div>
         </div>
     `;
     setTimeout(loadAllRequests, 0);
 }
+
 async function loadAllRequests() {
-    const listContainer = document.getElementById('leave-requests-list');
+    const pendingContainer = document.getElementById('pending-requests-list');
+    const processedContainer = document.getElementById('processed-requests-list');
+    
     try {
-        // 1. On récupère les demandes triées par date de début
-        const q = query(collection(db, "leaveRequests"), orderBy("startDate", "asc"));
+        const q = query(collection(db, "leaveRequests"), orderBy("startDate", "desc"));
         const snapshot = await getDocs(q);
 
+        pendingContainer.innerHTML = '';
+        processedContainer.innerHTML = '';
+
         if (snapshot.empty) {
-            listContainer.innerHTML = '<p class="text-center text-gray-500">Aucune demande de congé pour le moment.</p>';
+            pendingContainer.innerHTML = '<p class="text-center italic py-4 text-gray-500">Aucune demande en attente.</p>';
+            processedContainer.innerHTML = '<p class="text-center italic py-4 text-gray-500">Aucun historique.</p>';
             return;
         }
 
-        // 2. On transforme les documents en un tableau JavaScript
         const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        let pendingCount = 0;
+        let processedCount = 0;
 
-        // 3. On applique le tri personnalisé pour prioriser les "pending"
-        requests.sort((a, b) => {
-            // Si 'a' est en attente et 'b' ne l'est pas, 'a' passe en premier
-            if (a.status === 'pending' && b.status !== 'pending') {
-                return -1;
-            }
-            // Si 'b' est en attente et 'a' ne l'est pas, 'b' passe en premier
-            if (a.status !== 'pending' && b.status === 'pending') {
-                return 1;
-            }
-            
-            // Si les deux ont le même statut (tous deux 'pending' ou tous deux 'non-pending'),
-            // on garde le tri par date de début (que la requête a déjà fait)
-            const dateA = new Date(a.startDate + 'T00:00:00');
-            const dateB = new Date(b.startDate + 'T00:00:00');
-            return dateA - dateB;
-        });
-
-        // 4. On affiche la liste maintenant triée
-        listContainer.innerHTML = '';
         requests.forEach(data => {
-            // On passe l'objet complet (qui contient l'id)
-            listContainer.appendChild(createRequestElement(data.id, data));
+            const el = createRequestElement(data.id, data);
+            if (data.status === 'pending') {
+                pendingContainer.appendChild(el);
+                pendingCount++;
+            } else {
+                processedContainer.appendChild(el);
+                processedCount++;
+            }
         });
 
-        listContainer.addEventListener('click', handleAdminAction);
+        if (pendingCount === 0) pendingContainer.innerHTML = '<div class="text-center py-8"><span class="text-4xl">🎉</span><p class="font-bold text-green-600 mt-2">Tout est à jour !</p><p class="text-sm text-gray-500">Aucune demande en attente.</p></div>';
+        if (processedCount === 0) processedContainer.innerHTML = '<p class="text-center italic py-4 text-gray-500">Aucun historique.</p>';
+
+        document.getElementById('pending-requests-list').addEventListener('click', handleAdminAction);
+        document.getElementById('processed-requests-list').addEventListener('click', handleAdminAction);
+        
     } catch (error) {
         console.error("Erreur de chargement des demandes:", error);
-        listContainer.innerHTML = '<p class="text-center text-red-500">Erreur de chargement.</p>';
+        pendingContainer.innerHTML = '<p class="text-center text-red-500 font-bold">Erreur de chargement.</p>';
     }
 }
 
 function createRequestElement(id, data) {
     const el = document.createElement('div');
-    el.className = 'p-4 border rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4';
+    el.className = 'p-5 border rounded-xl flex flex-col gap-3 transition-shadow hover:shadow-md';
+    el.style.backgroundColor = 'var(--color-background)';
+    el.style.borderColor = 'var(--color-border)';
     
-    // --- MODIFIÉ ---
-    // Utilisation de T00:00:00
-    const startDate = new Date(data.startDate + 'T00:00:00');
-    const endDate = new Date((data.endDate || data.startDate) + 'T00:00:00');
-    const options = { year: 'numeric', month: 'long', day: 'numeric' }; // timeZone: 'UTC' retiré
+    const startDate = new Date(data.startDate + 'T12:00:00Z');
+    const endDate = new Date((data.endDate || data.startDate) + 'T12:00:00Z');
+    const options = { timeZone: 'UTC', year: 'numeric', month: 'long', day: 'numeric' };
 
     let dateDisplay;
     if (startDate.getTime() === endDate.getTime()) {
         dateDisplay = startDate.toLocaleDateString('fr-FR', { weekday: 'long', ...options });
     } else {
-        dateDisplay = `Du ${startDate.toLocaleDateString('fr-FR', options)} au ${endDate.toLocaleDateString('fr-FR', options)}`;
+        dateDisplay = `Du ${startDate.toLocaleDateString('fr-FR', options)}<br>Au ${endDate.toLocaleDateString('fr-FR', options)}`;
     }
 
-    let timeDisplay = '';
-    if (data.startTime && data.endTime) {
-        timeDisplay = `<p class="text-sm text-purple-700 font-semibold">De ${data.startTime} à ${data.endTime}</p>`;
-    }
-    
-    let statusBadge;
+    let statusBadge = '';
+    let actionButtons = '';
+
     if (data.status === 'approved') {
-        statusBadge = '<span class="px-3 py-1 text-sm font-semibold rounded-full bg-green-100 text-green-800">Approuvé</span>';
+        statusBadge = '<span class="px-3 py-1 text-xs font-black uppercase tracking-wider rounded-full bg-green-100 text-green-700">Approuvé</span>';
+        actionButtons = `<button data-id="${id}" data-action="delete" class="action-btn text-xs text-red-500 hover:underline font-bold mt-2">✖ Supprimer l'archive</button>`;
     } else if (data.status === 'refused') {
-        statusBadge = '<span class="px-3 py-1 text-sm font-semibold rounded-full bg-red-100 text-red-800">Refusé</span>';
+        statusBadge = '<span class="px-3 py-1 text-xs font-black uppercase tracking-wider rounded-full bg-red-100 text-red-700">Refusé</span>';
+        actionButtons = `<button data-id="${id}" data-action="delete" class="action-btn text-xs text-gray-500 hover:underline font-bold mt-2">✖ Supprimer l'archive</button>`;
     } else {
-        statusBadge = '<span class="px-3 py-1 text-sm font-semibold rounded-full bg-blue-100 text-blue-800">En attente</span>';
+        statusBadge = '<span class="px-3 py-1 text-xs font-black uppercase tracking-wider rounded-full bg-amber-100 text-amber-700 animate-pulse">En attente</span>';
+        actionButtons = `
+            <div class="flex gap-2 w-full mt-2 pt-3 border-t" style="border-color: var(--color-border);">
+                <button data-id="${id}" data-action="refused" class="action-btn flex-1 bg-red-50 text-red-600 border border-red-200 hover:bg-red-500 hover:text-white font-bold py-2 rounded-lg transition-colors">Refuser</button>
+                <button data-id="${id}" data-action="approved" class="action-btn flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-2 rounded-lg shadow-sm transition-colors">Accepter</button>
+            </div>
+        `;
     }
 
     el.innerHTML = `
-        <div>
-            <p class="font-bold">${data.userName}</p>
-            <p class="text-gray-700">${dateDisplay}</p>
-            ${timeDisplay}
-            <p class="text-sm text-gray-500 mt-1">Raison: ${data.reason}</p>
+        <div class="flex justify-between items-start">
+            <div>
+                <p class="font-black text-lg" style="color: var(--color-text-base);">${data.userName}</p>
+                <p class="text-sm font-semibold mt-1" style="color: var(--color-primary);">${dateDisplay}</p>
+            </div>
+            <div>${statusBadge}</div>
         </div>
-        <div class="flex flex-wrap items-center gap-2">
-            ${statusBadge}
-            <button data-id="${id}" data-action="approved" class="action-btn bg-green-500 hover:bg-green-600 text-white font-bold px-3 py-1 rounded ${data.status === 'approved' ? 'hidden' : ''}">Approuver</button>
-            <button data-id="${id}" data-action="refused" class="action-btn bg-red-500 hover:bg-red-600 text-white font-bold px-3 py-1 rounded ${data.status === 'refused' ? 'hidden' : ''}">Refuser</button>
-            <button data-id="${id}" data-action="delete" class="action-btn bg-gray-600 hover:bg-gray-700 text-white font-bold px-3 py-1 rounded">Supprimer</button>
+        <div class="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg text-sm border border-gray-100 dark:border-gray-700">
+            <span class="font-bold text-gray-500 uppercase text-xs">Motif</span><br>
+            <span style="color: var(--color-text-base);">${data.reason}</span>
+            ${data.startTime ? `<br><span class="text-xs font-semibold text-purple-600 mt-1 block">🕒 De ${data.startTime} à ${data.endTime}</span>` : ''}
         </div>
+        ${actionButtons}
     `;
     return el;
 }
 
-/**
- * Met à jour la collection 'planning' en fonction d'un changement de statut de congé.
- * @param {string} docId - L'ID de la demande de congé.
- * @param {object} leaveData - Les données de la demande de congé.
- * @param {string} newStatus - 'approved', 'refused', or 'deleted'.
- * @param {WriteBatch} [existingBatch] - Un batch Firestore optionnel pour combiner les opérations.
- */
 async function updatePlanningOnLeaveChange(docId, leaveData, newStatus, existingBatch = null) {
     const batch = existingBatch || writeBatch(db);
     const planningRef = collection(db, "planning");
 
-    // 1. Supprimer toutes les entrées de planning existantes pour ce congé
     const q = query(planningRef, where("id_leaveRequest", "==", docId));
     const existingEntries = await getDocs(q);
     existingEntries.forEach(doc => batch.delete(doc.ref));
 
-    // 2. Si le nouveau statut est 'approved', créer les nouvelles entrées
     if (newStatus === 'approved') {
-        // --- MODIFIÉ ---
-        // Utilisation de T00:00:00 comme demandé
-        const startDate = new Date(leaveData.startDate + 'T00:00:00');
-        const endDate = new Date((leaveData.endDate || leaveData.startDate) + 'T00:00:00');
-
+        const startDate = new Date(leaveData.startDate + 'T12:00:00Z');
+        const endDate = new Date((leaveData.endDate || leaveData.startDate) + 'T12:00:00Z');
         const chantierName = `Congé (${leaveData.reason})`;
 
-        // Boucle sur les dates locales
-        for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-            // Recréer la string YYYY-MM-DD
-            const year = d.getFullYear();
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            const dateString = `${year}-${month}-${day}`;
-            
-            const newPlanningRef = doc(planningRef); // Crée un ID unique
+        for (let d = new Date(startDate); d <= endDate; d.setUTCDate(d.getUTCDate() + 1)) {
+            const dateString = d.toISOString().split('T')[0];
+            const newPlanningRef = doc(planningRef);
             const planningData = {
-                chantierId: "LEAVE_ID", // Un ID spécial pour les congés
+                chantierId: "LEAVE_ID",
                 chantierName: chantierName,
                 teamNames: [leaveData.userName],
                 date: dateString,
                 startTime: leaveData.startTime || "",
                 notes: `Congé approuvé: ${leaveData.reason}`,
-                order: 0, // Pour s'afficher en haut
+                order: 0,
                 createdAt: serverTimestamp(),
-                id_leaveRequest: docId // Lien vers la demande originale
+                id_leaveRequest: docId
             };
             batch.set(newPlanningRef, planningData);
         }
     }
-
-    // Si on n'a pas passé de batch, on le commit ici.
-    if (!existingBatch) {
-        await batch.commit();
-    }
+    if (!existingBatch) await batch.commit();
 }
-
 
 async function handleAdminAction(e) {
     const button = e.target.closest('.action-btn');
@@ -175,52 +173,44 @@ async function handleAdminAction(e) {
     const action = button.dataset.action;
     const docId = button.dataset.id;
     
-    // On doit récupérer la dernière version des données du congé
     const leaveDocRef = doc(db, "leaveRequests", docId);
     const leaveDocSnap = await getDoc(leaveDocRef);
 
     if (!leaveDocSnap.exists()) {
         showInfoModal("Erreur", "Demande de congé non trouvée.");
-        loadAllRequests(); // Recharger la liste pour nettoyer
+        loadAllRequests(); 
         return;
     }
     const leaveData = leaveDocSnap.data();
 
     if (action === 'delete') {
-        const confirmed = await showConfirmationModal("Confirmation", `Voulez-vous vraiment supprimer la demande de ${leaveData.userName} ? Cette action est irréversible et la retirera du planning.`);
+        const confirmed = await showConfirmationModal("Confirmation", `Voulez-vous vraiment supprimer l'archive de ${leaveData.userName} ?`);
         if (confirmed) {
             try {
                 const batch = writeBatch(db);
-                // Supprimer la demande de congé
                 batch.delete(leaveDocRef);
-                // Nettoyer le planning (en passant 'deleted', la fonction va juste supprimer les entrées)
                 await updatePlanningOnLeaveChange(docId, leaveData, 'deleted', batch);
-                // Commiter le tout
                 await batch.commit();
-                
                 loadAllRequests();
             } catch (error) {
-                console.error("Erreur de suppression:", error);
                 showInfoModal("Erreur", "La suppression a échoué.");
             }
         }
-    } else { // Logique pour Approuver/Refuser
-        // Ne rien faire si le statut est déjà le bon
+    } else { 
         if (leaveData.status === action) return;
         
+        button.disabled = true;
+        button.textContent = "Traitement...";
+
         try {
             const batch = writeBatch(db);
-            // Mettre à jour la demande de congé
             batch.update(leaveDocRef, { status: action });
-            // Mettre à jour le planning (ajoute ou supprime les entrées)
             await updatePlanningOnLeaveChange(docId, leaveData, action, batch);
-            // Commiter le tout
             await batch.commit();
-
             loadAllRequests();
         } catch (error) {
-            console.error("Erreur de mise à jour du statut:", error);
             showInfoModal("Erreur", "La mise à jour a échoué.");
+            button.disabled = false;
         }
     }
 }

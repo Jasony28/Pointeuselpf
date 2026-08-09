@@ -1,5 +1,17 @@
 export const updatesLog = [
     {
+        version: 'v3.6.8',
+        date: '9 août 2026',
+        changes: [
+            "🔒 **Confidentialité & Vie Privée (RGPD)**",
+            "Les motifs de vos absences (Médical, Familial, Autre...) sont désormais strictement confidentiels. Vos collègues verront uniquement la mention neutre \"Absent(e)\" dans le planning de l'équipe. Seul l'administrateur et vous-même pouvez voir la vraie raison.",
+            "📅 **Règle stricte des 7 jours**",
+            "Le système de demande de congés a été mis à jour. Le calendrier bloque désormais automatiquement les 7 prochains jours. N'oubliez pas d'anticiper vos demandes !",
+            "👑 **Interface d'administration repensée**",
+            "L'écran de validation des congés a été totalement transformé avec un tableau de bord à double colonne (Demandes urgentes à traiter / Historique récent) pour une gestion beaucoup plus fluide."
+        ]
+    },
+    {
         version: 'v3.6.7',
         date: '6 août 2026',
         changes: [
