@@ -63,6 +63,15 @@ export async function render() {
                 </div>
             </div>
 
+            <!-- BLOC INSTALLATION APP -->
+            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="text-xl font-semibold mb-4 border-b pb-2" style="color: var(--color-text-base); border-color: var(--color-border);">📱 Installer l'application</h3>
+                <p class="text-sm mb-4" style="color: var(--color-text-muted);">Installez la pointeuse directement sur votre écran d'accueil pour y accéder en 1 clic, comme une vraie application !</p>
+                <button id="installAppBtn" class="w-full text-white font-bold py-3 rounded-lg transition-transform hover:scale-105 shadow-md flex items-center justify-center gap-2" style="background-color: var(--color-primary);">
+                    ⬇️ Installer sur l'écran d'accueil
+                </button>
+            </div>
+
             <!-- Thèmes -->
             <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                 <h3 class="text-xl font-semibold mb-4 border-b pb-2" style="color: var(--color-text-base); border-color: var(--color-border);">🎨 Thème de l'application</h3>
@@ -145,6 +154,45 @@ function setupEventListeners() {
             }
         }
     };
+
+    // --- INSTALLATION PWA ---
+    const installBtn = document.getElementById('installAppBtn');
+    if (installBtn) {
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+        
+        if (isStandalone) {
+            installBtn.innerHTML = "✅ Application déjà installée";
+            installBtn.classList.remove('hover:scale-105');
+            installBtn.style.backgroundColor = '#16a34a'; 
+            installBtn.disabled = true;
+            installBtn.style.opacity = '0.7';
+        } else {
+            installBtn.addEventListener('click', async () => {
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+                
+                if (isIOS) {
+                    showInfoModal(
+                        "Installation sur iPhone/iPad 🍏", 
+                        "Apple n'autorise pas l'installation en 1 clic.\n\nPour l'installer :\n1️⃣ Appuyez sur le bouton de Partage (le carré avec une flèche) au centre de la barre du bas dans Safari.\n2️⃣ Faites défiler et appuyez sur 'Sur l'écran d'accueil'.\n3️⃣ Appuyez sur 'Ajouter' en haut à droite."
+                    );
+                } else if (window.deferredPrompt) {
+                    window.deferredPrompt.prompt();
+                    const { outcome } = await window.deferredPrompt.userChoice;
+                    if (outcome === 'accepted') {
+                        installBtn.innerHTML = "✅ Application installée";
+                        installBtn.style.backgroundColor = '#16a34a';
+                        installBtn.disabled = true;
+                    }
+                    window.deferredPrompt = null;
+                } else {
+                    showInfoModal(
+                        "Information", 
+                        "Pour installer l'application, ouvrez le menu de votre navigateur (les 3 petits points) et choisissez 'Ajouter à l'écran d'accueil' ou 'Installer l'application'."
+                    );
+                }
+            });
+        }
+    }
 
     // --- SÉCURITÉ : MOT DE PASSE ---
     document.getElementById('changePasswordBtn').onclick = async () => {

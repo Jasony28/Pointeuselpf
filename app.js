@@ -1,10 +1,18 @@
 import { updatesLog } from './modules/updates-data.js';
 
-const APP_VERSION = 'v3.6.8'; 
+const APP_VERSION = 'v3.6.9'; 
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp, updateDoc, deleteField, initializeFirestore, CACHE_SIZE_UNLIMITED } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+
+// --- CAPTURE DE L'ÉVÉNEMENT D'INSTALLATION PWA ---
+window.deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault(); // Empêche l'affichage de la bannière automatique
+    window.deferredPrompt = e; // Sauvegarde pour notre bouton dans les paramètres
+});
+// -------------------------------------------------
 
 export const themes = {
     neutre: { name: 'Neutre', preview: '#e2e8f0', colors: { '--color-primary': '#475569', '--color-primary-hover': '#334155', '--color-background': '#f1f5f9', '--color-surface': '#ffffff', '--color-text-base': '#0f172a', '--color-text-muted': '#475569', '--color-border': '#e2e8f0' } },
@@ -108,6 +116,7 @@ const userTabs = [
     { id: 'user-dashboard', name: 'Planning' },
     { id: 'user-leave', name: 'Mes Congés' },
     { id: 'chantiers', name: 'Infos Chantiers' },
+    { id: 'user-chat', name: 'Messagerie' },
     { id: 'user-history', name: 'Mon Historique' },
     { id: 'user-stats', name: 'Mes Stats' },
     { id: 'settings', name: 'Paramètres' },
@@ -164,7 +173,7 @@ function setupNavigation() {
     const switchBtn = document.getElementById('switchViewBtn');
     if (isAdmin) {
         switchBtn.classList.remove('hidden');
-        switchBtn.textContent = isMasqueradingAsUser ? 'Vue Admin' : 'Vue Employé';
+        switchBtn.textContent = isMasqueradingAsUser ? 'Vue Employé' : 'Vue Admin'; // Mettre à jour l'étiquette selon l'état inverse pour clarté
         switchBtn.onclick = toggleView;
     } else {
         switchBtn.classList.add('hidden');

@@ -1,5 +1,12 @@
 export const updatesLog = [
     {
+        version: 'v3.6.9',
+        date: '20 octobre 2026',
+        changes: ["📱 **Installation de l'application facilitée**",
+            "Un nouveau bouton a été ajouté dans vos Paramètres ! Vous pouvez désormais installer la pointeuse directement sur votre écran d'accueil (Android et iPhone) pour y accéder en un clic comme une vraie application.",
+            ]
+            },
+    {
         version: 'v3.6.8',
         date: '9 août 2026',
         changes: [
