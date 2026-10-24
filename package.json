@@ -1,0 +1,21 @@
+{
+  "name": "pointeuse-lpf",
+  "version": "3.7.1",
+  "private": true,
+  "description": "Pointeuse LPF — application web + applis iPhone / Android (Capacitor)",
+  "scripts": {
+    "build": "node scripts/build-www.mjs",
+    "ios:init": "npm run build && npx cap add ios",
+    "ios": "npm run build && npx cap sync ios && npx cap open ios",
+    "android:init": "npm run build && npx cap add android",
+    "android": "npm run build && npx cap sync android && npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0"
+  }
+}

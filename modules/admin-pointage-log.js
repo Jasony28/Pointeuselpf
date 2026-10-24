@@ -6,7 +6,7 @@ export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-5xl mx-auto space-y-6">
             <div>
-                <h2 class="text-2xl font-bold">🕵️‍♂️ Journal d'Audit des Pointages</h2>
+                <h2 class="text-2xl font-bold">Journal d'Audit des Pointages</h2>
                 <p class="text-gray-600">Consultez l'historique détaillé de chaque pointage. Cliquez sur une entrée pour voir ses logs.</p>
             </div>
             <div class="bg-white p-4 rounded-lg shadow-sm">

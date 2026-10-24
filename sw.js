@@ -4,12 +4,13 @@ const { precaching, routing, strategies, core } = workbox;
 core.setCacheNameDetails({ prefix: 'pointeuse-lpf-cache' });
 
 // Version synchronisée avec app.js
-const APP_VERSION = 'v3.6.9'; // <--- CHANGEMENT ICI
+const APP_VERSION = 'v3.7.3'; // <--- CHANGEMENT ICI
 
 precaching.precacheAndRoute([
     { url: './', revision: APP_VERSION },
     { url: 'index.html', revision: APP_VERSION },
     { url: 'app.js', revision: APP_VERSION },
+    { url: 'styles/app.css', revision: APP_VERSION },
     { url: 'manifest.json', revision: APP_VERSION },
     
     // Modules principaux
@@ -25,6 +26,8 @@ precaching.precacheAndRoute([
     { url: 'modules/user-leave.js', revision: APP_VERSION },
     { url: 'modules/user-stats.js', revision: APP_VERSION },
     { url: 'modules/user-chat.js', revision: APP_VERSION }, // <--- AJOUT IMPORTANT DU FICHIER CHAT
+    { url: 'modules/user-route.js', revision: APP_VERSION },
+    { url: 'modules/route-planner.js', revision: APP_VERSION },
 
     // Modules Admin
     { url: 'modules/admin-chantiers.js', revision: APP_VERSION },
@@ -58,10 +61,17 @@ routing.registerRoute(
     })
 );
 
-// Stratégie pour les autres ressources CDN
+// Bibliothèques externes (Firebase, Tailwind, Chart.js, PDF…) : gardées sur le téléphone pour démarrer sans réseau
+const LIB_HOSTS = ['www.gstatic.com', 'cdn.tailwindcss.com', 'cdn.jsdelivr.net', 'unpkg.com', 'storage.googleapis.com', 'cdnjs.cloudflare.com'];
 routing.registerRoute(
-    ({ request }) => ['script', 'style'].includes(request.destination) && request.url.includes('cdn'),
+    ({ url }) => LIB_HOSTS.includes(url.hostname),
     new strategies.StaleWhileRevalidate({ cacheName: 'cdn-assets' })
+);
+
+// Fichiers de l'appli non listés plus haut (autres modules, images) : gardés après la première visite
+routing.registerRoute(
+    ({ url, request }) => url.origin === self.location.origin && ['script', 'style', 'image'].includes(request.destination),
+    new strategies.StaleWhileRevalidate({ cacheName: 'app-files' })
 );
 
 self.addEventListener('install', () => {

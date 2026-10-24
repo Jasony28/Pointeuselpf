@@ -5,7 +5,7 @@ export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-6xl mx-auto space-y-6">
             <div class="mb-8">
-                <h2 class="text-3xl font-black tracking-tight" style="color: var(--color-text-base);">📬 Validation des Congés</h2>
+                <h2 class="text-3xl font-black tracking-tight" style="color: var(--color-text-base);">Validation des Congés</h2>
                 <p class="text-lg mt-1" style="color: var(--color-text-muted);">Gérez les demandes de votre équipe en un coup d'œil.</p>
             </div>
             

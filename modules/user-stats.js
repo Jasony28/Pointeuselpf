@@ -17,7 +17,7 @@ export async function render() {
             
             <!-- SECTION PROFIL UTILISATEUR -->
             <div>
-                <h1 class="text-2xl font-bold mb-4">👤 Mes Informations</h1>
+                <h1 class="text-2xl font-bold mb-4">Mes Informations</h1>
                 <div id="user-profile-container" class="p-6 rounded-xl shadow-sm transition-all duration-300" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                     <p class="text-center text-sm" style="color: var(--color-text-muted);">Chargement du profil...</p>
                 </div>
@@ -26,12 +26,12 @@ export async function render() {
             <!-- SECTION STATISTIQUES -->
             <div>
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-                    <h1 class="text-2xl font-bold">📊 Mes Statistiques</h1>
+                    <h1 class="text-2xl font-bold">Mes Statistiques</h1>
                     
                     <div class="flex items-center gap-2">
-                        <button id="stats-prev-month" class="px-3 py-1 rounded-lg hover:opacity-80 font-bold" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">&lt;</button>
+                        <button id="stats-prev-month" class="nav-arrow" aria-label="Précédent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
                         <span id="stats-month-display" class="font-semibold text-lg w-32 text-center" style="color: var(--color-primary);"></span>
-                        <button id="stats-next-month" class="px-3 py-1 rounded-lg hover:opacity-80 font-bold" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">&gt;</button>
+                        <button id="stats-next-month" class="nav-arrow" aria-label="Suivant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
                     </div>
                 </div>
 
@@ -262,6 +262,7 @@ async function loadMonthlyStats() {
 
         querySnapshot.forEach(doc => {
             const p = doc.data();
+            if (!p.endTime) return; // pointage en cours : pas encore de durée (évitait un total "NaN")
             const durationMs = (new Date(p.endTime) - new Date(p.timestamp)) - (p.pauseDurationMs || 0);
             
             if (durationMs > 0) {

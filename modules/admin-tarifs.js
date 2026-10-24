@@ -9,7 +9,7 @@ export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto space-y-8">
             <div>
-                <h2 class="text-2xl font-bold mb-2">💰 Gestion des Taux Horaires</h2>
+                <h2 class="text-2xl font-bold mb-2">Gestion des Taux Horaires</h2>
                 <p class="text-gray-600">Définissez ici le coût horaire de chaque employé et le tarif de facturation pour chaque chantier.</p>
             </div>
 

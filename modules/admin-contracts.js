@@ -6,7 +6,7 @@ export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-7xl mx-auto space-y-6">
             <div>
-                <h2 class="text-3xl font-bold tracking-tight">👤 Fiches de l'Équipe</h2>
+                <h2 class="text-3xl font-bold tracking-tight">Fiches de l'Équipe</h2>
                 <p class="text-lg mt-1" style="color: var(--color-text-muted);">
                     Consultez et modifiez les informations de chaque membre, y compris l'historique des contrats.
                 </p>

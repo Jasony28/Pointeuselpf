@@ -12,7 +12,7 @@ export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto space-y-8">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <h2 class="text-2xl font-bold" style="color: var(--color-text-base);">👥 Gestion de l'Équipe</h2>
+                <h2 class="text-2xl font-bold" style="color: var(--color-text-base);">Gestion de l'Équipe</h2>
                 <button id="btn-open-transfer" class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-4 py-2 rounded-lg text-sm transition-colors shadow-sm">
                     🔄 Transférer / Dupliquer Données
                 </button>
@@ -44,7 +44,7 @@ export async function render() {
 
         <div id="transferModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4">
             <div class="p-6 rounded-lg shadow-xl w-full max-w-md space-y-4" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <h3 class="text-xl font-bold" style="color: var(--color-text-base);">🔄 Transférer ou Dupliquer des données</h3>
+                <h3 class="text-xl font-bold" style="color: var(--color-text-base);">Transférer ou Dupliquer des données</h3>
                 <p class="text-xs" style="color: var(--color-text-muted);">Copie ou déplace les pointages et plannings d'un employé vers un autre.</p>
                 
                 <div class="space-y-3 text-sm">

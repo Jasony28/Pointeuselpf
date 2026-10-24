@@ -15,7 +15,7 @@ export async function render() {
         <div class="max-w-7xl mx-auto space-y-6">
             <div class="bg-white p-4 rounded-lg shadow-sm">
                 <div class="flex flex-wrap justify-between items-center gap-4 mb-4">
-                    <h2 class="text-3xl font-bold text-gray-800">📊 Tableau de Bord Analytique</h2>
+                    <h2 class="text-3xl font-bold text-gray-800">Tableau de Bord Analytique</h2>
                     <div class="flex items-center gap-2 p-1 bg-gray-100 rounded-lg">
                         <button data-filter="week" class="filter-btn px-3 py-1 text-sm rounded-md bg-white shadow">Semaine</button>
                         <button data-filter="month" class="filter-btn px-3 py-1 text-sm rounded-md">Mois</button>
@@ -50,7 +50,7 @@ export async function render() {
             <div class="bg-white p-6 rounded-lg shadow-sm"><h3 class="text-xl font-semibold mb-4">Heures par Employé</h3><canvas id="userBarChart"></canvas></div>
 
             <div class="bg-white p-6 rounded-lg shadow-sm">
-                <h3 class="text-xl font-semibold mb-4">💰 Analyse de Rentabilité par Chantier</h3>
+                <h3 class="text-xl font-semibold mb-4">Analyse de Rentabilité par Chantier</h3>
                 <div id="profitability-list" class="space-y-3"></div>
             </div>
             

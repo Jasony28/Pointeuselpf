@@ -1,14 +1,25 @@
-import { doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, pageContent, isAdmin, showInfoModal } from "../app.js";
+import { doc, updateDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { db, pageContent, isAdmin, showInfoModal, showToast, currentUser } from "../app.js";
 import { getActiveChantiers } from "./data-service.js";
+import { getWeekDateRange } from "./utils.js";
 
 let chantiersCache = [];
+let myPlanning = { today: new Set(), week: new Set() }; // noms des chantiers où je suis planifié
+
+const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 export async function render() {
     pageContent.innerHTML = `
-        <div class="max-w-4xl mx-auto">
-            <h2 class="text-2xl font-bold mb-4">📄 Liste des Chantiers Actifs</h2>
-            <div id="chantiers-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        <div class="max-w-4xl mx-auto space-y-4">
+            <div>
+                <h2 class="text-2xl font-bold">Liste des Chantiers Actifs</h2>
+                <p class="mt-1 text-sm" style="color: var(--color-text-muted);">Adresses, codes d'accès et consignes de chaque chantier.</p>
+            </div>
+            <div class="hours-search">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <input type="search" id="chantier-search-input" placeholder="Rechercher un chantier ou une adresse…" autocomplete="off">
+            </div>
+            <div id="chantiers-list" class="space-y-5"></div>
         </div>
         
         <div id="detailsModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-20 p-4">
@@ -20,7 +31,7 @@ export async function render() {
                 </div>
                 <div>
                     <h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">ADRESSE</h4>
-                    <p id="modalChantierAddress" class="hover:underline text-lg cursor-pointer" style="color: var(--color-primary);"></p>
+                    <p id="modalChantierAddress" class="site-address-link text-lg cursor-pointer" style="color: var(--color-primary);"></p>
                 </div>
                 <div><h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">HEURES PRÉVUES</h4><p id="modalChantierHours" class="text-lg"></p></div>
                 <div><h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">CODES & ACCÈS</h4><div id="modalChantierKeybox" class="text-lg"></div></div>
@@ -75,35 +86,110 @@ export async function render() {
 
 async function loadChantiersList() {
     const listContainer = document.getElementById('chantiers-list');
-    listContainer.innerHTML = `<p class="col-span-full text-center" style="color: var(--color-text-muted);">Chargement...</p>`;
+    listContainer.innerHTML = `<div class="site-grid">${'<div class="site-card is-loading"></div>'.repeat(4)}</div>`;
     try {
-        chantiersCache = await getActiveChantiers();
+        const [chantiers] = await Promise.all([getActiveChantiers(), loadMyPlanning()]);
+        chantiersCache = chantiers;
         displayChantierCards();
     } catch (error) {
         console.error("Erreur de chargement des chantiers :", error);
-        listContainer.innerHTML = '<p class="col-span-full text-center text-red-500">Erreur de chargement des chantiers.</p>';
+        listContainer.innerHTML = '<p class="hours-empty">Erreur de chargement des chantiers.</p>';
     }
+}
+
+// Chantiers où l'utilisateur est planifié aujourd'hui / cette semaine (affichés en premier)
+async function loadMyPlanning() {
+    myPlanning = { today: new Set(), week: new Set() };
+    if (!currentUser) return;
+    try {
+        const { startOfWeek, endOfWeek } = getWeekDateRange(0);
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+        const snapshot = await getDocs(query(collection(db, "planning"),
+            where("date", ">=", startOfWeek.toISOString().split('T')[0]),
+            where("date", "<=", endOfWeek.toISOString().split('T')[0])));
+        snapshot.forEach(d => {
+            const task = d.data();
+            if (!(task.teamNames || []).includes(currentUser.displayName)) return;
+            myPlanning.week.add(task.chantierName);
+            if (task.date === todayStr) myPlanning.today.add(task.chantierName);
+        });
+    } catch (error) {
+        console.error("Planning indisponible pour le tri des chantiers :", error);
+    }
+}
+
+function createChantierCard(chantier) {
+    const card = document.createElement('div');
+    card.className = 'site-card';
+    card.setAttribute('role', 'button');
+    card.tabIndex = 0;
+
+    const codesCount = Array.isArray(chantier.keyboxCodes) ? chantier.keyboxCodes.length : 0;
+    const badge = myPlanning.today.has(chantier.name)
+        ? '<span class="site-badge is-today">Aujourd\'hui</span>'
+        : myPlanning.week.has(chantier.name) ? '<span class="site-badge">Cette semaine</span>' : '';
+
+    card.innerHTML = `
+        <div class="site-card-head">
+            <h3 class="site-card-name">${escapeHTML(chantier.name)}${chantier.isTva ? '<span class="site-tva">TVA</span>' : ''}</h3>
+            ${badge}
+        </div>
+        <p class="site-card-address">${chantier.address ? escapeHTML(chantier.address) : '<em>Adresse non renseignée</em>'}</p>
+        <div class="site-card-foot">
+            <span class="site-card-meta">
+                ${chantier.totalHeuresPrevues > 0 ? `<span>${chantier.totalHeuresPrevues} h prévues</span>` : ''}
+                ${codesCount ? `<span>${codesCount} code${codesCount > 1 ? 's' : ''}</span>` : ''}
+                ${chantier.additionalInfo ? '<span>Consignes</span>' : ''}
+            </span>
+            ${chantier.address ? `<button type="button" class="site-nav-btn" data-nav>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 11 19-9-9 19-2-8-8-2z"/></svg>Itinéraire</button>` : ''}
+        </div>`;
+
+    card.onclick = (e) => {
+        if (e.target.closest('[data-nav]')) { showNavigationChoice(chantier.address); return; }
+        showDetailsModal(chantier.id);
+    };
+    card.onkeydown = (e) => { if (e.key === 'Enter') showDetailsModal(chantier.id); };
+    return card;
 }
 
 function displayChantierCards() {
     const listContainer = document.getElementById('chantiers-list');
+    if (!listContainer) return;
     listContainer.innerHTML = '';
     if (chantiersCache.length === 0) {
-        listContainer.innerHTML = `<p class="col-span-full text-center" style="color: var(--color-text-muted);">Aucun chantier actif trouvé.</p>`;
+        listContainer.innerHTML = `<p class="hours-empty">Aucun chantier actif trouvé.</p>`;
         return;
     }
-    chantiersCache.forEach(chantier => {
-        const card = document.createElement('div');
-        card.className = 'p-4 rounded-lg shadow-sm cursor-pointer hover:shadow-md transition-shadow';
-        card.style.backgroundColor = 'var(--color-surface)';
-        card.style.border = '1px solid var(--color-border)';
-        
-        const tvaBadge = chantier.isTva ? `<span class="ml-2 text-[9px] bg-blue-100 text-blue-800 px-1 rounded font-bold align-middle">TVA</span>` : '';
-        card.innerHTML = `<h3 class="font-bold text-lg truncate flex items-center">${chantier.name}${tvaBadge}</h3>`;
-        
-        card.onclick = () => showDetailsModal(chantier.id);
-        listContainer.appendChild(card);
-    });
+
+    const searchTerm = (document.getElementById('chantier-search-input')?.value || '').toLowerCase().trim();
+    const matches = chantiersCache.filter(c =>
+        c.name.toLowerCase().includes(searchTerm) || (c.address || '').toLowerCase().includes(searchTerm)
+    );
+    if (matches.length === 0) {
+        listContainer.innerHTML = `<p class="hours-empty">Aucun chantier ne correspond à votre recherche.</p>`;
+        return;
+    }
+
+    // Mes chantiers de la semaine (aujourd'hui d'abord), puis tous les autres
+    const mine = matches.filter(c => myPlanning.week.has(c.name))
+        .sort((a, b) => myPlanning.today.has(b.name) - myPlanning.today.has(a.name));
+    const others = matches.filter(c => !myPlanning.week.has(c.name));
+
+    const addSection = (title, list) => {
+        if (!list.length) return;
+        const section = document.createElement('section');
+        section.innerHTML = `<h3 class="kpi-label mb-2">${title} · ${list.length}</h3>`;
+        const grid = document.createElement('div');
+        grid.className = 'site-grid';
+        list.forEach(chantier => grid.appendChild(createChantierCard(chantier)));
+        section.appendChild(grid);
+        listContainer.appendChild(section);
+    };
+    addSection('Mes chantiers cette semaine', mine);
+    addSection(mine.length ? 'Tous les autres chantiers' : 'Tous les chantiers', others);
 }
 
 function showDetailsModal(chantierId) {
@@ -137,11 +223,26 @@ function showDetailsModal(chantierId) {
     const keyboxContainer = document.getElementById('modalChantierKeybox');
     keyboxContainer.innerHTML = '';
     if (Array.isArray(chantier.keyboxCodes) && chantier.keyboxCodes.length > 0) {
+        // Chaque code est une pastille : un appui le copie dans le presse-papiers
         const ul = document.createElement('ul');
-        ul.className = 'list-disc list-inside';
+        ul.className = 'code-chips';
         chantier.keyboxCodes.forEach(code => {
             const li = document.createElement('li');
-            li.textContent = code;
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'code-chip';
+            chip.title = 'Copier';
+            chip.innerHTML = `<span></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+            chip.querySelector('span').textContent = code;
+            chip.onclick = async () => {
+                try {
+                    await navigator.clipboard.writeText(code);
+                    showToast(`Code copié : ${code}`, 'success');
+                } catch {
+                    showToast(code, 'info');
+                }
+            };
+            li.appendChild(chip);
             ul.appendChild(li);
         });
         keyboxContainer.appendChild(ul);
@@ -213,6 +314,9 @@ function setupKeyCodeHandlers(inputId, addButtonId, listId) {
 }
 
 function setupEventListeners() {
+    const searchInput = document.getElementById('chantier-search-input');
+    if (searchInput) searchInput.addEventListener('input', displayChantierCards);
+
     const closeBtn = document.getElementById('closeDetailsBtn');
     if(closeBtn) closeBtn.onclick = () => document.getElementById('detailsModal').classList.add('hidden');
     

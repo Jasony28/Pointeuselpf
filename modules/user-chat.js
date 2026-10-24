@@ -1,5 +1,5 @@
 // AJOUT DE 'showConfirmationModal' DANS LES IMPORTS
-import { db, currentUser, showConfirmationModal } from '../app.js'; 
+import { db, currentUser, showConfirmationModal, showInfoModal } from '../app.js';
 import { 
     collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, 
     getDocs, doc, updateDoc, setDoc, increment, arrayUnion 
@@ -7,6 +7,12 @@ import {
 
 let activeChatListener = null;
 let conversationsListener = null;
+
+// Appelé par app.js quand on quitte la page : coupe les écoutes temps réel de la messagerie
+export function cleanup() {
+    if (activeChatListener) { activeChatListener(); activeChatListener = null; }
+    if (conversationsListener) { conversationsListener(); conversationsListener = null; }
+}
 
 export async function render() {
     const container = document.getElementById('page-content');
@@ -322,7 +328,7 @@ async function startConversation(targetUserId, targetUserName) {
 
     } catch (error) {
         console.error(error);
-        alert("Impossible de lancer la conversation.");
+        showInfoModal("Erreur", "Impossible de lancer la conversation.");
     }
 }
 

@@ -2,229 +2,262 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Pointeuse Lpf</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Pointeuse LPF</title>
+    <meta name="description" content="Pointage, planification et suivi des chantiers — Les Petites Fées.">
     <link rel="manifest" href="./manifest.json">
-    <link rel="icon" href="./favicon.ico" type="image/x-icon">
+    <link rel="icon" href="./icons/icon-192x192.png" type="image/png">
     <link rel="apple-touch-icon" href="./icons/icon-192x192.png">
-    <meta name="theme-color" content="#4f46e5"/>
+    <meta name="theme-color" content="#0f172a"/>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+    <script>
+        // Capturé le plus tôt possible : le navigateur n'envoie qu'une fois son "installation possible"
+        window.deferredPrompt = null;
+        window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); window.deferredPrompt = e; });
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.css" rel="stylesheet" />
-    <style>
-        :root {
-            --color-primary: #4b5563;
-            --color-primary-hover: #374151;
-            --color-background: #f3f4f6;
-            --color-surface: #ffffff;
-            --color-text-base: #1f2937;
-            --color-text-muted: #6b7280;
-            --color-border: #e5e7eb;
-        }
-        body { 
-            font-family: 'Inter', sans-serif; 
-            overscroll-behavior-y: contain;
-            background-color: var(--color-background);
-            background-image: var(--bg-image, none);
-            background-size: var(--bg-size, auto);
-            background-position: var(--bg-position, 0 0);
-            background-attachment: var(--bg-attachment, scroll);
-            background-repeat: var(--bg-repeat, repeat);
-            color: var(--color-text-base);
-            transition: background-color 0.3s, color 0.3s;
-        }
-        [style*="var(--color-surface)"], nav, #update-toast {
-            backdrop-filter: var(--glass-blur, none);
-            -webkit-backdrop-filter: var(--glass-blur, none);
-            box-shadow: var(--glass-shadow, none) !important;
-        }
-        .hidden-by-default { display: none; }
-        .nav-active {
-            color: var(--color-primary) !important;
-            font-weight: 600;
-        }
-        #main-nav-list a {
-            color: var(--color-text-muted);
-        }
-        #main-nav-list a:hover {
-            color: var(--color-text-base);
-            background-color: rgba(0,0,0,0.05);
-        }
-        #page-content {
-            transition: opacity 0.2s ease-in-out;
-        }
-        .page-exit {
-            opacity: 0;
-        }
-        #update-toast {
-            position: fixed;
-            bottom: 1.5rem;
-            right: 1.5rem;
-            background-color: var(--color-surface);
-            color: var(--color-text-base);
-            padding: 1rem 1.5rem;
-            border-radius: 0.5rem;
-            border: 1px solid var(--color-border);
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            transform: translateY(200%);
-            transition: transform 0.5s ease-in-out;
-            z-index: 100;
-        }
-        #update-toast.show {
-            transform: translateY(0);
-        }
-    </style>
+    <script>
+        // Thème Tailwind aligné sur le design system (styles/app.css)
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+                    },
+                    colors: {
+                        gray: {
+                            50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1', 400: '#94a3b8',
+                            500: '#64748b', 600: '#475569', 700: '#334155', 800: '#1e293b', 900: '#0f172a',
+                        },
+                        yellow: {
+                            50: '#fffbeb', 100: '#fef3c7', 200: '#fde68a', 300: '#fcd34d', 400: '#fbbf24',
+                            500: '#f59e0b', 600: '#d97706', 700: '#b45309', 800: '#92400e', 900: '#78350f',
+                        },
+                        primary: 'var(--color-primary)',
+                    },
+                    borderRadius: { DEFAULT: '6px', md: '7px', lg: '10px', xl: '14px', '2xl': '18px' },
+                    zIndex: { 60: '60' },
+                },
+            },
+        };
+    </script>
+    <link rel="stylesheet" href="./styles/app.css">
 </head>
 <body>
-    <div id="app-loader" class="flex flex-col justify-center items-center min-h-screen text-center p-4">
-        <svg class="animate-spin h-8 w-8 mb-4" style="color: var(--color-primary);" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-        <p class="text-lg font-semibold" style="color: var(--color-text-muted);">Chargement de l'application...</p>
+    <!-- Chargement -->
+    <div id="app-loader" class="app-loader">
+        <div class="spinner" role="status" aria-label="Chargement"></div>
+        <p>Chargement…</p>
     </div>
+
+    <!-- Authentification -->
     <div id="auth-container" class="hidden-by-default">
-        <div class="flex flex-col items-center justify-center px-6 py-8 mx-auto md:h-screen lg:py-0">
-            <div class="w-full rounded-lg md:mt-0 sm:max-w-md xl:p-0" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <div class="p-6 space-y-4 md:space-y-6 sm:p-8">
-                    <form id="login-form" class="space-y-4 md:space-y-6">
-                        <h1 class="text-xl font-bold leading-tight tracking-tight text-center md:text-2xl">Connectez-vous</h1>
+        <div class="auth-screen">
+            <aside class="auth-brand">
+                <div class="auth-brand-top">
+                    <span class="brand-mark" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                    </span>
+                    Pointeuse LPF
+                </div>
+                <div class="auth-pitch">
+                    <img src="./icons/assets/logo.png" alt="Les Petites Fées — Service de nettoyage" class="auth-logo">
+                    <h2>Le temps de vos équipes,<br>parfaitement maîtrisé.</h2>
+                    <p>Pointage, planification des chantiers et suivi des heures réunis dans un seul outil.</p>
+                    <ul class="auth-features">
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Pointage en temps réel, pauses incluses</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Planning hebdomadaire par chantier</li>
+                        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Rapports d'heures et de trajets</li>
+                    </ul>
+                </div>
+                <p class="auth-brand-foot">© Les Petites Fées · Service de nettoyage</p>
+            </aside>
+
+            <main class="auth-panel">
+                <div class="auth-card">
+                    <div class="auth-mobile-brand">
+                        <span class="brand-mark" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                        </span>
+                        Pointeuse LPF
+                    </div>
+
+                    <form id="login-form">
                         <div>
-                            <label for="login-email" class="block mb-2 text-sm font-medium">Email</label>
-                            <input type="email" id="login-email" class="border sm:text-sm rounded-lg block w-full p-2.5" style="background-color: var(--color-background); border-color: var(--color-border);" placeholder="nom@email.com" required>
+                            <h1 class="auth-title">Connexion</h1>
+                            <p class="auth-subtitle">Accédez à votre espace de travail.</p>
                         </div>
-                        <div>
-                            <label for="login-password" class="block mb-2 text-sm font-medium">Mot de passe</label>
-                            <input type="password" id="login-password" placeholder="••••••••" class="border sm:text-sm rounded-lg block w-full p-2.5" style="background-color: var(--color-background); border-color: var(--color-border);" required>
+                        <div class="field">
+                            <label for="login-email" class="field-label">Adresse e-mail</label>
+                            <input type="email" id="login-email" class="input" placeholder="nom@entreprise.com" autocomplete="email" required>
                         </div>
-                        <div class="flex items-center justify-end">
-                            <a href="#" id="show-reset-link" class="text-sm font-medium hover:underline" style="color: var(--color-primary);">Mot de passe oublié ?</a>
+                        <div class="field">
+                            <div class="field-row">
+                                <label for="login-password" class="field-label">Mot de passe</label>
+                                <a href="#" id="show-reset-link" class="link" style="font-size: 0.8125rem;">Mot de passe oublié ?</a>
+                            </div>
+                            <input type="password" id="login-password" class="input" placeholder="••••••••" autocomplete="current-password" required>
                         </div>
-                        <button type="submit" class="w-full text-white font-medium rounded-lg text-sm px-5 py-2.5 text-center" style="background-color: var(--color-primary);">Se connecter</button>
-                        <p class="text-sm font-light" style="color: var(--color-text-muted);">
-                            Pas encore de compte ? <a href="#" id="show-register-link" class="font-medium hover:underline" style="color: var(--color-primary);">Créez-en un</a>
-                        </p>
+                        <button type="submit" class="btn btn-primary btn-lg btn-block">Se connecter</button>
+                        <p class="auth-alt">Pas encore de compte ? <a href="#" id="show-register-link" class="link">Créer un compte</a></p>
                     </form>
-                    <form id="register-form" class="hidden space-y-4 md:space-y-6">
-                         <h1 class="text-xl font-bold leading-tight tracking-tight text-center md:text-2xl">Créer un compte</h1>
-                         <div>
-                            <label for="register-name" class="block mb-2 text-sm font-medium">Nom complet</label>
-                            <input type="text" id="register-name" class="border sm:text-sm rounded-lg block w-full p-2.5" style="background-color: var(--color-background); border-color: var(--color-border);" required>
-                        </div>
+
+                    <form id="register-form" hidden>
                         <div>
-                            <label for="register-email" class="block mb-2 text-sm font-medium">Email</label>
-                            <input type="email" id="register-email" placeholder="nom@email.com" class="border sm:text-sm rounded-lg block w-full p-2.5" style="background-color: var(--color-background); border-color: var(--color-border);" required>
+                            <h1 class="auth-title">Créer un compte</h1>
+                            <p class="auth-subtitle">Votre accès sera activé après validation par un administrateur.</p>
                         </div>
-                        <div>
-                            <label for="register-password" class="block mb-2 text-sm font-medium">Mot de passe</label>
-                            <input type="password" id="register-password" placeholder="••••••••" class="border sm:text-sm rounded-lg block w-full p-2.5" style="background-color: var(--color-background); border-color: var(--color-border);" required>
+                        <div class="field">
+                            <label for="register-name" class="field-label">Nom complet</label>
+                            <input type="text" id="register-name" class="input" placeholder="Prénom Nom" autocomplete="name" required>
                         </div>
-                        <button type="submit" class="w-full text-white font-medium rounded-lg text-sm px-5 py-2.5 text-center" style="background-color: var(--color-primary);">Créer le compte</button>
-                        <p class="text-sm font-light" style="color: var(--color-text-muted);">
-                            Déjà un compte ? <a href="#" id="show-login-link-from-register" class="font-medium hover:underline" style="color: var(--color-primary);">Se connecter</a>
-                        </p>
+                        <div class="field">
+                            <label for="register-email" class="field-label">Adresse e-mail</label>
+                            <input type="email" id="register-email" class="input" placeholder="nom@entreprise.com" autocomplete="email" required>
+                        </div>
+                        <div class="field">
+                            <label for="register-password" class="field-label">Mot de passe</label>
+                            <input type="password" id="register-password" class="input" placeholder="6 caractères minimum" autocomplete="new-password" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-lg btn-block">Créer le compte</button>
+                        <p class="auth-alt">Déjà inscrit ? <a href="#" id="show-login-link-from-register" class="link">Se connecter</a></p>
                     </form>
-                    <form id="reset-form" class="hidden space-y-4 md:space-y-6">
-                         <h1 class="text-xl font-bold leading-tight tracking-tight text-center md:text-2xl">Mot de passe oublié</h1>
-                         <p class="text-sm text-center" style="color: var(--color-text-muted);">Entrez votre email pour recevoir un lien.</p>
+
+                    <form id="reset-form" hidden>
                         <div>
-                            <label for="reset-email" class="block mb-2 text-sm font-medium">Email</label>
-                            <input type="email" id="reset-email" class="border sm:text-sm rounded-lg block w-full p-2.5" style="background-color: var(--color-background); border-color: var(--color-border);" placeholder="nom@email.com" required>
+                            <h1 class="auth-title">Mot de passe oublié</h1>
+                            <p class="auth-subtitle">Saisissez votre e-mail, nous vous enverrons un lien de réinitialisation.</p>
                         </div>
-                        <button type="submit" class="w-full text-white font-medium rounded-lg text-sm px-5 py-2.5 text-center" style="background-color: var(--color-primary);">Envoyer le lien</button>
-                        <p class="text-sm font-light" style="color: var(--color-text-muted);">
-                            Retour à la <a href="#" id="show-login-link-from-reset" class="font-medium hover:underline" style="color: var(--color-primary);">connexion</a>
-                        </p>
+                        <div class="field">
+                            <label for="reset-email" class="field-label">Adresse e-mail</label>
+                            <input type="email" id="reset-email" class="input" placeholder="nom@entreprise.com" autocomplete="email" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-lg btn-block">Envoyer le lien</button>
+                        <p class="auth-alt"><a href="#" id="show-login-link-from-reset" class="link">← Retour à la connexion</a></p>
                     </form>
                 </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Compte en attente -->
+    <div id="pending-approval-container" class="hidden-by-default status-screen">
+        <div class="status-card">
+            <div class="status-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
             </div>
+            <h1>Compte en attente de validation</h1>
+            <p>Votre compte a bien été créé. Un administrateur doit maintenant valider votre accès.</p>
+            <button id="logoutPendingBtn" class="btn btn-secondary btn-block">Se déconnecter</button>
         </div>
     </div>
-    <div id="pending-approval-container" class="hidden-by-default min-h-screen flex items-center justify-center p-4">
-        <div class="rounded-xl p-8 w-full max-w-sm space-y-4 text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-            <h1 class="text-2xl font-bold">⌛ En attente d'approbation</h1>
-            <p style="color: var(--color-text-muted);">Votre compte a bien été créé. Un administrateur doit maintenant valider votre accès.</p>
-            <button id="logoutPendingBtn" class="text-white font-bold px-4 py-2 rounded-lg w-full transition-colors" style="background-color: var(--color-primary);">Se déconnecter</button>
-        </div>
-    </div>
-    <div id="app-container" class="hidden-by-default">
-        <nav class="sticky top-0 z-20" style="background-color: var(--color-surface); border-bottom: 1px solid var(--color-border);">
-            <div class="max-w-screen-xl flex flex-wrap items-center justify-between mx-auto p-4">
-                <a href="#" id="home-nav-link" class="flex items-center space-x-3">
-                    <span class="self-center text-2xl font-semibold whitespace-nowrap">Pointeuse Lpf</span>
-                </a>
-                <div class="flex items-center md:order-2 space-x-2 md:space-x-4">
-                    <button id="switchViewBtn" class="hidden text-sm px-3 py-1.5 rounded-md text-white" style="background-color: var(--color-primary);">Vue Admin</button>
-                    <span id="currentUserDisplay" class="text-sm hidden sm:inline" style="color: var(--color-text-muted);"></span>
-                    <span id="app-version-display" class="text-xs text-gray-400"></span>
-                    <button data-collapse-toggle="navbar-default" type="button" class="inline-flex items-center p-2 w-10 h-10 justify-center text-sm rounded-lg md:hidden focus:outline-none focus:ring-2" style="color: var(--color-text-muted); background-color: var(--color-background); border-color: var(--color-border);">
-                        <span class="sr-only">Ouvrir le menu principal</span>
-                        <svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 17 14"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1h15M1 7h15M1 13h15"/></svg>
-                    </button>
+
+    <!-- Application -->
+    <div id="app-container" class="hidden-by-default app-shell">
+        <aside id="sidebar" class="sidebar" aria-label="Navigation principale">
+            <a href="#" id="home-nav-link" class="sidebar-brand">
+                <span class="brand-mark" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                </span>
+                <span class="brand-text">
+                    <span class="brand-name">Pointeuse LPF</span>
+                    <span class="brand-sub">Les Petites Fées</span>
+                </span>
+            </a>
+
+            <div class="sidebar-scroll">
+                <div id="switchViewBtn" class="workspace-switch" role="group" aria-label="Espace de travail" hidden>
+                    <button type="button" data-view="user" aria-pressed="true">Employé</button>
+                    <button type="button" data-view="admin" aria-pressed="false">Administration</button>
                 </div>
-                <div class="hidden w-full md:block md:w-auto" id="navbar-default">
-                  <ul id="main-nav-list" class="font-medium flex flex-col p-4 md:p-0 mt-4 border rounded-lg md:flex-row md:space-x-8 md:mt-0 md:border-0" style="background-color: transparent; border-color: transparent;">
-                  </ul>
+                <p id="nav-section-label" class="nav-section-label">Menu</p>
+                <nav>
+                    <ul id="main-nav-list" class="nav-list"></ul>
+                </nav>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="user-chip">
+                    <span id="user-avatar" class="avatar" aria-hidden="true"></span>
+                    <span class="user-chip-text">
+                        <span id="currentUserDisplay" class="user-chip-name"></span>
+                        <span class="user-chip-meta"><span id="user-role-display"></span> · <span id="app-version-display"></span></span>
+                    </span>
                 </div>
             </div>
-        </nav>
-        <main id="page-content" class="p-4 md:p-6"></main>
-    </div>
-    <div id="genericModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-60 p-4" role="dialog" aria-modal="true">
-        <div class="p-6 rounded-lg w-full max-w-sm text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-            <h3 id="modalTitle" class="text-xl font-bold mb-4"></h3>
-            <p id="modalMessage" class="mb-6" style="color: var(--color-text-muted);"></p>
-            <div id="modalActions" class="flex justify-center gap-4">
-                <button id="modalConfirmBtn" class="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2 rounded transition-colors">Confirmer</button>
-                <button id="modalCancelBtn" class="font-bold px-6 py-2 rounded transition-colors" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Annuler</button>
-            </div>
-        </div>
-    </div>
-    <div id="pinModal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" role="dialog" aria-modal="true">
-        <div class="p-6 rounded-lg w-full max-w-xs text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-            <h3 class="text-lg font-bold mb-4">Mode Confidentiel</h3>
-            <p class="mb-4" style="color: var(--color-text-muted);">Veuillez entrer le code PIN.</p>
-            <form id="pinForm">
-                <input type="password" id="pinInput" inputmode="numeric" pattern="[0-9]*" class="w-full border p-3 rounded text-center text-2xl tracking-[1em]" maxlength="4" required style="background-color: var(--color-background); border-color: var(--color-border);" />
-                <div class="flex justify-center gap-4 mt-6">
-                    <button type="button" id="pinCancelBtn" class="font-bold px-6 py-2 rounded transition-colors" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Annuler</button>
-                    <button type="submit" class="text-white font-bold px-6 py-2 rounded transition-colors" style="background-color: var(--color-primary);">Valider</button>
+        </aside>
+        <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
+
+        <div class="app-main">
+            <header class="topbar">
+                <div class="breadcrumb">
+                    <span id="breadcrumb-section" class="breadcrumb-section">Espace employé</span>
+                    <span class="breadcrumb-sep" aria-hidden="true">/</span>
+                    <span id="breadcrumb-page" class="breadcrumb-page"></span>
                 </div>
-            </form>
+                <div class="topbar-right">
+                    <span id="topbar-date" class="topbar-date"></span>
+                </div>
+            </header>
+            <main id="page-content"></main>
+        </div>
+
+        <!-- Barre d'onglets mobile -->
+        <nav id="bottom-nav" class="bottom-nav" aria-label="Navigation rapide"></nav>
+    </div>
+
+    <!-- Modale générique (info / confirmation) -->
+    <div id="genericModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal-panel">
+            <div class="modal-body">
+                <h3 id="modalTitle" class="modal-title"></h3>
+                <p id="modalMessage" class="modal-text"></p>
+            </div>
+            <div id="modalActions" class="modal-footer">
+                <button id="modalCancelBtn" class="btn btn-secondary">Annuler</button>
+                <button id="modalConfirmBtn" class="btn btn-danger">Confirmer</button>
+            </div>
         </div>
     </div>
-    <div id="updatesModal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4" role="dialog" aria-modal="true">
-        <div class="p-6 rounded-lg w-full max-w-lg max-h-[80vh] flex flex-col" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-            <div class="flex-shrink-0">
-                <h3 class="text-2xl font-bold mb-4">🎉 Nouveautés de l'application</h3>
+
+    <!-- Mode confidentiel -->
+    <div id="pinModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="pinModalTitle">
+        <form id="pinForm" class="modal-panel modal-panel-sm">
+            <div class="modal-body">
+                <h3 id="pinModalTitle" class="modal-title">Mode confidentiel</h3>
+                <p class="modal-text">Veuillez saisir le code PIN.</p>
+                <input type="password" id="pinInput" inputmode="numeric" pattern="[0-9]*" maxlength="4" class="input pin-input" autocomplete="off" required />
             </div>
-            <div id="updates-content" class="flex-grow overflow-y-auto pr-2 space-y-5">
+            <div class="modal-footer">
+                <button type="button" id="pinCancelBtn" class="btn btn-secondary">Annuler</button>
+                <button type="submit" class="btn btn-primary">Valider</button>
             </div>
-            <div class="flex-shrink-0 mt-6 text-right">
-                 <button id="closeUpdatesBtn" class="text-white font-bold px-6 py-2 rounded transition-colors" style="background-color: var(--color-primary);">Compris !</button>
+        </form>
+    </div>
+
+    <!-- Nouveautés -->
+    <div id="updatesModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="updatesModalTitle">
+        <div class="modal-panel modal-panel-lg">
+            <div class="modal-body">
+                <h3 id="updatesModalTitle" class="modal-title">Nouveautés de l'application</h3>
+                <div id="updates-content" class="updates-list"></div>
+            </div>
+            <div class="modal-footer">
+                <button id="closeUpdatesBtn" class="btn btn-primary">J'ai compris</button>
             </div>
         </div>
     </div>
-    <div id="reassignModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4" role="dialog" aria-modal="true">
-        <div class="p-6 rounded-lg w-full max-w-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-            <h3 id="reassignModalTitle" class="text-xl font-bold mb-4">Réattribuer le Pointage</h3>
-            <p class="mb-4" style="color: var(--color-text-muted);">Sélectionnez le nouvel employé à qui attribuer cette entrée :</p>
-            <select id="userSelect" class="w-full border p-2 rounded mb-6" style="background-color: var(--color-background); border-color: var(--color-border);"></select>
-            <div class="flex justify-center gap-4">
-                <button id="reassignConfirmBtn" class="text-white font-bold px-6 py-2 rounded transition-colors" style="background-color: var(--color-primary);">Confirmer</button>
-                <button id="reassignCancelBtn" class="font-bold px-6 py-2 rounded transition-colors" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Annuler</button>
-            </div>
-        </div>
-    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/jspdf@latest/dist/jspdf.umd.min.js"></script>
     <script src="https://unpkg.com/jspdf-autotable@latest/dist/jspdf.plugin.autotable.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.js"></script>
     <script src="https://storage.googleapis.com/workbox-cdn/releases/6.5.4/workbox-window.prod.mjs" type="module"></script>
     <script type="module" src="./app.js"></script>
 </body>

@@ -6,7 +6,7 @@ import { db, pageContent } from "../app.js";
 export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-3xl mx-auto space-y-4">
-            <h2 class="text-2xl font-bold">ℹ️ Mises à Jour des Chantiers</h2>
+            <h2 class="text-2xl font-bold">Mises à Jour des Chantiers</h2>
             <p class="text-gray-600">Retrouvez ici les dernières informations et consignes importantes pour chaque chantier.</p>
             <div id="updates-list" class="space-y-4">
                 <p>Chargement des mises à jour...</p>

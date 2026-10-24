@@ -8,7 +8,7 @@ export async function render() {
 
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto h-[calc(100vh-100px)] flex flex-col">
-            <h2 class="text-2xl font-bold mb-4" style="color: var(--color-text-base);">✨ Optimiseur de Tournées (Intelligent)</h2>
+            <h2 class="text-2xl font-bold mb-4" style="color: var(--color-text-base);">Optimiseur de Tournées (Intelligent)</h2>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 h-full pb-6">
                 <div class="flex flex-col p-4 rounded shadow h-full" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">

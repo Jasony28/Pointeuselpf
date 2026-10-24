@@ -1,7 +1,7 @@
-import { collection, query, where, orderBy, getDocs, doc, deleteDoc, limit } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { collection, query, where, orderBy, getDocs, getDoc, doc, deleteDoc, limit } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, showConfirmationModal, navigateTo, isShowingAllHours } from "../app.js"; // <-- isShowingAllHours IMPORTÉ ICI
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
-import { getUsers } from "./data-service.js";
+import { getUsers, getActiveChantiers } from "./data-service.js";
 
 // --- VARIABLES GLOBALES POUR LES CARTES NAVIGABLES ---
 let globalWeekOffset = 0;
@@ -11,41 +11,69 @@ let globalMonthOffset = 0;
 let userStatsFilter = { period: 'week', offset: 0 };
 let chantierStatsFilter = { period: 'week', offset: 0 };
 
+// --- CACHE DES POINTAGES ---
+// Les cartes "Semaine", "Heures par employé" et "Heures par chantier" demandent souvent la même
+// période : on ne télécharge chaque période qu'une fois par affichage du tableau de bord.
+const pointagesCache = new Map();
+
+function fetchPointages(start, end) {
+    const key = `${start.toISOString()}|${end.toISOString()}`;
+    if (!pointagesCache.has(key)) {
+        const q = query(collection(db, "pointages"), where("timestamp", ">=", start.toISOString()), where("timestamp", "<=", end.toISOString()));
+        const request = getDocs(q)
+            .then(snapshot => snapshot.docs.map(d => d.data()))
+            .catch(error => { pointagesCache.delete(key); throw error; });
+        pointagesCache.set(key, request);
+    }
+    return pointagesCache.get(key);
+}
+
+const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 export async function render() {
+    pointagesCache.clear();
     pageContent.innerHTML = `
         <div class="max-w-7xl mx-auto space-y-8">
-            <h2 class="text-2xl font-bold" style="color: var(--color-text-base);">📊 Tableau de Bord Administrateur</h2>
+            <h2 class="text-2xl font-bold" style="color: var(--color-text-base);">Tableau de Bord Administrateur</h2>
+
+            <section aria-labelledby="todo-title">
+                <h3 id="todo-title" class="kpi-label mb-3">Aujourd'hui · à traiter</h3>
+                <div id="todo-panel" class="todo-grid">
+                    ${'<div class="todo-tile is-loading"></div>'.repeat(4)}
+                </div>
+                <div id="todo-alerts" class="mt-3 space-y-2"></div>
+            </section>
             
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-6">
                 
-                <div class="p-6 rounded-lg shadow-sm text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <div class="p-5 rounded-lg shadow-sm text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                     <div class="flex justify-between items-center mb-1">
-                        <button id="global-week-prev" class="p-1 rounded-lg" style="background-color: var(--color-background);">&lt;</button>
-                        <h3 id="global-week-title" class="text-sm font-medium" style="color: var(--color-text-muted);">Heures (Semaine)</h3>
-                        <button id="global-week-next" class="p-1 rounded-lg" style="background-color: var(--color-background);">&gt;</button>
+                        <button id="global-week-prev" class="nav-arrow" aria-label="Précédent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+                        <h3 id="global-week-title" class="kpi-label">Heures (Semaine)</h3>
+                        <button id="global-week-next" class="nav-arrow" aria-label="Suivant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
                     </div>
-                    <p id="global-week-total" class="mt-1 text-3xl font-semibold animate-pulse" style="color: var(--color-text-base);">...</p>
+                    <p id="global-week-total" class="kpi-value mt-2 animate-pulse">...</p>
                 </div>
 
-                <div class="p-6 rounded-lg shadow-sm text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <div class="p-5 rounded-lg shadow-sm text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                     <div class="flex justify-between items-center mb-1">
-                        <button id="global-month-prev" class="p-1 rounded-lg" style="background-color: var(--color-background);">&lt;</button>
-                        <h3 id="global-month-title" class="text-sm font-medium" style="color: var(--color-text-muted);">Heures (Mois)</h3>
-                        <button id="global-month-next" class="p-1 rounded-lg" style="background-color: var(--color-background);">&gt;</button>
+                        <button id="global-month-prev" class="nav-arrow" aria-label="Précédent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+                        <h3 id="global-month-title" class="kpi-label">Heures (Mois)</h3>
+                        <button id="global-month-next" class="nav-arrow" aria-label="Suivant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
                     </div>
-                    <p id="global-month-total" class="mt-1 text-3xl font-semibold animate-pulse" style="color: var(--color-text-base);">...</p>
+                    <p id="global-month-total" class="kpi-value mt-2 animate-pulse">...</p>
                 </div>
 
-                <div id="active-projects-card" class="p-6 rounded-lg shadow-sm text-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                    <h3 class="text-sm font-medium" style="color: var(--color-text-muted);">Chantiers Actifs</h3>
-                    <p class="mt-1 text-3xl font-semibold animate-pulse" style="color: var(--color-text-base);">...</p>
+                <div id="active-projects-card" class="p-5 rounded-lg shadow-sm text-center flex flex-col justify-center" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                    <h3 class="kpi-label">Chantiers actifs</h3>
+                    <p class="kpi-value mt-2 animate-pulse">...</p>
                 </div>
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                     <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-3">
-                        <h3 class="text-xl font-semibold" style="color: var(--color-text-base);">Heures par employé</h3>
+                        <h3 class="text-lg font-semibold" style="color: var(--color-text-base);">Heures par employé</h3>
                         <div class="flex items-center gap-1 p-1 rounded-lg" style="background-color: var(--color-background);">
                             <button data-period="week" class="user-stats-filter-btn px-3 py-1 rounded-md text-sm">Semaine</button>
                             <button data-period="month" class="user-stats-filter-btn px-3 py-1 rounded-md text-sm">Mois</button>
@@ -53,16 +81,16 @@ export async function render() {
                         </div>
                     </div>
                     <div class="flex justify-between items-center mb-4">
-                        <button id="user-stats-prev-btn" class="px-4 py-2 rounded-lg" style="background-color: var(--color-background);">&lt;</button>
+                        <button id="user-stats-prev-btn" class="nav-arrow" aria-label="Précédent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
                         <div id="user-stats-period-display" class="text-center font-semibold text-base" style="color: var(--color-text-base);"></div>
-                        <button id="user-stats-next-btn" class="px-4 py-2 rounded-lg" style="background-color: var(--color-background);">&gt;</button>
+                        <button id="user-stats-next-btn" class="nav-arrow" aria-label="Suivant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
                     </div>
                     <div id="user-stats-list" class="space-y-3"></div>
                 </div>
 
                 <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                     <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-3">
-                        <h3 class="text-xl font-semibold" style="color: var(--color-text-base);">Heures par chantier</h3>
+                        <h3 class="text-lg font-semibold" style="color: var(--color-text-base);">Heures par chantier</h3>
                          <div class="flex items-center gap-1 p-1 rounded-lg" style="background-color: var(--color-background);">
                             <button data-period="week" class="chantier-stats-filter-btn px-3 py-1 rounded-md text-sm">Semaine</button>
                             <button data-period="month" class="chantier-stats-filter-btn px-3 py-1 rounded-md text-sm">Mois</button>
@@ -70,16 +98,16 @@ export async function render() {
                         </div>
                     </div>
                      <div class="flex justify-between items-center mb-4">
-                        <button id="chantier-stats-prev-btn" class="px-4 py-2 rounded-lg" style="background-color: var(--color-background);">&lt;</button>
+                        <button id="chantier-stats-prev-btn" class="nav-arrow" aria-label="Précédent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
                         <div id="chantier-stats-period-display" class="text-center font-semibold text-base" style="color: var(--color-text-base);"></div>
-                        <button id="chantier-stats-next-btn" class="px-4 py-2 rounded-lg" style="background-color: var(--color-background);">&gt;</button>
+                        <button id="chantier-stats-next-btn" class="nav-arrow" aria-label="Suivant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
                     </div>
                     <div id="chantier-stats-list" class="space-y-3"></div>
                 </div>
             </div>
             
             <div>
-                <h3 class="text-xl font-semibold mb-2" style="color: var(--color-text-base);">Activité Récente</h3>
+                <h3 class="text-lg font-semibold mb-3" style="color: var(--color-text-base);">Activité récente</h3>
                 <div id="recent-activity-list" class="space-y-3"></div>
             </div>
         </div>
@@ -87,7 +115,8 @@ export async function render() {
     
     setTimeout(() => {
         // --- CHARGEMENT PRIORITAIRE (rapide) ---
-        loadGlobalStats(); 
+        loadTodoPanel();
+        loadGlobalStats();
         loadStaticStats(); 
         loadRecentActivity();
         setupEventListeners();
@@ -103,6 +132,108 @@ export async function render() {
         }, 200);
 
     }, 0);
+}
+
+// --- BLOC "À TRAITER" ---
+// Ce qui demande une action aujourd'hui : qui pointe, qui est prévu sans avoir pointé,
+// pointages oubliés, congés et comptes en attente. Chaque tuile mène à la page concernée.
+const FORGOTTEN_AFTER_MS = 10 * 3600000;
+
+async function loadTodoPanel() {
+    const panel = document.getElementById('todo-panel');
+    const alerts = document.getElementById('todo-alerts');
+    if (!panel) return;
+
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekId = getWeekDateRange(0).startOfWeek.toISOString().split('T')[0];
+
+    // Chaque requête peut échouer indépendamment sans bloquer les autres tuiles
+    const [openSnap, todaySnap, planningSnap, publishedDoc, leaveSnap, users] = await Promise.all([
+        getDocs(query(collection(db, "pointages"), where("endTime", "==", null))),
+        getDocs(query(collection(db, "pointages"), where("timestamp", ">=", startOfToday.toISOString()))),
+        getDocs(query(collection(db, "planning"), where("date", "==", todayStr))),
+        getDoc(doc(db, "publishedSchedules", weekId)),
+        getDocs(query(collection(db, "leaveRequests"), where("status", "==", "pending"))),
+        getUsers(),
+    ].map(request => request.catch(error => { console.error("Bloc À traiter :", error); return null; })));
+
+    if (!document.getElementById('todo-panel')) return;
+
+    const open = openSnap ? openSnap.docs.map(d => d.data()) : [];
+    const running = open.filter(p => now - new Date(p.timestamp) < FORGOTTEN_AFTER_MS);
+    const forgotten = open.filter(p => now - new Date(p.timestamp) >= FORGOTTEN_AFTER_MS);
+
+    let missing = null;
+    if (planningSnap && publishedDoc?.exists()) {
+        const planned = new Set();
+        planningSnap.docs.forEach(d => (d.data().teamNames || []).forEach(name => planned.add(name)));
+        const pointed = new Set([...(todaySnap ? todaySnap.docs.map(d => d.data().userName) : []), ...open.map(p => p.userName)]);
+        missing = [...planned].filter(name => !pointed.has(name));
+    }
+
+    const pendingLeaves = leaveSnap ? leaveSnap.size : null;
+    const pendingUsers = users ? users.filter(u => u.status === 'pending') : null;
+
+    const names = (list, max = 3) => {
+        if (!list.length) return '';
+        const shown = list.slice(0, max).map(escapeHTML).join(', ');
+        return list.length > max ? `${shown} +${list.length - max}` : shown;
+    };
+
+    const tiles = [
+        {
+            page: 'admin-live-view', tone: 'success',
+            label: 'En cours',
+            value: openSnap ? running.length : '–',
+            detail: running.length ? names(running.map(p => `${p.userName} (${p.chantier})`), 2) : 'Personne ne pointe',
+        },
+        {
+            page: 'admin-planning', tone: missing && missing.length ? 'warning' : 'neutral',
+            label: 'Prévus sans pointage',
+            value: missing ? missing.length : '–',
+            detail: missing === null ? 'Planning du jour non publié' : missing.length ? names(missing) : 'Tout le monde a pointé',
+        },
+        {
+            page: 'admin-leave', tone: pendingLeaves ? 'primary' : 'neutral',
+            label: 'Congés à valider',
+            value: pendingLeaves ?? '–',
+            detail: pendingLeaves ? 'Demandes en attente' : 'Aucune demande',
+        },
+        {
+            page: 'admin-team', tone: pendingUsers && pendingUsers.length ? 'primary' : 'neutral',
+            label: 'Comptes à approuver',
+            value: pendingUsers ? pendingUsers.length : '–',
+            detail: pendingUsers && pendingUsers.length ? names(pendingUsers.map(u => u.displayName || u.email)) : 'Aucun nouveau compte',
+        },
+    ];
+
+    panel.innerHTML = tiles.map(tile => `
+        <button type="button" class="todo-tile tone-${tile.tone}" data-page="${tile.page}">
+            <span class="todo-label">${tile.label}</span>
+            <span class="todo-value">${tile.value}</span>
+            <span class="todo-detail">${tile.detail}</span>
+        </button>
+    `).join('');
+    panel.querySelectorAll('[data-page]').forEach(tile => {
+        tile.onclick = () => navigateTo(tile.dataset.page);
+    });
+
+    if (alerts) {
+        alerts.innerHTML = forgotten.map(p => {
+            const hours = Math.floor((now - new Date(p.timestamp)) / 3600000);
+            return `
+                <button type="button" class="todo-alert" data-page="admin-live-view">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+                    <span><strong>Pointage oublié ?</strong> ${escapeHTML(p.userName)} pointe sur ${escapeHTML(p.chantier)} depuis ${hours} h.</span>
+                </button>`;
+        }).join('');
+        alerts.querySelectorAll('[data-page]').forEach(alert => {
+            alert.onclick = () => navigateTo(alert.dataset.page);
+        });
+    }
 }
 
 function setupEventListeners() {
@@ -151,18 +282,13 @@ async function loadGlobalStats() {
     const endOfMonth = new Date(Date.UTC(dateForMonth.getFullYear(), dateForMonth.getMonth() + 1, 0, 23, 59, 59, 999));
     if(monthTitle) monthTitle.textContent = dateForMonth.toLocaleString('fr-FR', { month: 'long', year: 'numeric' });
 
-    // --- Requêtes ---
-    const weekQuery = query(collection(db, "pointages"), where("timestamp", ">=", startOfWeek.toISOString()), where("timestamp", "<=", endOfWeek.toISOString()));
-    const monthQuery = query(collection(db, "pointages"), where("timestamp", ">=", startOfMonth.toISOString()), where("timestamp", "<=", endOfMonth.toISOString()));
-    
     try {
-        const [weekSnapshot, monthSnapshot] = await Promise.all([ getDocs(weekQuery), getDocs(monthQuery) ]);
+        const [weekPointages, monthPointages] = await Promise.all([ fetchPointages(startOfWeek, endOfWeek), fetchPointages(startOfMonth, endOfMonth) ]);
         const users = await getUsers();
         
         // --- Calcul du total de la Semaine avec ou sans plafonnement (selon bouton rouge) ---
         let weekUserStats = {};
-        weekSnapshot.forEach(doc => { 
-            const data = doc.data();
+        weekPointages.forEach(data => {
             if (data.endTime) {
                 if (!weekUserStats[data.uid]) weekUserStats[data.uid] = 0;
                 weekUserStats[data.uid] += (new Date(data.endTime) - new Date(data.timestamp)) - (data.pauseDurationMs || 0); 
@@ -185,8 +311,7 @@ async function loadGlobalStats() {
         
         // --- Calcul du total du Mois avec ou sans plafonnement (selon bouton rouge) ---
         let monthUserStats = {};
-        monthSnapshot.forEach(doc => { 
-            const data = doc.data();
+        monthPointages.forEach(data => {
             if (data.endTime) {
                 if (!monthUserStats[data.uid]) monthUserStats[data.uid] = 0;
                 monthUserStats[data.uid] += (new Date(data.endTime) - new Date(data.timestamp)) - (data.pauseDurationMs || 0); 
@@ -257,18 +382,10 @@ async function loadUserStats() {
     updateFilterUI('user', userStatsFilter, userInfo.displayText);
 
     try {
-        const q = query(
-            collection(db, "pointages"),
-            where("timestamp", ">=", userInfo.startDate.toISOString()),
-            where("timestamp", "<=", userInfo.endDate.toISOString())
-        );
-        const querySnapshot = await getDocs(q);
-        
-        const users = await getUsers();
+        const [pointages, users] = await Promise.all([fetchPointages(userInfo.startDate, userInfo.endDate), getUsers()]);
         const userStats = {};
 
-        querySnapshot.forEach(doc => {
-            const data = doc.data();
+        pointages.forEach(data => {
             if (data.endTime) {
                 const durationMs = (new Date(data.endTime) - new Date(data.timestamp)) - (data.pauseDurationMs || 0);
                 if (!userStats[data.uid]) {
@@ -304,23 +421,29 @@ async function loadChantierStats() {
     updateFilterUI('chantier', chantierStatsFilter, chantierInfo.displayText);
 
     try {
-        const q = query(
-            collection(db, "pointages"),
-            where("timestamp", ">=", chantierInfo.startDate.toISOString()),
-            where("timestamp", "<=", chantierInfo.endDate.toISOString())
-        );
-        const querySnapshot = await getDocs(q);
-        
+        const [pointages, chantiers] = await Promise.all([fetchPointages(chantierInfo.startDate, chantierInfo.endDate), getActiveChantiers()]);
+
         const chantierStats = {};
-        querySnapshot.forEach(doc => {
-            const data = doc.data();
+        const chantierDays = {};
+        pointages.forEach(data => {
             if (data.endTime) {
                 const durationMs = (new Date(data.endTime) - new Date(data.timestamp)) - (data.pauseDurationMs || 0);
                 chantierStats[data.chantier] = (chantierStats[data.chantier] || 0) + durationMs;
+                if (!chantierDays[data.chantier]) chantierDays[data.chantier] = new Set();
+                chantierDays[data.chantier].add(data.timestamp.split('T')[0]);
             }
         });
 
-        displayStats(chantierStats, document.getElementById('chantier-stats-list'), "Aucun chantier pointé pour cette période.", true);
+        // Budget = jours de passage × heures prévues par passage (même règle que la page "Écarts d'heures")
+        const budgets = {};
+        chantiers.forEach(chantier => {
+            const hoursPerVisit = parseFloat(chantier.totalHeuresPrevues) || 0;
+            if (hoursPerVisit > 0 && chantierDays[chantier.name]) {
+                budgets[chantier.name] = chantierDays[chantier.name].size * hoursPerVisit * 3600000;
+            }
+        });
+
+        displayStats(chantierStats, document.getElementById('chantier-stats-list'), "Aucun chantier pointé pour cette période.", true, budgets);
     } catch (error) {
         console.error("Erreur de chargement des statistiques par chantier:", error);
     }
@@ -341,7 +464,18 @@ function updateFilterUI(type, filter, displayText) {
     });
 }
 
-function displayStats(statsObject, container, emptyMessage, isClickable = false) {
+function budgetBarHTML(doneMs, budgetMs) {
+    const ratio = doneMs / budgetMs;
+    const state = ratio > 1.1 ? 'over' : ratio < 0.9 ? 'under' : 'ok';
+    const label = { over: 'Dépassement', under: 'Heures manquantes', ok: 'Dans le budget' }[state];
+    return `
+        <div class="budget-bar budget-${state}">
+            <div class="budget-track"><div class="budget-fill" style="width: ${Math.min(100, Math.round(ratio * 100))}%"></div></div>
+            <span class="budget-text"><strong>${label}</strong> · ${formatMilliseconds(doneMs)} / ${formatMilliseconds(budgetMs)} prévues (${Math.round(ratio * 100)} %)</span>
+        </div>`;
+}
+
+function displayStats(statsObject, container, emptyMessage, isClickable = false, budgets = {}) {
     if (!container) return;
     container.innerHTML = "";
     
@@ -359,13 +493,17 @@ function displayStats(statsObject, container, emptyMessage, isClickable = false)
         const name = isUserStats ? value.name : key;
         const totalMs = isUserStats ? value.totalMs : value;
         const div = document.createElement('div');
-        div.className = 'flex justify-between items-center text-sm p-2 border-b';
+        div.className = 'stat-row';
         div.style.borderColor = 'var(--color-border)';
         if (isClickable) {
-            div.innerHTML = `<button class="font-medium hover:underline text-left" style="color: var(--color-primary);">${name}</button><span class="font-bold" style="color: var(--color-primary);">${formatMilliseconds(totalMs)}</span>`;
+            div.innerHTML = `<button class="font-medium hover:underline text-left" style="color: var(--color-primary);">${name}</button><span class="stat-row-value">${formatMilliseconds(totalMs)}</span>`;
             div.querySelector('button').onclick = () => navigateTo('admin-chantier-details', { chantierName: name });
+            if (budgets[name]) {
+                div.classList.add('has-budget');
+                div.insertAdjacentHTML('beforeend', budgetBarHTML(totalMs, budgets[name]));
+            }
         } else {
-            div.innerHTML = `<span class="font-medium" style="color: var(--color-text-base);">${name}</span><span class="font-bold" style="color: var(--color-primary);">${formatMilliseconds(totalMs)}</span>`;
+            div.innerHTML = `<span class="font-medium" style="color: var(--color-text-base);">${name}</span><span class="stat-row-value">${formatMilliseconds(totalMs)}</span>`;
         }
         container.appendChild(div);
     });
@@ -415,7 +553,8 @@ function createDetailedActivityElement(docId, d) {
     `;
     const deleteBtn = document.createElement("button");
     deleteBtn.textContent = "✖";
-    deleteBtn.className = "absolute top-2 right-3 hover:text-red-600 font-bold";
+    deleteBtn.className = "absolute top-2 right-2 w-9 h-9 grid place-items-center rounded-lg hover:text-red-600 hover:bg-red-50 font-bold";
+    deleteBtn.setAttribute('aria-label', 'Supprimer ce pointage');
     deleteBtn.style.color = 'var(--color-text-muted)';
     deleteBtn.onclick = async () => { if (await showConfirmationModal("Confirmation", "Supprimer ce pointage ?")) { await deleteDoc(doc(db, "pointages", docId)); render(); } };
     wrapper.appendChild(deleteBtn);

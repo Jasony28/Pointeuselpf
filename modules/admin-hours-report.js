@@ -9,7 +9,7 @@ let filter = { period: 'week', offset: 0 };
 export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto">
-            <h2 class="text-2xl font-bold mb-4">📄 Rapport d'Heures Global</h2>
+            <h2 class="text-2xl font-bold mb-4">Rapport d'Heures Global</h2>
             
             <div class="p-4 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                 <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
@@ -19,9 +19,9 @@ export async function render() {
                         <button data-period="year" class="filter-btn px-4 py-2 rounded-md">Année</button>
                     </div>
                     <div class="flex items-center gap-2">
-                        <button id="prev-btn" class="px-4 py-2 rounded-lg" style="background-color: var(--color-background);">&lt;</button>
+                        <button id="prev-btn" class="nav-arrow" aria-label="Précédent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
                         <div id="period-display" class="text-center font-semibold text-lg min-w-[250px]"></div>
-                        <button id="next-btn" class="px-4 py-2 rounded-lg" style="background-color: var(--color-background);">&gt;</button>
+                        <button id="next-btn" class="nav-arrow" aria-label="Suivant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
                     </div>
                 </div>
 

@@ -20,7 +20,7 @@ export async function render() {
         <div class="max-w-6xl mx-auto space-y-6">
             <div class="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
                 <div>
-                    <h2 class="text-3xl font-bold tracking-tight" style="color: var(--color-text-base);">⚠️ Écarts d'heures</h2>
+                    <h2 class="text-3xl font-bold tracking-tight" style="color: var(--color-text-base);">Écarts d'heures</h2>
                     <p class="text-sm mt-1" style="color: var(--color-text-muted);">Analyse de rentabilité : Prévu vs Réalisé</p>
                 </div>
                 
@@ -33,9 +33,9 @@ export async function render() {
                     </select>
 
                     <div class="flex items-center rounded-lg p-1" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                        <button id="prevPeriodBtn" class="px-4 py-1.5 rounded font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">&lt;</button>
+                        <button id="prevPeriodBtn" class="nav-arrow" aria-label="Précédent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
                         <span id="currentPeriodLabel" class="font-bold min-w-[160px] text-center text-sm" style="color: var(--color-primary);">Cette semaine</span>
-                        <button id="nextPeriodBtn" class="px-4 py-1.5 rounded font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">&gt;</button>
+                        <button id="nextPeriodBtn" class="nav-arrow" aria-label="Suivant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
                     </div>
 
                     <button id="exportPdfBtn" class="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 shadow-sm">

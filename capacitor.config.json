@@ -1,0 +1,13 @@
+{
+  "appId": "be.lespetitesfees.pointeuse",
+  "appName": "Pointeuse LPF",
+  "webDir": "www",
+  "backgroundColor": "#f5f6f8",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#f5f6f8"
+  },
+  "android": {
+    "backgroundColor": "#f5f6f8"
+  }
+}

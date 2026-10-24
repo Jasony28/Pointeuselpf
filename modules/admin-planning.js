@@ -22,9 +22,9 @@ export async function render() {
                 <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div class="flex flex-col sm:flex-row sm:items-center gap-4">
                         <div class="flex items-center justify-center sm:justify-start gap-2">
-                            <button id="prevWeekBtn" class="px-3 py-2 rounded-lg" style="background-color: var(--color-background);">&lt;</button>
+                            <button id="prevWeekBtn" class="nav-arrow" aria-label="Précédent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
                             <div id="currentPeriodDisplay" class="text-center font-semibold text-base whitespace-nowrap min-w-[250px]"></div>
-                            <button id="nextWeekBtn" class="px-3 py-2 rounded-lg" style="background-color: var(--color-background);">&gt;</button>
+                            <button id="nextWeekBtn" class="nav-arrow" aria-label="Suivant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
                         </div>
                         <div class="flex-shrink-0 mx-auto sm:mx-0 items-center border rounded-lg p-1" style="background-color: var(--color-background); border-color: var(--color-border);">
                             <button data-view="week" class="view-btn px-3 py-1 text-sm rounded-md">Semaine</button>

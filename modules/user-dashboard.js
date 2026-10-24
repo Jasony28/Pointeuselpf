@@ -1,5 +1,5 @@
-import { collection, query, where, orderBy, getDocs, doc, getDoc, addDoc, serverTimestamp, updateDoc, limit, onSnapshot } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, currentUser, pageContent, showInfoModal, navigateTo } from "../app.js";
+import { collection, query, where, orderBy, getDocs, doc, getDoc, addDoc, setDoc, deleteDoc, serverTimestamp, updateDoc, limit, onSnapshot } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { db, currentUser, pageContent, showInfoModal, showToast, navigateTo } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 import { getActiveChantiers, getTeamMembers } from "./data-service.js";
 
@@ -11,6 +11,12 @@ let chantiersCache = [];
 let colleaguesCache = [];
 let currentWeekOffset = 0;
 let unreadListener = null;
+
+// Appelé par app.js quand on quitte la page : stoppe l'écoute des messages et le minuteur affiché
+export function cleanup() {
+    if (unreadListener) { unreadListener(); unreadListener = null; }
+    clearInterval(timerInterval);
+}
 
 export async function render() {
     if (unreadListener) {
@@ -24,18 +30,19 @@ export async function render() {
             <div id="missed-pointage-suggestions" class="space-y-4"></div>
             <div id="unread-messages-container" class="hidden transform transition-all duration-300 hover:scale-[1.01] cursor-pointer"></div>
             <div>
-                <h2 class="text-xl font-bold mb-2">🗓️ Mon Planning de la Semaine</h2>
-                <div class="rounded-lg shadow-sm p-4" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                    <div class="flex justify-between items-center">
-                        <button id="prevWeekBtn" class="px-4 py-2 rounded-lg hover:opacity-80" style="background-color: var(--color-background);"><</button>
-                        <div class="text-center"> 
-                            <div id="currentPeriodDisplay" class="font-semibold text-lg"></div>
-                            <div id="currentWeekTotalHours" class="text-sm font-bold" style="color: var(--color-primary);"></div>
+                <h2 class="text-xl font-bold mb-3">Mon Planning de la Semaine</h2>
+                <div class="rounded-lg shadow-sm p-3" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                    <div class="flex justify-between items-center gap-2">
+                        <button id="prevWeekBtn" class="nav-arrow" aria-label="Semaine précédente"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+                        <div class="text-center min-w-0">
+                            <div id="currentPeriodDisplay" class="font-semibold"></div>
+                            <div id="currentWeekTotalHours" class="week-total-pill"></div>
                         </div>
-                        <button id="nextWeekBtn" class="px-4 py-2 rounded-lg hover:opacity-80" style="background-color: var(--color-background);">></button>
+                        <button id="nextWeekBtn" class="nav-arrow" aria-label="Semaine suivante"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
                     </div>
                 </div>
-                <div id="schedule-grid" class="grid grid-cols-1 md:grid-cols-7 gap-2 mt-4"></div>
+                <p class="swipe-hint">Glissez vers la gauche ou la droite pour changer de semaine</p>
+                <div id="schedule-grid" class="schedule-grid grid grid-cols-1 md:grid-cols-7 gap-2 mt-3"></div>
             </div>
         </div>
 
@@ -89,6 +96,9 @@ export async function render() {
         if (e.target.id === 'startBtn') openStartModal();
         if (e.target.id === 'prevWeekBtn') { currentWeekOffset--; displayWeekView(); }
         if (e.target.id === 'nextWeekBtn') { currentWeekOffset++; displayWeekView(); }
+        if (e.target.id === 'currentPeriodDisplay' && currentWeekOffset !== 0) { currentWeekOffset = 0; displayWeekView(); }
+        const addDayBtn = e.target.closest?.('.add-day-task');
+        if (addDayBtn) openAddTaskModal(addDayBtn.dataset.date);
         if (e.target.id === 'cancelStartPointage') document.getElementById('startPointageModal').classList.add('hidden');
         if (e.target.id === 'cancelStopPointage') document.getElementById('stopPointageModal').classList.add('hidden');
         if (e.target.id === 'closeDetailsBtn') document.getElementById('detailsModal').classList.add('hidden');
@@ -103,6 +113,7 @@ export async function render() {
             if (!localStorage.getItem('activePointage')) checkForMissedPointages();
             
             displayWeekView();
+            enableWeekSwipe();
         } catch (error) {
             console.error("Erreur critique dashboard:", error);
         }
@@ -137,25 +148,22 @@ function initLiveTracker() {
 
     if (activePointage && activePointage.uid === currentUser.uid) {
         const isPaused = activePointage.status === 'paused';
-        let chantierHTML = `<p class="text-2xl font-bold my-2" style="color: var(--color-primary);">${activePointage.chantier}</p>`;
-        
+        const startedAt = new Date(activePointage.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        let chantierHTML = `<p class="tracker-chantier">${activePointage.chantier}</p>`;
+
         if (activePointage.chantierId) {
-            chantierHTML = `
-                <p id="liveChantierName" class="text-2xl font-bold my-2 cursor-pointer hover:underline" style="color: var(--color-primary);">
-                    ${activePointage.chantier}
-                </p>
-            `;
+            chantierHTML = `<p id="liveChantierName" class="tracker-chantier is-link">${activePointage.chantier}</p>`;
         }
 
         container.innerHTML = `
-            <div class="text-center">
-                <p style="color: var(--color-text-muted);">Pointage en cours sur :</p>
-                ${chantierHTML} 
-                <div id="timer" class="text-5xl font-mono my-4 tracking-wider ${isPaused ? 'text-yellow-500' : ''}">00:00:00</div>
-                ${isPaused ? '<p class="text-yellow-600 font-semibold mb-4">PAUSE</p>' : ''}
-                <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                    <button id="pauseResumeBtn" class="w-full sm:w-auto font-bold px-8 py-4 rounded-lg text-lg shadow-lg ${isPaused ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-yellow-500 hover:bg-yellow-600 text-white'}">${isPaused ? 'Reprendre' : 'Pause'}</button>
-                    <button id="stopBtn" class="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white font-bold px-8 py-4 rounded-lg text-lg shadow-lg">Arrêter</button>
+            <div class="tracker ${isPaused ? 'is-paused' : 'is-running'}">
+                <span class="tracker-status"><span class="tracker-dot"></span>${isPaused ? 'En pause' : 'Pointage en cours'}</span>
+                ${chantierHTML}
+                <div id="timer" class="tracker-timer">00:00:00</div>
+                <p class="tracker-meta">Démarré à ${startedAt}${(activePointage.pauses || []).length > 0 ? ` · ${activePointage.pauses.length} pause${activePointage.pauses.length > 1 ? 's' : ''}` : ''}</p>
+                <div class="tracker-actions">
+                    <button id="pauseResumeBtn" class="tracker-btn ${isPaused ? 'tracker-btn-resume' : 'tracker-btn-pause'}">${isPaused ? 'Reprendre' : 'Pause'}</button>
+                    <button id="stopBtn" class="tracker-btn tracker-btn-stop">Arrêter</button>
                 </div>
             </div>`;
 
@@ -167,14 +175,21 @@ function initLiveTracker() {
         }
 
         updateTimerUI();
+        clearInterval(timerInterval);
         if (!isPaused) timerInterval = setInterval(updateTimerUI, 1000);
         document.getElementById('pauseResumeBtn').onclick = isPaused ? resumePointage : pausePointage;
         document.getElementById('stopBtn').onclick = openStopModal;
     } else {
+        if (document.getElementById('breadcrumb-page')?.textContent === 'Planning') document.title = 'Planning · Pointeuse LPF';
+        const hour = new Date().getHours();
+        const greeting = hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir';
+        const firstName = (currentUser.displayName || '').split(' ')[0];
         container.innerHTML = `
-            <div class="text-center">
-                <h3 class="text-xl font-bold mb-2">Prêt à commencer votre journée ?</h3>
-                <button id="startBtn" class="w-full md:w-auto text-white font-bold px-8 py-4 rounded-lg text-lg shadow-lg" style="background-color: var(--color-primary); transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='var(--color-primary-hover)'" onmouseout="this.style.backgroundColor='var(--color-primary)'">Démarrer un nouveau pointage</button>
+            <div class="tracker is-idle">
+                <p class="tracker-greeting">${greeting}${firstName ? ` ${firstName}` : ''}</p>
+                <h3 class="tracker-idle-title">Prêt à commencer votre journée ?</h3>
+                <p class="tracker-meta">${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+                <button id="startBtn" class="tracker-btn tracker-btn-start">Démarrer un nouveau pointage</button>
             </div>`;
     }
 }
@@ -196,9 +211,40 @@ function updateTimerUI() {
     const minutes = String(Math.floor((effectiveElapsedTime % 3600000) / 60000)).padStart(2, '0');
     const seconds = String(Math.floor((effectiveElapsedTime % 60000) / 1000)).padStart(2, '0');
     timerElement.textContent = `${hours}:${minutes}:${seconds}`;
+    // Minuteur visible dans l'onglet / le sélecteur d'applications (uniquement sur l'écran Planning)
+    if (document.getElementById('breadcrumb-page')?.textContent === 'Planning') {
+        document.title = `${activePointage.status === 'paused' ? '⏸ ' : ''}${hours}:${minutes}:${seconds} · ${activePointage.chantier}`;
+    }
+}
+
+// Glisser horizontalement sur le planning pour passer à la semaine précédente / suivante
+function enableWeekSwipe() {
+    const area = document.getElementById('schedule-grid');
+    if (!area) return;
+    let startX = null, startY = null;
+    area.addEventListener('touchstart', (e) => {
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+    }, { passive: true });
+    area.addEventListener('touchend', (e) => {
+        if (startX === null) return;
+        const dx = e.changedTouches[0].clientX - startX;
+        const dy = e.changedTouches[0].clientY - startY;
+        startX = null;
+        if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+        currentWeekOffset += dx < 0 ? 1 : -1;
+        vibrate(10);
+        displayWeekView();
+    }, { passive: true });
+}
+
+// Retour haptique discret sur les actions de pointage (Android ; ignoré ailleurs)
+function vibrate(pattern) {
+    if (navigator.vibrate) navigator.vibrate(pattern);
 }
 
 function pausePointage() {
+    vibrate(30);
     clearInterval(timerInterval);
     let activePointage = JSON.parse(localStorage.getItem('activePointage'));
     activePointage.status = 'paused';
@@ -211,6 +257,7 @@ function pausePointage() {
 }
 
 function resumePointage() {
+    vibrate(30);
     let activePointage = JSON.parse(localStorage.getItem('activePointage'));
     activePointage.status = 'running';
     const lastPause = activePointage.pauses.slice(-1)[0];
@@ -234,9 +281,21 @@ async function startPointage(chantierId, chantierName, colleagues) {
     };
 
     try {
-        const newPointageRef = await addDoc(collection(db, "pointages"), newPointageData);
+        // L'identifiant est créé sur le téléphone : le minuteur démarre tout de suite, même hors ligne.
+        // Firestore garde l'écriture en attente et l'envoie dès que le réseau revient.
+        const newPointageRef = doc(collection(db, "pointages"));
+        setDoc(newPointageRef, newPointageData).catch(error => {
+            console.error("Erreur d'envoi du pointage:", error);
+            showInfoModal("Erreur", "Le pointage n'a pas pu être enregistré sur le serveur.");
+        });
         localStorage.setItem('activePointage', JSON.stringify({ docId: newPointageRef.id, ...newPointageData }));
-        
+        vibrate(40);
+        initLiveTracker();
+        if (!navigator.onLine) {
+            showToast("Hors ligne : pointage démarré. Il sera envoyé dès le retour du réseau.", 'warning');
+            return; // le calcul du trajet demande Internet
+        }
+
         const lastPointageQuery = query(collection(db, "pointages"), where("uid", "==", currentUser.uid), where("endTime", "!=", null), orderBy("endTime", "desc"), limit(1));
         const lastPointageSnapshot = await getDocs(lastPointageQuery);
         let startAddressForTravel = HOME_BASE_ADDRESS;
@@ -260,8 +319,6 @@ async function startPointage(chantierId, chantierName, colleagues) {
                 calculateAndSaveTravel(startAddressForTravel, newChantierAddress, newPointageRef.id, isDriver);
             }
         }
-
-        initLiveTracker();
     } catch (error) {
         console.error("Erreur de démarrage du pointage:", error);
         showInfoModal("Erreur", "Le démarrage du pointage a échoué.");
@@ -277,16 +334,23 @@ async function stopPointage(notes = "") {
     }
     const totalPauseMs = (activePointage.pauses || []).reduce((acc, p) => acc + (p.end ? new Date(p.end) - new Date(p.start) : 0), 0);
     const pointageRef = doc(db, "pointages", activePointage.docId);
+    // Arrêt immédiat à l'écran ; l'envoi au serveur se fait dès que le réseau est disponible
+    const saving = updateDoc(pointageRef, { endTime: new Date().toISOString(), notes, pauseDurationMs: totalPauseMs, status: 'completed' });
+    vibrate([40, 60, 40]);
+    clearInterval(timerInterval);
+    localStorage.removeItem('activePointage');
+    initLiveTracker();
+    if (!navigator.onLine) {
+        showToast("Hors ligne : pointage enregistré sur le téléphone. Il sera ajouté à l'historique dès le retour du réseau.", 'warning');
+        saving.catch(error => console.error("Erreur d'enregistrement:", error));
+        return;
+    }
     try {
-        await updateDoc(pointageRef, { endTime: new Date().toISOString(), notes, pauseDurationMs: totalPauseMs, status: 'completed' });
+        await saving;
         showInfoModal("Succès", "Pointage enregistré avec succès !");
-    } catch (error) { 
-        console.error("Erreur d'enregistrement:", error); 
-        showInfoModal("Erreur", "Une erreur est survenue lors de l'enregistrement."); 
-    } finally { 
-        clearInterval(timerInterval); 
-        localStorage.removeItem('activePointage'); 
-        initLiveTracker(); 
+    } catch (error) {
+        console.error("Erreur d'enregistrement:", error);
+        showInfoModal("Erreur", "Une erreur est survenue lors de l'enregistrement.");
     }
 }
 
@@ -375,7 +439,7 @@ async function openStartModal() {
     }
     
     const otherColleagues = colleaguesCache.filter(colleague => !todaysColleagues.has(colleague.name) && colleague.name !== currentUser.displayName);
-    const createColleagueElement = (name) => `<label class="flex items-center gap-2 p-1 rounded w-full hover:bg-gray-100"><input type="checkbox" value="${name}" name="colleagues" class="text-blue-600 focus:ring-blue-500" /><span class="text-gray-800">${name}</span></label>`;
+    const createColleagueElement = (name) => `<label class="flex items-center gap-3 px-2 py-2 rounded w-full cursor-pointer hover:bg-gray-100"><input type="checkbox" value="${name}" name="colleagues" class="h-5 w-5 rounded text-blue-600 focus:ring-blue-500" /><span class="text-gray-800">${name}</span></label>`;
     let colleaguesHTML = '';
     
     if (todaysColleagues.size > 0) {
@@ -487,18 +551,20 @@ function displayWeekView() {
     if(scheduleGrid) {
         scheduleGrid.innerHTML = ""; 
         const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+        const todayStr = new Date().toISOString().split('T')[0];
         for (let i = 0; i < 7; i++) {
             const dayDate = new Date(startOfWeek);
             dayDate.setUTCDate(startOfWeek.getUTCDate() + i);
+            const isToday = dayDate.toISOString().split('T')[0] === todayStr;
             const dayColumn = document.createElement('div');
-            dayColumn.className = 'rounded-lg p-2 min-h-[100px]';
-            dayColumn.style.backgroundColor = 'var(--color-background)';
-            dayColumn.innerHTML = `<h4 class="font-bold text-center border-b pb-1 mb-2" style="border-color: var(--color-border);">
-                                            <span style="color: var(--color-text-base);">${days[i]}</span> 
-                                            <span class="text-sm font-normal" style="color: var(--color-text-muted);">${dayDate.getUTCDate()}</span>
-                                            <div id="day-total-${i}" class="text-sm font-bold mt-1" style="color: var(--color-primary); min-height: 1.25rem;"></div>
+            dayColumn.className = `schedule-day${isToday ? ' is-today' : ''}`;
+            dayColumn.innerHTML = `<h4 class="schedule-day-head">
+                                            <span class="schedule-day-name">${days[i]}${isToday ? ' <span class="schedule-today-badge">Aujourd\'hui</span>' : ''}</span>
+                                            <span class="schedule-day-date">${dayDate.getUTCDate()}</span>
+                                            <span id="day-total-${i}" class="schedule-day-total"></span>
                                     </h4>
-                                    <div id="day-col-${i}" class="space-y-2"></div>`;
+                                    <div id="day-col-${i}" class="space-y-2"></div>
+                                    <button type="button" class="add-day-task" data-date="${dayDate.toISOString().split('T')[0]}">+ Ajouter un chantier</button>`;
             scheduleGrid.appendChild(dayColumn);
         }
         loadUserScheduleForWeek(startOfWeek, endOfWeek);
@@ -511,11 +577,7 @@ async function loadUserScheduleForWeek(start, end) {
     const scheduleGrid = document.getElementById("schedule-grid");
     const totalHoursElement = document.getElementById("currentWeekTotalHours");
 
-    if (!publishDoc.exists()) {
-        if(scheduleGrid) scheduleGrid.innerHTML = `<p class'col-span-1 md:col-span-7 text-center p-4' style='color: var(--color-text-muted);'>Le planning de cette semaine n'a pas encore été publié.</p>`;
-        if (totalHoursElement) totalHoursElement.textContent = 'Total semaine prevues : 0h';
-        return;
-    }
+    const isPublished = publishDoc.exists();
 
     const planningQuery = query(collection(db, "planning"), 
         where("date", ">=", start.toISOString().split('T')[0]), 
@@ -525,8 +587,13 @@ async function loadUserScheduleForWeek(start, end) {
     );
     const planningSnapshot = await getDocs(planningQuery);
 
-    const scheduleData = planningSnapshot.docs.map(doc => doc.data());
-    const userSchedule = scheduleData.filter(task => task.teamNames && task.teamNames.includes(currentUser.displayName));
+    const scheduleData = planningSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    // Planning publié par l'admin + chantiers ajoutés par l'employé lui-même (visibles même avant publication)
+    const userSchedule = scheduleData.filter(task =>
+        (isPublished && task.teamNames && task.teamNames.includes(currentUser.displayName)) || task.addedByUid === currentUser.uid);
+    if (!isPublished && totalHoursElement) {
+        setTimeout(() => { totalHoursElement.textContent = 'Planning pas encore publié · vos ajouts uniquement'; }, 0);
+    }
 
     let dailyTotals = [0, 0, 0, 0, 0, 0, 0];
     let totalWeekHours = 0;
@@ -536,7 +603,7 @@ async function loadUserScheduleForWeek(start, end) {
         const dayIndex = (utcDate.getUTCDay() + 6) % 7;
 
         const chantierDetails = chantiersCache.find(c => c.id === task.chantierId);
-        const teamCount = (task.teamNames || []).length;
+        const teamCount = task.teamSize || (task.teamNames || []).length;
         
         if (chantierDetails && chantierDetails.totalHeuresPrevues > 0 && teamCount > 0) {
             const totalBudget = chantierDetails.totalHeuresPrevues;
@@ -547,7 +614,7 @@ async function loadUserScheduleForWeek(start, end) {
         }
     });
     
-    if (totalHoursElement) totalHoursElement.textContent = `Total semaine prevues : ${formatDecimalHours(totalWeekHours)}`;
+    if (totalHoursElement) totalHoursElement.textContent = `Total semaine prévues : ${formatDecimalHours(totalWeekHours)}`;
 
     for (let i = 0; i < 7; i++) {
         const dayTotalEl = document.getElementById(`day-total-${i}`);
@@ -570,11 +637,37 @@ async function loadUserScheduleForWeek(start, end) {
             container.appendChild(createTaskElement(data, chantierDetails));
         }
     });
+
+    for (let i = 0; i < 7; i++) {
+        const dayColumn = document.getElementById(`day-col-${i}`);
+        if (dayColumn && !dayColumn.children.length) {
+            dayColumn.innerHTML = `<p class="schedule-day-empty">Rien de prévu</p>`;
+            dayColumn.parentElement.classList.add('is-empty');
+        }
+    }
 }
 
 function createTaskElement(task, chantierDetails) {
     const el = document.createElement('div');
-    el.className = 'p-3 rounded-lg shadow-sm border-l-4 text-sm cursor-pointer hover:shadow-md transition-shadow';
+    // Chantier ajouté par l'employé : il peut le retirer
+    if (task.addedByUid === currentUser.uid && task.id) {
+        setTimeout(() => {
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'own-task-remove';
+            remove.textContent = 'Ajouté par vous · Retirer';
+            remove.onclick = (event) => {
+                event.stopPropagation();
+                deleteDoc(doc(db, "planning", task.id)).catch(error => {
+                    console.error(error);
+                    showInfoModal("Erreur", "Impossible de retirer ce chantier.");
+                });
+                displayWeekView();
+            };
+            el.appendChild(remove);
+        }, 0);
+    }
+    el.className = 'schedule-task p-3 rounded-lg shadow-sm border-l-4 text-sm cursor-pointer hover:shadow-md transition-shadow';
     el.style.backgroundColor = 'var(--color-surface)';
     el.style.borderColor = 'var(--color-primary)';
 
@@ -583,7 +676,7 @@ function createTaskElement(task, chantierDetails) {
     }
     
     const teamNames = task.teamNames || [];
-    const teamCount = teamNames.length;
+    const teamCount = task.teamSize || teamNames.length;
     const team = teamCount > 0 ? `Équipe : ${teamNames.join(', ')}` : 'Pas d\'équipe';
     
     const startTimeHTML = task.startTime ? `<span class="ml-2 px-2 py-0.5 rounded text-xs font-bold" style="background-color: var(--color-background); color: var(--color-primary);">${task.startTime}</span>` : '';
@@ -663,7 +756,9 @@ function renderSuggestions(suggestions) {
 async function handleSuggestionClick(e) {
     const button = e.target;
     const suggId = button.dataset.suggId;
-    if (!suggId) return;
+    if (!suggId || button.disabled) return;
+    // Empêche un double appui d'ajouter deux fois le même pointage
+    button.closest('div.border-l-4')?.querySelectorAll('button').forEach(b => { b.disabled = true; });
     if (button.classList.contains('accept-suggestion-btn')) {
         const suggDoc = await getDoc(doc(db, "pointages", suggId));
         if (!suggDoc.exists()) { showInfoModal("Erreur", "Le pointage original n'a pas été trouvé."); return; }
@@ -737,4 +832,70 @@ function initUnreadMessagesListener() {
             container.innerHTML = '';
         }
     });
+}
+// --- Ajout d'un chantier par l'employé (planning reçu sur papier, changement de dernière minute…) ---
+function openAddTaskModal(dateStr) {
+    document.getElementById('addTaskModal')?.remove();
+    const dateLabel = new Date(`${dateStr}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    const modal = document.createElement('div');
+    modal.id = 'addTaskModal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+        <form class="modal-panel" id="addTaskForm">
+            <div class="modal-body space-y-4">
+                <div>
+                    <h3 class="modal-title">Ajouter un chantier</h3>
+                    <p class="modal-text">À votre planning du ${dateLabel}.</p>
+                </div>
+                <div class="field">
+                    <label for="addTaskChantier" class="field-label">Chantier</label>
+                    <select id="addTaskChantier" class="input" required>
+                        <option value="">Choisir un chantier…</option>
+                        ${chantiersCache.map(c => `<option value="${c.id}">${String(c.name).replace(/</g, '&lt;')}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="addTaskTime" class="field-label">Heure de début (si imposée)</label>
+                    <input id="addTaskTime" type="time" class="input">
+                </div>
+                <div class="field">
+                    <label for="addTaskPeople" class="field-label">Personnes présentes (vous compris)</label>
+                    <input id="addTaskPeople" type="number" class="input" inputmode="numeric" pattern="[0-9]*" min="1" max="20" step="1" value="1" required>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="cancelAddTaskBtn" class="btn btn-secondary">Annuler</button>
+                <button type="submit" class="btn btn-primary">Ajouter</button>
+            </div>
+        </form>`;
+    document.body.appendChild(modal);
+    modal.querySelector('#cancelAddTaskBtn').onclick = () => modal.remove();
+    const peopleInput = modal.querySelector('#addTaskPeople');
+    peopleInput.addEventListener('input', () => { peopleInput.value = peopleInput.value.replace(/[^0-9]/g, ''); });
+    modal.querySelector('#addTaskForm').onsubmit = (e) => {
+        e.preventDefault();
+        const chantier = chantiersCache.find(c => c.id === document.getElementById('addTaskChantier').value);
+        if (!chantier) return;
+        // Écriture sans attendre le serveur : fonctionne aussi hors ligne
+        setDoc(doc(collection(db, "planning")), {
+            date: dateStr,
+            chantierId: chantier.id,
+            chantierName: chantier.name,
+            teamNames: [currentUser.displayName],
+            // Nombre de personnes sur place : le temps du chantier est partagé entre elles (Ma tournée, heures prévues)
+            teamSize: Math.min(20, Math.max(1, parseInt(document.getElementById("addTaskPeople").value, 10) || 1)),
+            startTime: document.getElementById('addTaskTime').value || '',
+            notes: '',
+            order: 999,
+            addedByEmployee: true,
+            addedByUid: currentUser.uid,
+            createdAt: serverTimestamp(),
+        }).catch(error => {
+            console.error("Ajout au planning refusé :", error);
+            showInfoModal("Erreur", "Le chantier n'a pas pu être ajouté au planning (droits insuffisants ou problème de connexion).");
+        });
+        modal.remove();
+        showToast(`${chantier.name} ajouté au ${dateLabel}.`, 'success');
+        displayWeekView();
+    };
 }

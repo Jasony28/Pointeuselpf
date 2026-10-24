@@ -1,4 +1,4 @@
-import { pageContent, currentUser, showInfoModal, db, themes, applyTheme, showUpdatesModal } from "../app.js";
+import { pageContent, currentUser, showInfoModal, showToast, db, themes, applyTheme, showUpdatesModal, getAppMode, setAppMode } from "../app.js";
 import { getAuth, signOut, sendPasswordResetEmail, updateEmail, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { doc, updateDoc, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { updatesLog } from "./updates-data.js";
@@ -8,11 +8,11 @@ const auth = getAuth();
 export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-3xl mx-auto space-y-6 pb-12">
-            <h2 class="text-3xl font-bold tracking-tight mb-6">⚙️ Paramètres</h2>
+            <h2 class="text-3xl font-bold tracking-tight mb-6">Paramètres</h2>
 
             <!-- Profil -->
-            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <h3 class="text-xl font-semibold mb-4 border-b pb-2" style="color: var(--color-text-base); border-color: var(--color-border);">👤 Mon Profil</h3>
+            <div class="settings-card p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="settings-section-title">Mon Profil</h3>
                 <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium mb-1">Nom d'affichage</label>
@@ -23,61 +23,66 @@ export async function render() {
                         <input type="text" value="${currentUser.role === 'admin' ? 'Administrateur' : 'Employé'}" disabled class="w-full border p-2 rounded opacity-50 cursor-not-allowed" style="background-color: var(--color-background); border-color: var(--color-border);">
                     </div>
                     <div class="text-right mt-4">
-                        <button id="saveProfileBtn" class="text-white font-bold px-6 py-2 rounded" style="background-color: var(--color-primary);">Enregistrer le profil</button>
+                        <button id="saveProfileBtn" class="btn btn-primary">Enregistrer le profil</button>
                     </div>
                 </div>
             </div>
 
             <!-- Sécurité -->
-            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <h3 class="text-xl font-semibold mb-4 border-b pb-2" style="color: var(--color-text-base); border-color: var(--color-border);">🛡️ Sécurité et Compte</h3>
+            <div class="settings-card p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="settings-section-title">Sécurité et Compte</h3>
                 
-                <div class="flex justify-between items-center mb-4">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
                     <p class="text-sm" style="color: var(--color-text-muted);">Recevoir un e-mail pour changer votre mot de passe.</p>
-                    <button id="changePasswordBtn" class="font-bold px-6 py-2 rounded transition-colors" style="background-color: var(--color-background); border: 1px solid var(--color-border);">
+                    <button id="changePasswordBtn" class="btn btn-secondary">
                         Changer le mot de passe
                     </button>
                 </div>
 
                 <div class="border-t my-4" style="border-color: var(--color-border);"></div>
                 
-                <div class="flex justify-between items-center">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                     <div>
                         <p class="text-sm" style="color: var(--color-text-muted);">Modifier votre e-mail de connexion.</p>
                         <p class="text-xs font-semibold mt-1" style="color: var(--color-text-base);">Actuel : ${currentUser.email}</p>
                     </div>
-                    <button id="changeEmailBtn" class="font-bold px-6 py-2 rounded transition-colors" style="background-color: var(--color-background); border: 1px solid var(--color-border);">
+                    <button id="changeEmailBtn" class="btn btn-secondary">
                         Changer l'e-mail
                     </button>
                 </div>
             </div>
 
             <!-- Export PDF -->
-            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <h3 class="text-xl font-semibold mb-4 border-b pb-2" style="color: var(--color-text-base); border-color: var(--color-border);">🗂️ Gestion des Données</h3>
+            <div class="settings-card p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="settings-section-title">Gestion des Données</h3>
                 <p class="text-sm" style="color: var(--color-text-muted); margin-bottom: 1rem;">Télécharger l'intégralité de votre historique de pointages.</p>
                 <div class="flex">
-                    <button id="exportPdfBtn" class="font-bold w-full px-6 py-2 rounded transition-colors" style="background-color: var(--color-background); border: 1px solid var(--color-primary); color: var(--color-primary);">
+                    <button id="exportPdfBtn" class="btn btn-secondary btn-block">
                         Exporter mon historique (PDF)
                     </button>
                 </div>
             </div>
 
             <!-- BLOC INSTALLATION APP -->
-            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <h3 class="text-xl font-semibold mb-4 border-b pb-2" style="color: var(--color-text-base); border-color: var(--color-border);">📱 Installer l'application</h3>
+            <div class="settings-card p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="settings-section-title">Télécharger l'application</h3>
                 <p class="text-sm mb-4" style="color: var(--color-text-muted);">Installez la pointeuse directement sur votre écran d'accueil pour y accéder en 1 clic, comme une vraie application !</p>
-                <button id="installAppBtn" class="w-full text-white font-bold py-3 rounded-lg transition-transform hover:scale-105 shadow-md flex items-center justify-center gap-2" style="background-color: var(--color-primary);">
-                    ⬇️ Installer sur l'écran d'accueil
+                <button id="installAppBtn" class="btn btn-primary btn-lg btn-block">
+                    Télécharger l'application
                 </button>
             </div>
 
             <!-- Thèmes -->
-            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <h3 class="text-xl font-semibold mb-4 border-b pb-2" style="color: var(--color-text-base); border-color: var(--color-border);">🎨 Thème de l'application</h3>
-                <div id="theme-selector" class="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4">
+            <div class="settings-card p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="settings-section-title">Thème de l'application</h3>
+                <div class="segmented" role="group" aria-label="Mode d'affichage" id="mode-selector" style="width: 100%; margin-bottom: 0.5rem;">
+                    <button type="button" data-mode="light" style="flex: 1;">Clair</button>
+                    <button type="button" data-mode="dark" style="flex: 1;">Sombre</button>
+                    <button type="button" data-mode="auto" style="flex: 1;">Automatique</button>
+                </div>
+                <div id="theme-selector" class="grid grid-cols-3 sm:grid-cols-5 gap-3 mt-2">
                     ${Object.entries(themes).map(([key, theme]) => `
-                        <button class="theme-option flex flex-col items-center p-3 rounded-lg border-2 transition-all" data-theme-key="${key}" style="border-color: transparent;">
+                        <button class="theme-option flex flex-col items-center p-3 rounded-lg border-2 transition-all" data-theme-key="${key}" style="border-color: transparent;" aria-label="Thème ${theme.name}">
                             <div class="w-10 h-10 rounded-full mb-2 border shadow-inner" style="background-color: ${theme.preview}; border-color: var(--color-border);"></div>
                             <span class="text-sm font-medium" style="color: var(--color-text-base);">${theme.name}</span>
                         </button>
@@ -86,28 +91,28 @@ export async function render() {
             </div>
 
             <!-- Nouveautés -->
-            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <h3 class="text-xl font-semibold mb-4 border-b pb-2" style="color: var(--color-text-base); border-color: var(--color-border);">✨ Nouveautés</h3>
+            <div class="settings-card p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="settings-section-title">Nouveautés</h3>
                 <p class="text-sm mb-4" style="color: var(--color-text-muted);">Consultez les dernières mises à jour de l'application.</p>
-                <button id="showUpdatesBtn" class="font-bold px-6 py-2 rounded transition-colors" style="background-color: var(--color-background); border: 1px solid var(--color-border);">
+                <button id="showUpdatesBtn" class="btn btn-secondary">
                     Voir le journal des mises à jour
                 </button>
             </div>
 
             <!-- Feedback -->
-            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <h3 class="text-xl font-semibold mb-4 border-b pb-2" style="color: var(--color-text-base); border-color: var(--color-border);">💡 Donner un feedback</h3>
+            <div class="settings-card p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="settings-section-title">Donner un feedback</h3>
                 <p class="text-sm" style="color: var(--color-text-muted);">Une idée d'amélioration ? Un bug à signaler ? Vos retours sont précieux.</p>
                 <textarea id="feedbackTextarea" class="w-full border p-2 rounded mt-3 h-24" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);" placeholder="Votre idée ici..."></textarea>
                 <div class="text-right mt-3">
-                    <button id="sendFeedbackBtn" class="text-white font-bold px-6 py-2 rounded" style="background-color: var(--color-primary);">Ouvrir mon e-mail pour envoyer</button>
+                    <button id="sendFeedbackBtn" class="btn btn-primary">Ouvrir mon e-mail pour envoyer</button>
                 </div>
             </div>
 
             <!-- Déconnexion -->
-            <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+            <div class="settings-card p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                  <div class="text-center">
-                    <button id="logoutBtnSettings" class="bg-red-600 hover:bg-red-700 text-white font-bold px-8 py-3 rounded-lg transition-colors">
+                    <button id="logoutBtnSettings" class="btn btn-danger btn-lg btn-block">
                         Déconnexion
                     </button>
                 </div>
@@ -128,8 +133,8 @@ export async function render() {
                         <input id="currentPasswordInput" type="password" required class="w-full border p-2 rounded" style="background-color: var(--color-background); border-color: var(--color-border);">
                     </div>
                     <div class="flex justify-end gap-4 pt-4">
-                        <button type="button" id="cancelChangeEmailBtn" class="font-bold px-6 py-2 rounded" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Annuler</button>
-                        <button type="submit" id="confirmChangeEmailBtn" class="text-white font-bold px-6 py-2 rounded" style="background-color: var(--color-primary);">Valider</button>
+                        <button type="button" id="cancelChangeEmailBtn" class="btn btn-secondary">Annuler</button>
+                        <button type="submit" id="confirmChangeEmailBtn" class="btn btn-primary">Valider</button>
                     </div>
                 </form>
             </div>
@@ -158,7 +163,9 @@ function setupEventListeners() {
     // --- INSTALLATION PWA ---
     const installBtn = document.getElementById('installAppBtn');
     if (installBtn) {
-        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+        // Appli déjà installée : écran d'accueil (PWA) ou appli App Store / Play Store (Capacitor)
+        const isNativeApp = !!window.Capacitor?.isNativePlatform?.();
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone || isNativeApp;
         
         if (isStandalone) {
             installBtn.innerHTML = "✅ Application déjà installée";
@@ -171,11 +178,8 @@ function setupEventListeners() {
                 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
                 
                 if (isIOS) {
-                    showInfoModal(
-                        "Installation sur iPhone/iPad 🍏", 
-                        "Apple n'autorise pas l'installation en 1 clic.\n\nPour l'installer :\n1️⃣ Appuyez sur le bouton de Partage (le carré avec une flèche) au centre de la barre du bas dans Safari.\n2️⃣ Faites défiler et appuyez sur 'Sur l'écran d'accueil'.\n3️⃣ Appuyez sur 'Ajouter' en haut à droite."
-                    );
-                } else if (window.deferredPrompt) {
+                    showIOSInstallSheet();
+                } else if (window.deferredPrompt || await waitForInstallPrompt(3000)) {
                     window.deferredPrompt.prompt();
                     const { outcome } = await window.deferredPrompt.userChoice;
                     if (outcome === 'accepted') {
@@ -185,10 +189,7 @@ function setupEventListeners() {
                     }
                     window.deferredPrompt = null;
                 } else {
-                    showInfoModal(
-                        "Information", 
-                        "Pour installer l'application, ouvrez le menu de votre navigateur (les 3 petits points) et choisissez 'Ajouter à l'écran d'accueil' ou 'Installer l'application'."
-                    );
+                    showToast("L'application est déjà installée sur cet appareil, ou ce navigateur ne permet pas l'installation.", 'info');
                 }
             });
         }
@@ -294,6 +295,12 @@ function setupEventListeners() {
         });
     });
 
+    // --- MODE CLAIR / SOMBRE ---
+    const modeButtons = document.querySelectorAll('#mode-selector [data-mode]');
+    const refreshModeUI = () => modeButtons.forEach(b => b.classList.toggle('is-active', b.dataset.mode === getAppMode()));
+    modeButtons.forEach(b => b.onclick = () => { setAppMode(b.dataset.mode); refreshModeUI(); });
+    refreshModeUI();
+
     // --- NOUVEAUTÉS ---
     document.getElementById('showUpdatesBtn').onclick = () => {
         showUpdatesModal(updatesLog); 
@@ -320,6 +327,54 @@ function setupEventListeners() {
 
     // --- DÉCONNEXION ---
     document.getElementById('logoutBtnSettings').onclick = () => signOut(auth);
+}
+
+// iPhone / iPad : Apple ne permet pas aux sites de lancer l'installation.
+// On affiche une feuille visuelle qui montre exactement où appuyer dans Safari.
+function showIOSInstallSheet() {
+    document.getElementById('iosInstallSheet')?.remove();
+    const shareIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>`;
+    const addIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></svg>`;
+    const isSafari = /Safari/.test(navigator.userAgent) && !/CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);
+
+    const sheet = document.createElement('div');
+    sheet.id = 'iosInstallSheet';
+    sheet.className = 'modal ios-install';
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-modal', 'true');
+    sheet.innerHTML = `
+        <div class="modal-panel">
+            <div class="modal-body">
+                <div class="ios-install-head">
+                    <img src="./icons/icon-192x192.png" alt="" class="ios-install-icon">
+                    <div>
+                        <h3 class="modal-title">Installer Pointeuse LPF</h3>
+                        <p class="modal-text" style="margin-top: 0.125rem;">2 appuis, et l'appli est sur votre écran d'accueil.</p>
+                    </div>
+                </div>
+                <ol class="ios-steps">
+                    <li><span class="ios-step-num">1</span><span>Appuyez sur <span class="ios-key">${shareIcon} Partager</span> ${isSafari ? 'dans la barre en bas de Safari' : 'dans votre navigateur'}</span></li>
+                    <li><span class="ios-step-num">2</span><span>Choisissez <span class="ios-key">${addIcon} Sur l'écran d'accueil</span>, puis <strong>Ajouter</strong></span></li>
+                </ol>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="closeIosInstallBtn" class="btn btn-primary btn-block">C'est compris</button>
+            </div>
+        </div>
+        ${isSafari ? '<div class="ios-install-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M6 14l6 6 6-6"/></svg></div>' : ''}
+    `;
+    document.body.appendChild(sheet);
+    sheet.querySelector('#closeIosInstallBtn').onclick = () => sheet.remove();
+}
+
+// Le navigateur peut accorder l'installation quelques instants après le chargement :
+// on l'attend brièvement plutôt que d'afficher tout de suite le message de secours.
+function waitForInstallPrompt(timeoutMs) {
+    return new Promise(resolve => {
+        const onPrompt = () => { clearTimeout(timer); setTimeout(() => resolve(!!window.deferredPrompt), 0); };
+        const timer = setTimeout(() => { window.removeEventListener('beforeinstallprompt', onPrompt); resolve(false); }, timeoutMs);
+        window.addEventListener('beforeinstallprompt', onPrompt, { once: true });
+    });
 }
 
 function updateThemeSelectionUI(selectedKey) {

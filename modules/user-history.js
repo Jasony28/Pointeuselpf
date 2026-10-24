@@ -107,7 +107,7 @@ export async function render(params = {}) {
                 </div>
 
                 <div class="flex items-center gap-2">
-                    <div id="view-toggle" class="p-1 rounded-lg flex" style="background-color: var(--color-background);">
+                    <div id="view-toggle" class="segmented">
                         <button id="showListViewBtn" class="px-3 py-1 text-sm rounded-md font-semibold view-toggle-btn active">Liste</button>
                         <button id="showCalendarViewBtn" class="px-3 py-1 text-sm rounded-md font-semibold view-toggle-btn">Calendrier</button>
                     </div>
@@ -119,14 +119,14 @@ export async function render(params = {}) {
                     ` : ''}
 
                     ${(targetUser.uid === currentUser.uid || currentUser.role === 'admin') ? `
-                    <button id="downloadPdfBtn" class="text-white font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition-opacity" style="background-color: var(--color-primary);">📄 PDF</button>
+                    <button id="downloadPdfBtn" class="btn btn-secondary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events: none;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>PDF</button>
                     ` : ''}
                 </div>
             </div>
 
             <div id="filters-container" class="p-4 rounded-lg mb-4" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                 <button id="toggleFiltersBtn" class="w-full font-bold py-2 px-4 rounded text-left flex items-center gap-2" style="background-color: var(--color-background); border: 1px solid var(--color-border);">
-                    🔍 Affiner la recherche
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events: none;"><path d="M22 3H2l8 9.46V19l4 2v-8.54z"/></svg> Affiner la recherche
                 </button>
                 <div id="filters-content" class="hidden mt-4">
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
@@ -144,7 +144,7 @@ export async function render(params = {}) {
                         </div>
                         <div class="flex gap-2">
                             <button id="applyFiltersBtn" class="w-full text-white font-bold px-4 py-2 rounded" style="background-color: var(--color-primary);">Filtrer</button>
-                            <button id="resetFiltersBtn" class="w-full px-4 py-2 rounded" style="background-color: var(--color-background); border: 1px solid var(--color-border);" title="Réinitialiser">↻</button>
+                            <button id="resetFiltersBtn" class="w-full px-4 py-2 rounded" style="background-color: var(--color-background); border: 1px solid var(--color-border);" title="Réinitialiser" aria-label="Réinitialiser"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events: none; margin: 0 auto;"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
                         </div>
                     </div>
                 </div>
@@ -152,9 +152,9 @@ export async function render(params = {}) {
             <div id="list-view">
                 <div class="rounded-lg shadow-sm p-4 mb-4" id="weekly-nav" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                     <div class="flex justify-between items-center">
-                        <button id="prevWeekBtn" class="px-4 py-2 rounded-lg hover:opacity-80" style="background-color: var(--color-background);">&lt;</button>
+                        <button id="prevWeekBtn" class="nav-arrow" aria-label="Précédent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
                         <div id="currentPeriodDisplay" class="text-center font-semibold text-lg"></div>
-                        <button id="nextWeekBtn" class="px-4 py-2 rounded-lg hover:opacity-80" style="background-color: var(--color-background);">&gt;</button>
+                        <button id="nextWeekBtn" class="nav-arrow" aria-label="Suivant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
                     </div>
                 </div>
                 <div id="totalsDisplay" class="rounded-lg shadow-sm p-4 mb-4 text-center text-xl font-bold grid grid-cols-1 md:grid-cols-2 gap-2" style="background-color: var(--color-surface); border: 1px solid var(--color-border);"></div>
@@ -164,9 +164,9 @@ export async function render(params = {}) {
             <div id="calendar-view" class="hidden">
                  <div class="rounded-lg shadow-sm p-4" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                     <div id="calendar-header" class="flex justify-between items-center mb-4">
-                        <button id="prevMonthBtn" class="px-4 py-2 rounded-lg hover:opacity-80" style="background-color: var(--color-background);">&lt;</button>
+                        <button id="prevMonthBtn" class="nav-arrow" aria-label="Précédent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
                         <h3 id="calendarMonthYear" class="text-xl font-bold"></h3>
-                        <button id="nextMonthBtn" class="px-4 py-2 rounded-lg hover:opacity-80" style="background-color: var(--color-background);">&gt;</button>
+                        <button id="nextMonthBtn" class="nav-arrow" aria-label="Suivant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
                     </div>
                     <div id="calendar-grid" class="grid grid-cols-7 gap-1"></div>
                 </div>
@@ -858,7 +858,7 @@ function createHistoryEntryElement(d, trajetData) {
 
     let trajetDisplay = '';
     if (trajetData) {
-        trajetDisplay = `<div class="text-xs mt-1" style="color: var(--color-text-muted);">🚗 ${trajetData.distance_km.toFixed(1)} km - ${formatMinutes(trajetData.duree_min)}</div>`;
+        trajetDisplay = `<div class="entry-trip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 17h14M6 17l1.5-5h9L18 17M7 17v2M17 17v2"/><circle cx="8" cy="14.5" r=".5"/><circle cx="16" cy="14.5" r=".5"/></svg>${trajetData.distance_km.toFixed(1)} km · ${formatMinutes(trajetData.duree_min)}</div>`;
     }
     
     const startDate = new Date(d.timestamp);
@@ -871,18 +871,22 @@ function createHistoryEntryElement(d, trajetData) {
         if (d.pauseDurationMs && d.pauseDurationMs > 0) {
             pauseDisplay = `<div class="text-xs text-yellow-600 mt-1">Pause : ${formatMilliseconds(d.pauseDurationMs)}</div>`;
         }
+    } else {
+        // Pointage encore en cours : on affiche l'heure de début au lieu d'une ligne vide
+        timeDisplay = `Débuté à ${startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · en cours`;
+        durationDisplay = `<span class="hours-live mt-1"><span class="hours-live-dot"></span>En cours</span>`;
     }
-    wrapper.innerHTML = `<div class="pr-20"><div class="font-bold">${d.chantier}</div><div class="text-sm" style="color: var(--color-text-muted);">${timeDisplay}</div>${trajetDisplay}<div class="text-xs mt-1" style="color: var(--color-text-muted);">Collègues : ${Array.isArray(d.colleagues) && d.colleagues.length > 0 ? d.colleagues.join(", ") : 'Aucun'}</div></div>${d.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-text-muted);"><strong>Notes:</strong> ${d.notes}</div>` : ""}`;
+    wrapper.innerHTML = `<div class="${currentUser.role === 'admin' && !localStealthMode ? 'pr-28' : 'pr-20'}"><div class="font-bold">${d.chantier}</div><div class="text-sm" style="color: var(--color-text-muted);">${timeDisplay}</div>${trajetDisplay}<div class="text-xs mt-1" style="color: var(--color-text-muted);">Collègues : ${Array.isArray(d.colleagues) && d.colleagues.length > 0 ? d.colleagues.join(", ") : 'Aucun'}</div></div>${d.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-text-muted);"><strong>Notes:</strong> ${d.notes}</div>` : ""}`;
     
     if (currentUser.role === 'admin' && !localStealthMode) {
         const controlsWrapper = document.createElement("div");
         controlsWrapper.className = "absolute top-2 right-3 flex flex-col items-end text-right"; 
         const buttonsDiv = document.createElement('div');
-        buttonsDiv.className = 'flex gap-2';
+        buttonsDiv.className = 'entry-actions';
         buttonsDiv.innerHTML = `
-            <button class="edit-btn font-bold" title="Modifier" data-id="${d.id}" style="color: var(--color-text-muted);">✏️</button>
-            <button class="delete-btn font-bold" title="Supprimer" data-id="${d.id}" style="color: var(--color-text-muted);">✖️</button>
-            <button class="reassign-btn font-bold" title="Réattribuer" data-id="${d.id}" style="color: var(--color-text-muted);">🔄</button>
+            <button class="edit-btn icon-btn" title="Modifier" aria-label="Modifier" data-id="${d.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+            <button class="reassign-btn icon-btn" title="Réattribuer" aria-label="Réattribuer" data-id="${d.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></button>
+            <button class="delete-btn icon-btn is-danger" title="Supprimer" aria-label="Supprimer" data-id="${d.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>
         `;
         controlsWrapper.appendChild(buttonsDiv);
         controlsWrapper.innerHTML += pauseDisplay + durationDisplay;

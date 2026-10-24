@@ -7,7 +7,7 @@ let chantiersCache = [];
 export async function render() {
     pageContent.innerHTML = `
         <div class="max-w-3xl mx-auto space-y-6">
-            <h2 class="text-2xl font-bold">📝 Mises à Jour des Chantiers</h2>
+            <h2 class="text-2xl font-bold">Mises à Jour des Chantiers</h2>
             <div class="bg-white p-6 rounded-lg shadow-sm">
                 <div class="space-y-4">
                     <div>
