@@ -1,10 +1,10 @@
 import { updatesLog } from './modules/updates-data.js';
 
-const APP_VERSION = 'v3.7.3';
+const APP_VERSION = 'v3.7.4';
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, initializeAuth, indexedDBLocalPersistence, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, serverTimestamp, updateDoc, deleteField, initializeFirestore, CACHE_SIZE_UNLIMITED, persistentLocalCache, persistentMultipleTabManager } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, serverTimestamp, updateDoc, deleteField, initializeFirestore, CACHE_SIZE_UNLIMITED, persistentLocalCache, persistentMultipleTabManager, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 
 // L'événement d'installation (beforeinstallprompt) est capturé dans index.html, avant le chargement de Firebase.
 
@@ -207,7 +207,8 @@ const adminTabs = [
     { id: 'admin-travel-report', name: 'Rapport trajets', icon: 'route' },
     { id: 'admin-hours-report', name: 'Rapport heures', icon: 'clock' },
     { id: 'admin-team', name: 'Équipe', short: 'Équipe', icon: 'users' },
-    { id: 'admin-missing-hours', name: 'Écarts d\'heures', icon: 'alert' }
+    { id: 'admin-missing-hours', name: 'Écarts d\'heures', icon: 'alert' },
+    { id: 'admin-errors', name: 'Erreurs', icon: 'bug' },
 ];
 
 // Libellés de fil d'Ariane pour les pages hors menu
@@ -298,6 +299,7 @@ function getPageName(pageId) {
 
 export async function navigateTo(pageId, params = {}) {
     if (pageId === 'user-details') pageId = 'user-history';
+    currentPageId = pageId;
 
     document.querySelectorAll('#main-nav-list a').forEach(link => {
         if (link.id === `nav-${pageId}`) {
@@ -727,3 +729,54 @@ export function showInfoModal(title, message) {
 
     modalCancelBtn.onclick = () => { genericModal.classList.add('hidden'); };
 }
+
+// =====================================================================
+// SUIVI DES ERREURS : chaque erreur chez un utilisateur est envoyée dans
+// la collection "errorLogs", consultable par l'admin (page Erreurs).
+// =====================================================================
+let currentPageId = null;
+const reportedErrors = new Set();
+let reportedCount = 0;
+let reporting = false;
+const MAX_REPORTS_PER_SESSION = 15;
+const originalConsoleError = console.error.bind(console);
+
+export function reportError(error, context = '') {
+    try {
+        if (reporting || !currentUser || reportedCount >= MAX_REPORTS_PER_SESSION) return;
+        const message = String(error?.message || error || 'Erreur inconnue').slice(0, 500);
+        // Les coupures réseau ne sont pas des bugs : inutile de les remonter
+        if (/offline|unavailable|failed to fetch|network/i.test(message) && !navigator.onLine) return;
+        const key = `${context}|${message}`;
+        if (reportedErrors.has(key)) return;
+        reportedErrors.add(key);
+        reportedCount++;
+        reporting = true;
+        addDoc(collection(db, "errorLogs"), {
+            message,
+            context: String(context).slice(0, 200),
+            stack: String(error?.stack || '').slice(0, 2000),
+            page: currentPageId || '',
+            uid: currentUser.uid,
+            userName: currentUser.displayName || currentUser.email || '',
+            appVersion: APP_VERSION,
+            userAgent: navigator.userAgent.slice(0, 300),
+            online: navigator.onLine,
+            clientTime: new Date().toISOString(),
+            createdAt: serverTimestamp(),
+        }).catch(() => {}).finally(() => { reporting = false; });
+    } catch {
+        reporting = false;
+    }
+}
+
+window.addEventListener('error', (event) => reportError(event.error || event.message, 'Erreur JavaScript'));
+window.addEventListener('unhandledrejection', (event) => reportError(event.reason, 'Promesse non gérée'));
+// Les erreurs déjà attrapées par les pages (console.error) sont aussi remontées
+console.error = (...args) => {
+    originalConsoleError(...args);
+    const error = args.find(a => a instanceof Error) || args.find(a => a && a.message);
+    const context = args.filter(a => typeof a === 'string').join(' ').slice(0, 200);
+    if (error || context) reportError(error || context, context);
+};
+
