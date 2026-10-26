@@ -18,6 +18,7 @@ precaching.precacheAndRoute([
     { url: 'modules/utils.js', revision: APP_VERSION },
     { url: 'modules/data-service.js', revision: APP_VERSION },
     { url: 'modules/updates-data.js', revision: APP_VERSION },
+    { url: 'modules/native-files.js', revision: APP_VERSION },
     { url: 'modules/settings.js', revision: APP_VERSION },
     { url: 'modules/chantiers.js', revision: APP_VERSION },
 

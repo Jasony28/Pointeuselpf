@@ -3,7 +3,8 @@
 # - Avec la clé de signature (secrets ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
 #   ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD) : fichier .aab à envoyer sur le Play Store,
 #   et .apk signé pour installer directement sur un téléphone.
-# - Sans la clé : seulement un .apk de test.
+# - Sans la clé : les mêmes fichiers, signés avec une clé jetable (« TEST ») : pour essayer
+#   l'appli sur un téléphone, jamais pour le Play Store.
 #
 # Lancement : onglet « Actions » du dépôt → « Appli Android » → « Run workflow ».
 # Les fichiers produits sont en bas de la page du lancement, rubrique « Artifacts ».
@@ -59,12 +60,29 @@ jobs:
           echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
           echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
 
-      - name: Signature
-        if: env.HAS_KEYSTORE == 'true'
+      - name: Clé de signature
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload.jks
+          if [ "$HAS_KEYSTORE" = "true" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload.jks
+            echo "SUFFIX=" >> "$GITHUB_ENV"
+          else
+            # Pas de clé dans les secrets : clé jetable, uniquement pour tester sur un téléphone
+            PASS=$(openssl rand -hex 16)
+            keytool -genkeypair -keystore android/app/upload.jks -alias test -keyalg RSA -keysize 2048 -validity 365 \
+              -storepass "$PASS" -keypass "$PASS" -dname "CN=Test Pointeuse LPF"
+            echo "::add-mask::$PASS"
+            {
+              echo "ANDROID_KEYSTORE_PASSWORD=$PASS"
+              echo "ANDROID_KEY_ALIAS=test"
+              echo "ANDROID_KEY_PASSWORD=$PASS"
+              echo "SUFFIX=-TEST-pas-pour-le-Play-Store"
+            } >> "$GITHUB_ENV"
+          fi
           cat >> android/app/build.gradle <<'EOF'
 
           android {
@@ -84,28 +102,19 @@ jobs:
           }
           EOF
 
-      - name: Compilation (version Play Store)
-        if: env.HAS_KEYSTORE == 'true'
+      - name: Compilation
         working-directory: android
         env:
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || env.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || env.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || env.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon bundleRelease assembleRelease
           mkdir -p ../sortie
-          cp app/build/outputs/bundle/release/app-release.aab "../sortie/pointeuse-lpf-${VERSION_NAME}-${VERSION_CODE}.aab"
-          cp app/build/outputs/apk/release/app-release.apk "../sortie/pointeuse-lpf-${VERSION_NAME}-${VERSION_CODE}.apk"
-
-      - name: Compilation (version de test, sans clé)
-        if: env.HAS_KEYSTORE != 'true'
-        working-directory: android
-        run: |
-          chmod +x gradlew
-          ./gradlew --no-daemon assembleDebug
-          mkdir -p ../sortie
-          cp app/build/outputs/apk/debug/app-debug.apk "../sortie/pointeuse-lpf-${VERSION_NAME}-test.apk"
+          cp app/build/outputs/bundle/release/app-release.aab "../sortie/pointeuse-lpf-${VERSION_NAME}-${VERSION_CODE}${SUFFIX}.aab"
+          cp app/build/outputs/apk/release/app-release.apk "../sortie/pointeuse-lpf-${VERSION_NAME}-${VERSION_CODE}${SUFFIX}.apk"
+          ls -la ../sortie
 
       - uses: actions/upload-artifact@v4
         with:

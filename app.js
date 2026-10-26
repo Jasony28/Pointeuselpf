@@ -1,6 +1,10 @@
 import { updatesLog } from './modules/updates-data.js';
+import { installNativeFileSaving } from './modules/native-files.js';
 
 const APP_VERSION = 'v3.8.7';
+
+// Appli Android / iPhone : PDF et CSV proposés dans le menu « Partager » du téléphone
+installNativeFileSaving();
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, initializeAuth, indexedDBLocalPersistence, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
