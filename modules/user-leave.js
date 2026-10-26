@@ -15,18 +15,13 @@ export async function render() {
             </div>
             
             <!-- FORMULAIRE DE DEMANDE -->
-            <div class="p-6 md:p-8 rounded-xl shadow-lg border relative overflow-hidden" style="background-color: var(--color-surface); border-color: var(--color-border);">
-                <!-- Décoration visuelle -->
-                <div class="absolute top-0 right-0 w-32 h-32 bg-primary opacity-5 rounded-bl-full pointer-events-none"></div>
-
-                <h3 class="text-2xl font-bold mb-6 flex items-center gap-2">
-                    <span style="color: var(--color-primary);">✈️</span> Formulaire de demande
-                </h3>
+            <div class="p-6 md:p-8 rounded-xl shadow-sm border" style="background-color: var(--color-surface); border-color: var(--color-border);">
+                <h3 class="text-xl font-bold mb-5">Nouvelle demande</h3>
 
                 <form id="leaveRequestForm" class="space-y-6 relative z-10">
                     
-                    <div class="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 text-sm text-blue-800 dark:text-blue-200 flex gap-3 mb-6">
-                        <span class="text-xl">ℹ️</span>
+                    <div class="leave-info">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>
                         <p>Les demandes de congés doivent être soumises <strong>au moins 7 jours à l'avance</strong>. Une fois approuvée, la demande s'affichera automatiquement dans le planning officiel.</p>
                     </div>
 
@@ -51,14 +46,14 @@ export async function render() {
                                 <label for="leave-reason" class="text-sm font-bold uppercase tracking-wider mb-1 block" style="color: var(--color-text-muted);">Motif de l'absence</label>
                                 <select id="leave-reason" class="w-full border-2 p-3 rounded-lg font-semibold cursor-pointer" style="background-color: var(--color-background); border-color: var(--color-border);" required>
                                     <option value="" disabled selected>-- Sélectionnez un motif --</option>
-                                    <option value="Vacances">🌴 Vacances / Congé payé</option>
-                                    <option value="Médical">🏥 Raison Médicale</option>
-                                    <option value="Familial">👪 Événement Familial</option>
-                                    <option value="Autre">✏️ Autre (préciser)</option>
+                                    <option value="Vacances">Vacances / Congé payé</option>
+                                    <option value="Médical">Raison médicale</option>
+                                    <option value="Familial">Événement familial</option>
+                                    <option value="Autre">Autre (préciser)</option>
                                 </select>
                             </div>
                             <div id="custom-reason-container" class="hidden">
-                                <label for="leave-reason-custom" class="text-sm font-bold uppercase tracking-wider mb-1 block text-red-500">Précisez la raison</label>
+                                <label for="leave-reason-custom" class="text-sm font-bold uppercase tracking-wider mb-1 block" style="color: var(--color-text-muted);">Précisez la raison</label>
                                 <textarea id="leave-reason-custom" class="w-full border-2 p-3 rounded-lg" style="background-color: var(--color-background); border-color: var(--color-border);" rows="2"></textarea>
                                 <div class="text-right text-xs font-bold mt-1" style="color: var(--color-text-muted);">
                                    <span id="char-counter">0</span> / ${CUSTOM_REASON_MAX_LENGTH} max
@@ -79,19 +74,18 @@ export async function render() {
                     </div>
 
                     <div class="text-right pt-6 border-t" style="border-color: var(--color-border);">
-                        <button type="submit" class="w-full md:w-auto text-white font-black px-8 py-3 rounded-xl shadow-lg transition-transform hover:scale-105" style="background-color: var(--color-primary);">
-                            🚀 Soumettre la demande
-                        </button>
+                        <button type="submit" class="btn btn-primary btn-lg w-full md:w-auto">Envoyer la demande</button>
                     </div>
                 </form>
             </div>
 
             <!-- PLANNING DES CONGÉS DE L'ÉQUIPE -->
             <div class="p-6 rounded-xl shadow-sm border" style="background-color: var(--color-surface); border-color: var(--color-border);">
-                <div class="flex justify-between items-center mb-6">
-                    <button id="prevWeekBtn" class="px-5 py-2 rounded-lg font-bold bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors">&lt; Préc.</button>
-                    <h3 id="list-title" class="text-xl font-bold text-center text-primary"></h3>
-                    <button id="nextWeekBtn" class="px-5 py-2 rounded-lg font-bold bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors">Suiv. &gt;</button>
+                <h3 class="text-xl font-bold mb-3">Congés de l'équipe</h3>
+                <div class="flex justify-between items-center gap-2 mb-5">
+                    <button id="prevWeekBtn" class="nav-arrow" aria-label="Semaine précédente"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;"><path d="m15 18-6-6 6-6"/></svg></button>
+                    <p id="list-title" class="font-semibold text-center"></p>
+                    <button id="nextWeekBtn" class="nav-arrow" aria-label="Semaine suivante"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;"><path d="m9 18 6-6-6-6"/></svg></button>
                 </div>
                 <div id="leave-list-container" class="space-y-6"></div>
             </div>
@@ -278,10 +272,7 @@ function displayLeaveList() {
 
     if (sortedDays.length === 0) {
         listContainer.innerHTML = `
-            <div class="text-center py-10 bg-gray-50 dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-600">
-                <span class="text-4xl opacity-50">🏖️</span>
-                <p class="mt-3 font-semibold text-gray-500">Aucun congé prévu cette semaine-là.</p>
-            </div>`;
+            <p class="hours-empty">Aucun congé prévu cette semaine-là.</p>`;
         return;
     }
 
@@ -289,14 +280,12 @@ function displayLeaveList() {
         const dayEntries = groupedByDay[dateString];
         const dayDate = new Date(dateString + 'T12:00:00Z');
         const dayWrapper = document.createElement('div');
-        dayWrapper.className = "mb-6";
+        dayWrapper.className = "leave-day";
         dayWrapper.innerHTML = `
-            <div class="border-b pb-2 mb-4 border-gray-200 dark:border-gray-700">
-                <h3 class="font-black text-lg" style="color: var(--color-primary);">${dayDate.toLocaleDateString('fr-FR', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' })}</h3>
-            </div>`;
+            <h4 class="leave-day-title">${dayDate.toLocaleDateString('fr-FR', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' })}</h4>`;
         
         const entriesContainer = document.createElement('div');
-        entriesContainer.className = 'grid grid-cols-1 md:grid-cols-2 gap-4';
+        entriesContainer.className = 'grid grid-cols-1 md:grid-cols-2 gap-3';
 
         dayEntries.forEach(entry => {
             if (entry.status === 'pending' && entry.userId !== currentUser.uid && currentUser.role !== 'admin') {
@@ -306,19 +295,19 @@ function displayLeaveList() {
             let statusStyle = '', statusText = '', actionHtml = '';
             
             if (entry.status === 'approved') {
-                statusStyle = 'border-l-4 border-green-500 bg-green-50 dark:bg-green-900/10';
-                statusText = '<span class="text-green-600 font-bold text-xs uppercase tracking-wider">✅ Approuvé</span>';
+                statusStyle = 'is-approved';
+                statusText = '<span class="leave-status is-approved">Approuvé</span>';
                 if (entry.userId === currentUser.uid || currentUser.role === 'admin') {
-                    actionHtml = `<button class="cancel-leave-btn mt-2 text-xs font-bold text-red-500 hover:underline" data-id="${entry.id}">Annuler ce congé</button>`;
+                    actionHtml = `<button class="cancel-leave-btn leave-action" data-id="${entry.id}">Annuler ce congé</button>`;
                 }
             } else if (entry.status === 'refused') {
-                statusStyle = 'border-l-4 border-red-500 bg-red-50 dark:bg-red-900/10 opacity-70';
-                statusText = '<span class="text-red-600 font-bold text-xs uppercase tracking-wider">❌ Refusé</span>';
+                statusStyle = 'is-refused';
+                statusText = '<span class="leave-status is-refused">Refusé</span>';
             } else if (entry.status === 'pending') {
-                statusStyle = 'border-l-4 border-amber-400 bg-amber-50 dark:bg-amber-900/10 border border-amber-200';
-                statusText = '<span class="text-amber-600 font-bold text-xs uppercase tracking-wider animate-pulse">⏳ En attente</span>';
+                statusStyle = 'is-pending';
+                statusText = '<span class="leave-status is-pending">En attente</span>';
                 if (entry.userId === currentUser.uid) {
-                    actionHtml = `<button class="cancel-leave-btn mt-2 text-xs font-bold text-gray-500 hover:text-red-500 hover:underline" data-id="${entry.id}">Annuler ma demande</button>`;
+                    actionHtml = `<button class="cancel-leave-btn leave-action" data-id="${entry.id}">Annuler ma demande</button>`;
                 }
             }
 
@@ -334,22 +323,18 @@ function displayLeaveList() {
 
             // On ajoute quand même les heures si c'est une absence partielle
             if (entry.startTime && entry.endTime) {
-                reasonText += ` <span class="text-purple-600 font-semibold">(de ${entry.startTime} à ${entry.endTime})</span>`;
+                reasonText += ` <span class="leave-hours">de ${entry.startTime} à ${entry.endTime}</span>`;
             }
             // ---------------------------------
             
             const card = document.createElement('div');
-            card.className = `p-4 rounded-r-lg shadow-sm ${statusStyle}`;
+            card.className = `leave-card ${statusStyle}`;
             card.innerHTML = `
-                <div class="flex justify-between items-start">
-                    <div>
-                        <p class="font-black text-lg">${entry.userName}</p>
-                        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">${reasonText}</p>
-                    </div>
-                    <div class="text-right">
-                        ${statusText}
-                    </div>
+                <div class="leave-card-head">
+                    <p class="leave-card-name">${entry.userName}</p>
+                    ${statusText}
                 </div>
+                <p class="leave-card-reason">${reasonText}</p>
                 ${actionHtml}
             `;
             entriesContainer.appendChild(card);
@@ -386,7 +371,7 @@ async function submitLeaveRequest(e) {
     if (requestedStart < limitDate) {
         showInfoModal("Opération impossible", "Rappel : Toute demande de congé doit être effectuée au strict minimum 7 jours à l'avance.");
         submitButton.disabled = false; 
-        submitButton.textContent = "🚀 Soumettre la demande"; 
+        submitButton.textContent = "Envoyer la demande"; 
         return; 
     }
 
@@ -427,7 +412,7 @@ async function submitLeaveRequest(e) {
     
     const confirmed = await showConfirmationModal("Récapitulatif", summary);
     if (!confirmed) {
-        submitButton.disabled = false; submitButton.textContent = "🚀 Soumettre la demande"; return;
+        submitButton.disabled = false; submitButton.textContent = "Envoyer la demande"; return;
     }
 
     submitButton.textContent = "Envoi en cours...";
@@ -442,6 +427,6 @@ async function submitLeaveRequest(e) {
         showInfoModal("Erreur", "L'envoi de la demande a échoué.");
     } finally {
         submitButton.disabled = false;
-        submitButton.textContent = "🚀 Soumettre la demande";
+        submitButton.textContent = "Envoyer la demande";
     }
 }

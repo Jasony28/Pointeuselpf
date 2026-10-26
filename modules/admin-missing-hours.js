@@ -38,9 +38,7 @@ export async function render() {
                         <button id="nextPeriodBtn" class="nav-arrow" aria-label="Suivant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
                     </div>
 
-                    <button id="exportPdfBtn" class="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 shadow-sm">
-                        📥 Exporter PDF
-                    </button>
+                    <button id="exportPdfBtn" class="btn btn-secondary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events: none;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Exporter PDF</button>
                 </div>
             </div>
 
@@ -235,10 +233,10 @@ async function calculateAndDisplayReport() {
 
         if (currentReportData.length === 0) {
             listContainer.innerHTML = `
-                <div class="text-center py-10 bg-green-50 rounded-xl border border-green-200">
-                    <span class="text-4xl">🎉</span>
-                    <p class="text-green-700 font-bold text-lg mt-2">Félicitations !</p>
-                    <p class="text-green-600 text-sm">Aucun écart constaté. Le temps presté correspond parfaitement au temps prévu.</p>
+                <div class="missing-ok">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                    <p class="missing-ok-title">Aucun écart</p>
+                    <p class="missing-ok-text">Le temps presté correspond au temps prévu sur cette période.</p>
                 </div>`;
             return;
         }
@@ -264,9 +262,7 @@ async function calculateAndDisplayReport() {
                             <p class="text-xs font-bold uppercase tracking-wide text-red-500">Écart</p>
                             <span class="font-black text-red-600 text-2xl">-${formatTime(item.missingMin)}</span>
                         </div>
-                        <button class="add-manual-btn bg-green-100 hover:bg-green-200 text-green-700 font-bold p-3 rounded-full transition-colors shadow-sm" data-chantier="${item.chantierName}" title="Ajouter des heures manquantes">
-                            ➕
-                        </button>
+                        <button class="add-manual-btn missing-add-btn" data-chantier="${item.chantierName}" title="Ajouter des heures manquantes" aria-label="Ajouter des heures manquantes"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" style="pointer-events: none;"><path d="M12 5v14M5 12h14"/></svg></button>
                     </div>
                 </div>
             `;
@@ -291,7 +287,7 @@ function openManualEntryModal(chantierName) {
     const modal = document.getElementById('manualEntryModal');
     document.getElementById('manualEntryForm').reset();
     
-    document.getElementById('modalChantierName').textContent = `📍 ${chantierName}`;
+    document.getElementById('modalChantierName').textContent = chantierName;
     document.getElementById('entryChantier').value = chantierName;
     document.getElementById('entryHours').value = '';
     document.getElementById('entryMinutes').value = '0';

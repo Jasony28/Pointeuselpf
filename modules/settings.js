@@ -168,7 +168,7 @@ function setupEventListeners() {
         const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone || isNativeApp;
         
         if (isStandalone) {
-            installBtn.innerHTML = "✅ Application déjà installée";
+            installBtn.textContent = "Application déjà installée";
             installBtn.classList.remove('hover:scale-105');
             installBtn.style.backgroundColor = '#16a34a'; 
             installBtn.disabled = true;
@@ -183,7 +183,7 @@ function setupEventListeners() {
                     window.deferredPrompt.prompt();
                     const { outcome } = await window.deferredPrompt.userChoice;
                     if (outcome === 'accepted') {
-                        installBtn.innerHTML = "✅ Application installée";
+                        installBtn.textContent = "Application installée";
                         installBtn.style.backgroundColor = '#16a34a';
                         installBtn.disabled = true;
                     }

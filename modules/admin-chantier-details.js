@@ -17,18 +17,17 @@ export async function render(params = {}) {
 
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto space-y-6">
-            <button id="back-to-dashboard" class="font-semibold hover:underline" style="color: var(--color-primary);">&larr; Retour au tableau de bord</button>
+            <button id="back-to-dashboard" class="link font-semibold">&larr; Retour au tableau de bord</button>
+
+            <div>
+                <p class="kpi-label">Détail du chantier</p>
+                <h2 class="text-2xl font-bold" style="color: var(--color-text-base);">${currentChantierName}</h2>
+            </div>
             
-            <h2 class="text-2xl font-bold" style="color: var(--color-text-base);">
-                Détails pour le chantier : <span style="color: var(--color-primary);">${currentChantierName}</span>
-            </h2>
-            
-            <div class="p-4 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <div class="flex items-center justify-center gap-2" id="filter-buttons">
-                    <button data-filter="week" class="px-4 py-2 text-sm font-medium rounded-md transition-colors"></button>
-                    <button data-filter="month" class="px-4 py-2 text-sm font-medium rounded-md transition-colors"></button>
-                    <button data-filter="year" class="px-4 py-2 text-sm font-medium rounded-md transition-colors"></button>
-                </div>
+            <div class="segmented" id="filter-buttons" role="group" aria-label="Période">
+                <button data-filter="week"></button>
+                <button data-filter="month"></button>
+                <button data-filter="year"></button>
             </div>
 
             <div class="p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
@@ -51,9 +50,9 @@ export async function render(params = {}) {
 
         // Initialisation des textes des boutons
         const buttons = document.getElementById('filter-buttons').querySelectorAll('button');
-        buttons[0].textContent = "Cette Semaine";
-        buttons[1].textContent = "Ce Mois";
-        buttons[2].textContent = "Cette Année";
+        buttons[0].textContent = "Cette semaine";
+        buttons[1].textContent = "Ce mois";
+        buttons[2].textContent = "Cette année";
 
         loadChantierDetails();
     }, 0);
@@ -72,8 +71,8 @@ async function loadChantierDetails() {
     // Met à jour le style du bouton de filtre actif en utilisant les variables de thème
     filterButtons.querySelectorAll('button').forEach(btn => {
         const isActive = btn.dataset.filter === currentFilter;
-        btn.style.backgroundColor = isActive ? 'var(--color-primary)' : 'var(--color-background)';
-        btn.style.color = isActive ? '#FFFFFF' : 'var(--color-text-base)';
+        btn.classList.toggle('is-active', isActive);
+        btn.setAttribute('aria-pressed', String(isActive));
     });
 
     const now = new Date();
@@ -128,11 +127,10 @@ async function loadChantierDetails() {
 
         sortedUsers.forEach(([name, ms]) => {
             const div = document.createElement('div');
-            div.className = 'flex justify-between items-center text-sm p-2 border-b';
-            div.style.borderColor = 'var(--color-border)';
+            div.className = 'info-row';
             div.innerHTML = `
-                <span class="font-medium" style="color: var(--color-text-base);">${name}</span>
-                <span class="font-bold" style="color: var(--color-primary);">${formatMilliseconds(ms)}</span>
+                <span>${name}</span>
+                <strong class="tabular-nums" style="color: var(--color-primary);">${formatMilliseconds(ms)}</strong>
             `;
             listContainer.appendChild(div);
         });

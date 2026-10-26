@@ -282,7 +282,7 @@ function showEditModal(chantier) {
             const li = document.createElement('li');
             li.className = 'flex items-center justify-between p-2 rounded';
             li.style.backgroundColor = 'var(--color-background)';
-            li.innerHTML = `<span>${codeText}</span><button type="button" class="text-red-500 hover:text-red-700 font-bold">✖</button>`;
+            li.innerHTML = `<span>${codeText}</span><button type="button" class="icon-btn is-danger" aria-label="Retirer ce code"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" style="pointer-events: none;"><path d="M18 6 6 18M6 6l12 12"/></svg></button>`;
             li.querySelector('button').onclick = () => li.remove();
             editList.appendChild(li);
         });
@@ -302,7 +302,7 @@ function setupKeyCodeHandlers(inputId, addButtonId, listId) {
             const li = document.createElement('li');
             li.className = 'flex items-center justify-between p-2 rounded';
             li.style.backgroundColor = 'var(--color-background)';
-            li.innerHTML = `<span>${codeText}</span><button type="button" class="text-red-500 hover:text-red-700 font-bold">✖</button>`;
+            li.innerHTML = `<span>${codeText}</span><button type="button" class="icon-btn is-danger" aria-label="Retirer ce code"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" style="pointer-events: none;"><path d="M18 6 6 18M6 6l12 12"/></svg></button>`;
             li.querySelector('button').onclick = () => li.remove();
             list.appendChild(li);
             newKeyCodeInput.value = '';

@@ -257,7 +257,7 @@ function renderCardEdit(cardElement, user) {
                 <span class="text-xs">Dès le :</span>
                 <input type="date" class="input-field hist-date flex-1 !p-1 !text-xs" value="${c.startDate}" data-index="${index}">
                 <input type="number" class="input-field hist-hours w-16 !p-1 !text-xs text-center" value="${c.hours}" data-index="${index}" placeholder="Heures">
-                <button type="button" class="text-red-500 font-bold px-2 delete-hist-btn" data-index="${index}" title="Supprimer ce contrat">✖</button>
+                <button type="button" class="icon-btn is-danger delete-hist-btn" data-index="${index}" title="Supprimer ce contrat" aria-label="Supprimer ce contrat"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" style="pointer-events: none;"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
             </div>
         `).join('');
 

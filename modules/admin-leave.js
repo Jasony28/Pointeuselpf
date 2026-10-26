@@ -12,8 +12,8 @@ export async function render() {
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <!-- COLONNE 1 : EN ATTENTE -->
                 <div class="flex flex-col h-full">
-                    <h3 class="text-xl font-bold mb-4 flex items-center gap-2 text-amber-500">
-                        <span>⏳</span> Demandes à traiter
+                    <h3 class="text-xl font-bold mb-4 flex items-center gap-2" style="color: var(--color-text-base);">
+                        Demandes à traiter
                     </h3>
                     <div id="pending-requests-list" class="space-y-4 flex-grow p-4 rounded-xl shadow-sm border" style="background-color: var(--color-surface); border-color: var(--color-border);">
                         <p class="text-center py-4" style="color: var(--color-text-muted);">Chargement...</p>
@@ -23,7 +23,7 @@ export async function render() {
                 <!-- COLONNE 2 : HISTORIQUE -->
                 <div class="flex flex-col h-full">
                     <h3 class="text-xl font-bold mb-4 flex items-center gap-2" style="color: var(--color-text-base);">
-                        <span>✅</span> Historique récent
+                        Historique récent
                     </h3>
                     <div id="processed-requests-list" class="space-y-4 flex-grow p-4 rounded-xl shadow-sm border opacity-90" style="background-color: var(--color-surface); border-color: var(--color-border);">
                         <p class="text-center py-4" style="color: var(--color-text-muted);">Chargement...</p>
@@ -67,7 +67,7 @@ async function loadAllRequests() {
             }
         });
 
-        if (pendingCount === 0) pendingContainer.innerHTML = '<div class="text-center py-8"><span class="text-4xl">🎉</span><p class="font-bold text-green-600 mt-2">Tout est à jour !</p><p class="text-sm text-gray-500">Aucune demande en attente.</p></div>';
+        if (pendingCount === 0) pendingContainer.innerHTML = '<div class="text-center py-8"><p class="font-bold mt-2" style="color: var(--color-success);">Tout est à jour !</p><p class="text-sm text-gray-500">Aucune demande en attente.</p></div>';
         if (processedCount === 0) processedContainer.innerHTML = '<p class="text-center italic py-4 text-gray-500">Aucun historique.</p>';
 
         document.getElementById('pending-requests-list').addEventListener('click', handleAdminAction);
@@ -100,17 +100,17 @@ function createRequestElement(id, data) {
     let actionButtons = '';
 
     if (data.status === 'approved') {
-        statusBadge = '<span class="px-3 py-1 text-xs font-black uppercase tracking-wider rounded-full bg-green-100 text-green-700">Approuvé</span>';
-        actionButtons = `<button data-id="${id}" data-action="delete" class="action-btn text-xs text-red-500 hover:underline font-bold mt-2">✖ Supprimer l'archive</button>`;
+        statusBadge = '<span class="leave-status is-approved">Approuvé</span>';
+        actionButtons = `<button data-id="${id}" data-action="delete" class="action-btn leave-action">Supprimer l'archive</button>`;
     } else if (data.status === 'refused') {
-        statusBadge = '<span class="px-3 py-1 text-xs font-black uppercase tracking-wider rounded-full bg-red-100 text-red-700">Refusé</span>';
-        actionButtons = `<button data-id="${id}" data-action="delete" class="action-btn text-xs text-gray-500 hover:underline font-bold mt-2">✖ Supprimer l'archive</button>`;
+        statusBadge = '<span class="leave-status is-refused">Refusé</span>';
+        actionButtons = `<button data-id="${id}" data-action="delete" class="action-btn leave-action">Supprimer l'archive</button>`;
     } else {
-        statusBadge = '<span class="px-3 py-1 text-xs font-black uppercase tracking-wider rounded-full bg-amber-100 text-amber-700 animate-pulse">En attente</span>';
+        statusBadge = '<span class="leave-status is-pending">En attente</span>';
         actionButtons = `
             <div class="flex gap-2 w-full mt-2 pt-3 border-t" style="border-color: var(--color-border);">
-                <button data-id="${id}" data-action="refused" class="action-btn flex-1 bg-red-50 text-red-600 border border-red-200 hover:bg-red-500 hover:text-white font-bold py-2 rounded-lg transition-colors">Refuser</button>
-                <button data-id="${id}" data-action="approved" class="action-btn flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-2 rounded-lg shadow-sm transition-colors">Accepter</button>
+                <button data-id="${id}" data-action="refused" class="action-btn btn btn-secondary flex-1">Refuser</button>
+                <button data-id="${id}" data-action="approved" class="action-btn btn btn-primary flex-1">Accepter</button>
             </div>
         `;
     }
@@ -126,7 +126,7 @@ function createRequestElement(id, data) {
         <div class="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg text-sm border border-gray-100 dark:border-gray-700">
             <span class="font-bold text-gray-500 uppercase text-xs">Motif</span><br>
             <span style="color: var(--color-text-base);">${data.reason}</span>
-            ${data.startTime ? `<br><span class="text-xs font-semibold text-purple-600 mt-1 block">🕒 De ${data.startTime} à ${data.endTime}</span>` : ''}
+            ${data.startTime ? `<br><span class="leave-hours mt-1">de ${data.startTime} à ${data.endTime}</span>` : ''}
         </div>
         ${actionButtons}
     `;

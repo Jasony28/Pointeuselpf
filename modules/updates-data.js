@@ -1,5 +1,14 @@
 export const updatesLog = [
     {
+        version: 'v3.8.3',
+        date: '26 octobre 2026',
+        changes: [
+            "**Nouveau style** pour la Planification, les Congés, Mes statistiques, les Écarts d'heures et le détail d'un chantier.",
+            "**Planification** : le jour actuel est mis en avant, les jours et les chantiers sont plus lisibles, l'équipe s'affiche au-dessus du planning sur ordinateur.",
+            "**Congés** : statuts plus clairs (en attente, approuvé, refusé) et navigation par flèches entre les semaines.",
+        ]
+    },
+    {
         version: 'v3.8.2',
         date: '26 octobre 2026',
         changes: [

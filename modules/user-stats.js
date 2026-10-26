@@ -17,7 +17,7 @@ export async function render() {
             
             <!-- SECTION PROFIL UTILISATEUR -->
             <div>
-                <h1 class="text-2xl font-bold mb-4">Mes Informations</h1>
+                <h1 class="text-2xl font-bold mb-4">Mes informations</h1>
                 <div id="user-profile-container" class="p-6 rounded-xl shadow-sm transition-all duration-300" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                     <p class="text-center text-sm" style="color: var(--color-text-muted);">Chargement du profil...</p>
                 </div>
@@ -26,7 +26,7 @@ export async function render() {
             <!-- SECTION STATISTIQUES -->
             <div>
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-                    <h1 class="text-2xl font-bold">Mes Statistiques</h1>
+                    <h1 class="text-2xl font-bold">Mes statistiques</h1>
                     
                     <div class="flex items-center gap-2">
                         <button id="stats-prev-month" class="nav-arrow" aria-label="Précédent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
@@ -58,7 +58,7 @@ export async function render() {
 
                     <div class="p-4 rounded-lg shadow" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                         <div class="flex justify-between items-center mb-3">
-                            <h2 class="text-lg font-bold">Top 5 Chantiers (Mois)</h2>
+                            <h2 class="text-lg font-bold">Top 5 des chantiers du mois</h2>
                         </div>
                         <ul id="stats-top5-list" class="space-y-2">
                         </ul>
@@ -108,7 +108,7 @@ function renderProfileView(container, user) {
 
     // Affichage de l'historique des contrats (Lecture seule pour l'employé)
     let contractHtml = '<div class="mt-4 p-3 rounded-lg" style="background-color: var(--color-background); border: 1px solid var(--color-border);">';
-    contractHtml += '<strong class="text-sm">🕒 Mon Contrat Actuel :</strong><ul class="ml-4 mt-1 space-y-1 list-disc text-sm">';
+    contractHtml += '<strong class="text-sm">Mon contrat actuel</strong><ul class="ml-4 mt-1 space-y-1 list-disc text-sm">';
     if (user.contractHistory && user.contractHistory.length > 0) {
         const sorted = [...user.contractHistory].sort((a,b) => b.startDate.localeCompare(a.startDate));
         sorted.forEach(c => {
@@ -124,15 +124,15 @@ function renderProfileView(container, user) {
         <div class="flex justify-between items-start mb-4">
             <h3 class="text-2xl font-bold">${user.displayName}</h3>
         </div>
-        <div class="space-y-2 text-sm">
-            <p><strong>📞 GSM :</strong> ${gsm || '<span style="color: var(--color-text-muted);">Non défini</span>'}</p>
-            <p><strong>🏠 Adresse :</strong> ${address ? `<a href="${googleMapsUrl}" target="_blank" class="hover:underline" style="color: var(--color-primary);">${address}</a>` : '<span style="color: var(--color-text-muted);">Non définie</span>'}</p>
-            <p><strong>💳 Registre Nat. :</strong> ${user.nationalRegistryNumber || '<span style="color: var(--color-text-muted);">Non défini</span>'}</p>
-            <p><strong>🏦 IBAN :</strong> ${user.iban || '<span style="color: var(--color-text-muted);">Non défini</span>'}</p>
-            ${contractHtml}
-        </div>
+        <dl class="info-rows">
+            <div class="info-row"><dt>GSM</dt><dd>${gsm || '<span class="info-row-empty">Non défini</span>'}</dd></div>
+            <div class="info-row"><dt>Adresse</dt><dd>${address ? `<a href="${googleMapsUrl}" target="_blank" class="link">${address}</a>` : '<span class="info-row-empty">Non définie</span>'}</dd></div>
+            <div class="info-row"><dt>Registre national</dt><dd>${user.nationalRegistryNumber || '<span class="info-row-empty">Non défini</span>'}</dd></div>
+            <div class="info-row"><dt>IBAN</dt><dd>${user.iban || '<span class="info-row-empty">Non défini</span>'}</dd></div>
+        </dl>
+        ${contractHtml}
         <div class="mt-6">
-            <button id="edit-profile-btn" class="w-full font-bold py-2 px-4 rounded-lg hover:opacity-80 transition-opacity" style="background-color: var(--color-background); border: 1px solid var(--color-border);">Mettre à jour mes informations</button>
+            <button id="edit-profile-btn" class="btn btn-secondary btn-block">Mettre à jour mes informations</button>
         </div>
     `;
 

@@ -1866,3 +1866,215 @@ html.glass #page-content [style*="background-color: var(--color-surface)"] {
 .emp-timeline b { font-variant-numeric: tabular-nums; }
 .emp-missing { margin: 0; font-size: 0.75rem; color: var(--color-warning); }
 @media (max-width: 480px) { .team-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; } .team-stat { padding: 0.625rem 0.75rem; } .team-stat b { font-size: 1.0625rem; } }
+
+/* ==========================================================================
+   Planification (admin)
+   ========================================================================== */
+.planning-period { flex: 1; min-width: 0; text-align: center; font-weight: 600; font-size: 0.9375rem; }
+@media (min-width: 640px) { .planning-period { white-space: nowrap; min-width: 15rem; } }
+.planning-publish-date { margin-top: 0.25rem; font-size: 0.75rem; color: var(--color-text-muted); }
+.planning-team-pool { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+@media (min-width: 1536px) { .planning-team-pool { flex-direction: column; } }
+.planning-member {
+    display: flex; align-items: center; gap: 0.625rem;
+    padding: 0.5rem 0.625rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-surface);
+    font-size: 0.875rem; font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.15s var(--ease), background-color 0.15s var(--ease);
+}
+.planning-member:hover { border-color: var(--color-border-strong); }
+.planning-member:has(input:checked) { border-color: var(--color-primary); background: var(--color-primary-soft); }
+.planning-member input { width: 16px; height: 16px; flex-shrink: 0; accent-color: var(--color-primary); }
+
+.planning-day {
+    display: flex; flex-direction: column;
+    min-width: 0;
+    padding: 0.5rem;
+    border-radius: var(--radius-lg);
+    background: var(--color-surface-2);
+    border: 1px solid transparent;
+}
+.planning-day.is-today { background: var(--color-primary-soft); border-color: color-mix(in srgb, var(--color-primary) 30%, transparent); }
+.planning-day-head {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 0.4rem;
+    min-height: 2rem; margin-bottom: 0.5rem; padding: 0 0.125rem;
+}
+.planning-day-date { font-size: 1.125rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--color-text-base); }
+.planning-day.is-today .planning-day-date { color: var(--color-primary); }
+.planning-day-name { flex: 1; min-width: 0; font-size: 0.8125rem; font-weight: 600; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.planning-day-name .schedule-today-badge { vertical-align: 1px; }
+.planning-add-btn {
+    width: 28px; height: 28px; flex-shrink: 0;
+    display: grid; place-items: center;
+    border-radius: var(--radius);
+    border: 1px dashed color-mix(in srgb, var(--color-primary) 45%, var(--color-border));
+    background: transparent;
+    color: var(--color-primary);
+    font-size: 1.125rem; font-weight: 600; line-height: 1;
+    cursor: pointer;
+}
+.planning-add-btn:hover { background: var(--color-primary-soft); border-style: solid; }
+.planning-day-tabs { overflow-x: auto; }
+
+.planning-block {
+    position: relative;
+    padding: 0.5rem 0.5rem 0.5rem 0.625rem;
+    border: 1px solid var(--color-border);
+    border-left: 3px solid var(--color-primary);
+    border-radius: var(--radius);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-xs);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: box-shadow 0.15s var(--ease), transform 0.15s var(--ease);
+}
+.planning-block:hover { box-shadow: var(--shadow-sm); }
+.planning-block-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.25rem; }
+.planning-block-name { margin: 0; min-width: 0; font-weight: 700; font-size: 0.8125rem; line-height: 1.25; color: var(--color-text-base); overflow-wrap: break-word; hyphens: auto; }
+.planning-del-btn {
+    width: 22px; height: 22px; flex-shrink: 0;
+    display: grid; place-items: center;
+    margin: -0.125rem -0.125rem 0 0;
+    border: 0; border-radius: 6px;
+    background: transparent;
+    color: var(--color-text-subtle);
+    cursor: pointer;
+}
+.planning-del-btn svg { width: 14px; height: 14px; }
+.planning-del-btn:hover { background: color-mix(in srgb, var(--color-danger) 12%, transparent); color: var(--color-danger); }
+.planning-block-time { margin: 0.125rem 0 0; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.planning-block-time:empty { display: none; }
+.planning-note { display: inline-flex; align-items: center; gap: 0.2rem; margin-left: 0.25rem; color: var(--color-primary); font-weight: 600; }
+.planning-note svg { width: 12px; height: 12px; }
+.team-display-zone { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.375rem; }
+.team-display-zone:empty { display: none; }
+.team-member-tag {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    padding: 0.125rem 0.375rem 0.125rem 0.5rem;
+    border-radius: 999px;
+    background: var(--color-surface-3);
+    color: var(--color-text-base);
+    font-size: 0.6875rem; font-weight: 500; line-height: 1.4;
+    max-width: 100%; white-space: nowrap;
+    cursor: pointer;
+}
+.team-member-tag > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.team-member-tag:hover { background: color-mix(in srgb, var(--color-danger) 12%, var(--color-surface-2)); }
+.team-member-x { color: var(--color-text-subtle); font-weight: 700; }
+.team-member-tag:hover .team-member-x { color: var(--color-danger); }
+.planning-block .selection-checkbox { position: absolute; top: 0.375rem; right: 0.375rem; width: 16px; height: 16px; accent-color: var(--color-primary); }
+
+/* Grille de 7 colonnes (grand écran) : nom du jour sous le numéro, colonnes plus aérées */
+@media (min-width: 1024px) {
+    .planning-day-head { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "date add" "name add"; row-gap: 0; }
+    .planning-day-date { grid-area: date; line-height: 1.1; }
+    .planning-day-name { grid-area: name; font-size: 0.75rem; }
+    .planning-day-head .planning-add-btn { grid-area: add; }
+    .planning-day:not(.planning-day-single) .schedule-today-badge { display: none; }
+    .planning-day { padding: 0.375rem; }
+    .planning-block { padding: 0.4375rem 0.375rem 0.4375rem 0.5rem; }
+    .planning-block-name { font-size: 0.75rem; hyphens: manual; }
+    .planning-del-btn { width: 18px; height: 18px; }
+    .planning-del-btn svg { width: 12px; height: 12px; }
+}
+
+/* ==========================================================================
+   Congés (employé et admin)
+   ========================================================================== */
+.leave-info {
+    display: flex; gap: 0.75rem; align-items: flex-start;
+    margin-bottom: 1.5rem; padding: 0.875rem 1rem;
+    border-radius: var(--radius-lg);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 22%, var(--color-border));
+    background: var(--color-primary-soft);
+    color: var(--color-text-base);
+    font-size: 0.875rem; line-height: 1.5;
+}
+.leave-info svg { width: 20px; height: 20px; flex-shrink: 0; margin-top: 1px; color: var(--color-primary); }
+.leave-info p { margin: 0; }
+.leave-day + .leave-day { margin-top: 1.25rem; }
+.leave-day-title {
+    margin: 0 0 0.625rem; padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.9375rem; font-weight: 650; color: var(--color-text-base);
+}
+.leave-day-title::first-letter { text-transform: uppercase; }
+.leave-card {
+    padding: 0.875rem 1rem;
+    border: 1px solid var(--color-border);
+    border-left: 3px solid var(--color-border-strong);
+    border-radius: var(--radius-lg);
+    background: var(--color-surface);
+}
+.leave-card.is-approved { border-left-color: var(--color-success); }
+.leave-card.is-refused { border-left-color: var(--color-danger); opacity: 0.75; }
+.leave-card.is-pending { border-left-color: var(--color-warning); }
+.leave-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+.leave-card-name { margin: 0; font-weight: 650; font-size: 0.9375rem; color: var(--color-text-base); }
+.leave-card-reason { margin: 0.25rem 0 0; font-size: 0.875rem; color: var(--color-text-muted); }
+.leave-status {
+    display: inline-flex; align-items: center; flex-shrink: 0;
+    padding: 0.125rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    white-space: nowrap;
+}
+.leave-status.is-approved { background: color-mix(in srgb, var(--color-success) 14%, transparent); color: var(--color-success); }
+.leave-status.is-refused { background: color-mix(in srgb, var(--color-danger) 12%, transparent); color: var(--color-danger); }
+.leave-status.is-pending { background: color-mix(in srgb, var(--color-warning) 16%, transparent); color: var(--color-warning); }
+.leave-hours {
+    display: inline-block;
+    padding: 0 0.375rem;
+    border-radius: 6px;
+    background: var(--color-primary-soft);
+    color: var(--color-primary);
+    font-size: 0.75rem; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+#page-content .leave-action {
+    margin-top: 0.625rem; padding: 0;
+    border: 0; background: none;
+    font-size: 0.8125rem; font-weight: 600;
+    color: var(--color-danger);
+    cursor: pointer;
+}
+#page-content .leave-action:hover { text-decoration: underline; }
+
+/* ==========================================================================
+   Lignes « libellé / valeur » (Mes informations, détail d'un chantier…)
+   ========================================================================== */
+.info-rows { margin: 0; display: grid; }
+.info-row {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 1rem;
+    padding: 0.625rem 0;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.875rem;
+}
+.info-row:last-child { border-bottom: 0; }
+.info-row dt { color: var(--color-text-muted); font-weight: 500; flex-shrink: 0; }
+.info-row dd { margin: 0; min-width: 0; text-align: right; font-weight: 600; color: var(--color-text-base); overflow-wrap: anywhere; }
+.info-row-empty { font-weight: 400; color: var(--color-text-subtle); }
+
+/* Écarts d'heures */
+.missing-ok {
+    display: flex; flex-direction: column; align-items: center; text-align: center;
+    padding: 2rem 1rem;
+    border-radius: var(--radius-lg);
+    border: 1px dashed color-mix(in srgb, var(--color-success) 40%, var(--color-border));
+    background: color-mix(in srgb, var(--color-success) 7%, transparent);
+}
+.missing-ok svg { width: 36px; height: 36px; padding: 6px; border-radius: 50%; background: color-mix(in srgb, var(--color-success) 16%, transparent); color: var(--color-success); }
+.missing-ok-title { margin: 0.75rem 0 0; font-weight: 700; color: var(--color-text-base); }
+.missing-ok-text { margin: 0.25rem 0 0; font-size: 0.875rem; color: var(--color-text-muted); }
+.missing-add-btn {
+    width: 44px; height: 44px; flex-shrink: 0;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
+    background: var(--color-primary-soft);
+    color: var(--color-primary);
+    cursor: pointer;
+}
+.missing-add-btn:hover { background: var(--color-primary); color: #fff; }
