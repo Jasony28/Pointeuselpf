@@ -1,32 +1,10 @@
+<!-- Icône Pointeuse LPF : « LPF » (police Inter ExtraBold vectorisée) dans un anneau de temps, étoile de fée à midi. Tout tient dans la zone sûre des icônes « maskable ». -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Icône Pointeuse LPF : horloge + étoile de fée. Contenu dans la zone sûre (cercle de 80 %) pour les icônes « maskable ». -->
-  <defs>
-    <radialGradient id="bg" cx="50%" cy="38%" r="75%">
-      <stop offset="0" stop-color="#26355e"/>
-      <stop offset=".6" stop-color="#111a33"/>
-      <stop offset="1" stop-color="#080c18"/>
-    </radialGradient>
-    <linearGradient id="arc" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#8fb0ff"/>
-      <stop offset="1" stop-color="#a78bfa"/>
-    </linearGradient>
-    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
-      <stop offset="0" stop-color="#7aa2ff" stop-opacity=".35"/>
-      <stop offset="1" stop-color="#7aa2ff" stop-opacity="0"/>
-    </radialGradient>
-  </defs>
-  <rect width="512" height="512" fill="url(#bg)"/>
-  <circle cx="246" cy="270" r="190" fill="url(#glow)"/>
-  <!-- cadran -->
-  <circle cx="246" cy="270" r="118" fill="#0d1428" stroke="#ffffff" stroke-opacity=".14" stroke-width="22"/>
-  <!-- temps pointé (arc de 12 h à 4 h) -->
-  <path d="M246 152 A118 118 0 0 1 348.2 329" fill="none" stroke="url(#arc)" stroke-width="22" stroke-linecap="round"/>
-  <!-- aiguilles -->
-  <line x1="246" y1="270" x2="246" y2="192" stroke="#fff" stroke-width="20" stroke-linecap="round"/>
-  <line x1="246" y1="270" x2="300" y2="301" stroke="#fff" stroke-width="20" stroke-linecap="round"/>
-  <circle cx="246" cy="270" r="15" fill="#fff"/>
-  <circle cx="246" cy="270" r="6" fill="#a78bfa"/>
-  <!-- étoiles de fée -->
-  <path d="M368 108 Q374 142 408 148 Q374 154 368 188 Q362 154 328 148 Q362 142 368 108Z" fill="#fcd34d"/>
-  <path d="M414 206 Q417 220 431 223 Q417 226 414 240 Q411 226 397 223 Q411 220 414 206Z" fill="#fde68a"/>
+<defs><linearGradient id="dBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1e2647"/><stop offset="1" stop-color="#0a0f1f"/></linearGradient>
+<linearGradient id="dAc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a5b4fc"/><stop offset="1" stop-color="#7c6cf6"/></linearGradient></defs>
+<rect width="512" height="512" fill="url(#dBg)"/>
+<circle cx="256" cy="262" r="168" fill="none" stroke="#fff" stroke-opacity=".1" stroke-width="22"/>
+<path d="M256 94 A168 168 0 1 1 101 197" fill="none" stroke="url(#dAc)" stroke-width="22" stroke-linecap="round"/>
+<path d="M256 70 Q261 89 280 94 Q261 99 256 118 Q251 99 232 94 Q251 89 256 70Z" fill="#fcd34d"/>
+<path d="M212.41 304.92L156.18 304.92L156.18 219.08L176.52 219.08L176.52 288.33L212.41 288.33L212.41 304.92M242.06 304.92L221.72 304.92L221.72 219.08L256.86 219.08Q266.54 219.08 273.57 222.82Q280.60 226.57 284.38 233.25Q288.15 239.93 288.15 248.75Q288.15 257.62 284.29 264.19Q280.43 270.76 273.29 274.45Q266.14 278.13 256.29 278.13L242.06 278.13L242.06 304.92M242.06 235.55L242.06 262.06L252.60 262.06Q257.38 262.06 260.61 260.39Q263.84 258.72 265.45 255.72Q267.06 252.72 267.06 248.75Q267.06 244.71 265.45 241.75Q263.84 238.78 260.58 237.17Q257.33 235.55 252.54 235.55L242.06 235.55M317.80 304.92L297.46 304.92L297.46 219.08L355.82 219.08L355.82 235.67L317.80 235.67L317.80 257.45L352.08 257.45L352.08 273.70L317.80 273.70" fill="#fff"/>
 </svg>
