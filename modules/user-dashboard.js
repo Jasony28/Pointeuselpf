@@ -4,6 +4,7 @@ import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 import { getActiveChantiers, getTeamMembers } from "./data-service.js";
 import { rebuildDayTrips, localDateKey, isDayOver, returnTripId, DEPOT_ADDRESS } from "./trips.js";
 import { enhanceChantierSelect } from './chantier-picker.js';
+import { mailButtonHTML } from './mail.js';
 
 
 let timerInterval = null;
@@ -195,12 +196,15 @@ function initLiveTracker() {
 // Boutons d'itinéraire vers le chantier en cours (Waze / Google Maps)
 function navButtonsHTML(chantierId) {
     const chantier = chantiersCache.find(c => c.id === chantierId);
-    if (!chantier || !chantier.address) return '';
-    const q = encodeURIComponent(chantier.address);
+    if (!chantier) return '';
+    const mail = mailButtonHTML(chantier, 'tracker-nav-btn is-mail');
+    if (!chantier.address && !mail) return '';
+    const q = encodeURIComponent(chantier.address || '');
     return `
         <div class="tracker-nav">
-            <a class="tracker-nav-btn is-waze" href="https://waze.com/ul?q=${q}&navigate=yes" target="_blank" rel="noopener noreferrer">Waze</a>
-            <a class="tracker-nav-btn is-maps" href="https://www.google.com/maps/dir/?api=1&destination=${q}" target="_blank" rel="noopener noreferrer">Google Maps</a>
+            ${chantier.address ? `<a class="tracker-nav-btn is-waze" href="https://waze.com/ul?q=${q}&navigate=yes" target="_blank" rel="noopener noreferrer">Waze</a>
+            <a class="tracker-nav-btn is-maps" href="https://www.google.com/maps/dir/?api=1&destination=${q}" target="_blank" rel="noopener noreferrer">Google Maps</a>` : ''}
+            ${mail}
         </div>`;
 }
 

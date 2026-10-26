@@ -2,6 +2,7 @@ import { doc, updateDoc, collection, query, where, getDocs } from "https://www.g
 import { db, pageContent, isAdmin, showInfoModal, showToast, currentUser } from "../app.js";
 import { getActiveChantiers } from "./data-service.js";
 import { getWeekDateRange } from "./utils.js";
+import { isValidEmail, mailButtonHTML } from "./mail.js";
 
 let chantiersCache = [];
 let myPlanning = { today: new Set(), week: new Set() }; // noms des chantiers où je suis planifié
@@ -33,6 +34,10 @@ export async function render() {
                     <h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">ADRESSE</h4>
                     <p id="modalChantierAddress" class="site-address-link text-lg cursor-pointer" style="color: var(--color-primary);"></p>
                 </div>
+                <div id="modalChantierEmailContainer" style="display: none;">
+                    <h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">E-MAIL DU CLIENT</h4>
+                    <div class="mail-row"><span id="modalChantierEmail" class="mail-address"></span><span id="modalChantierEmailBtn"></span></div>
+                </div>
                 <div><h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">HEURES PRÉVUES</h4><p id="modalChantierHours" class="text-lg"></p></div>
                 <div><h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">CODES & ACCÈS</h4><div id="modalChantierKeybox" class="text-lg"></div></div>
                 <div><h4 class="font-semibold text-sm" style="color: var(--color-text-muted);">INFOS SUPPLÉMENTAIRES</h4><p id="modalChantierInfo" class="text-lg" style="white-space: pre-wrap; overflow-wrap: break-word;"></p></div>
@@ -50,6 +55,7 @@ export async function render() {
                     <label for="editChantierTva" class="text-sm font-medium">Assujetti TVA</label>
                 </div>
                 <div><label for="editChantierAddress" class="text-sm font-medium">Adresse</label><input id="editChantierAddress" type="text" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);" /></div>
+                <div><label for="editChantierEmail" class="text-sm font-medium">E-mail du client</label><input id="editChantierEmail" type="email" inputmode="email" autocapitalize="off" spellcheck="false" placeholder="ex : client@gmail.com" class="w-full border p-2 rounded mt-1" style="background-color: var(--color-background); border-color: var(--color-border);" /></div>
                 <div>
                     <label class="text-sm font-medium">Codes</label>
                     <div class="flex items-center gap-2 mt-1">
@@ -212,6 +218,15 @@ function showDetailsModal(chantierId) {
         addressTrigger.parentElement.style.display = 'none';
     }
     
+    const mailContainer = document.getElementById('modalChantierEmailContainer');
+    if (mailContainer) {
+        if (isValidEmail(chantier.email)) {
+            document.getElementById('modalChantierEmail').textContent = chantier.email;
+            document.getElementById('modalChantierEmailBtn').innerHTML = mailButtonHTML(chantier);
+            mailContainer.style.display = 'block';
+        } else { mailContainer.style.display = 'none'; }
+    }
+
     const hoursP = document.getElementById('modalChantierHours');
     if (chantier.totalHeuresPrevues && chantier.totalHeuresPrevues > 0) {
         hoursP.textContent = `${chantier.totalHeuresPrevues} heures`;
@@ -274,6 +289,7 @@ function showEditModal(chantier) {
     document.getElementById('editChantierName').value = chantier.name;
     document.getElementById('editChantierTva').checked = chantier.isTva || false;
     document.getElementById('editChantierAddress').value = chantier.address || '';
+    document.getElementById('editChantierEmail').value = chantier.email || '';
     document.getElementById('editChantierInfo').value = chantier.additionalInfo || '';
     const editList = document.getElementById('editKeyCodesList');
     editList.innerHTML = '';
@@ -341,10 +357,13 @@ function setupEventListeners() {
                 const docRef = doc(db, "chantiers", chantierId);
                 const editList = document.getElementById("editKeyCodesList");
                 const keyboxCodes = Array.from(editList.querySelectorAll('li span')).map(span => span.textContent);
+                const emailValue = document.getElementById('editChantierEmail').value.trim();
+                if (emailValue && !isValidEmail(emailValue)) { showInfoModal("Attention", "L'adresse e-mail n'est pas valide (ex : client@gmail.com)."); return; }
                 const updatedData = {
                     name: document.getElementById('editChantierName').value,
                     isTva: document.getElementById('editChantierTva').checked,
                     address: document.getElementById('editChantierAddress').value,
+                    email: document.getElementById('editChantierEmail').value.trim().toLowerCase(),
                     keyboxCodes: keyboxCodes,
                     additionalInfo: document.getElementById('editChantierInfo').value
                 };

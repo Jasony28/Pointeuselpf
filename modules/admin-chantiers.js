@@ -3,6 +3,7 @@ import { db, pageContent, showInfoModal, showConfirmationModal, showToast } from
 import { getGoogleMapsUrl } from "./utils.js";
 import { getActiveChantiers } from "./data-service.js";
 import { clearTripCaches, findDaysUsingAddress, rebuildDayTrips } from "./trips.js";
+import { isValidEmail, mailButtonHTML } from "./mail.js";
 
 // Token Mapbox
 const MAPBOX_TOKEN = "pk.eyJ1IjoiamFzb255MjgiLCJhIjoiY21lMDcyYWhzMDIyODJsczl0cmM0aTVjciJ9.V14cJXdBNoq3yAQTDeUg-A";
@@ -77,6 +78,10 @@ export async function render() {
                     <h4 class="kpi-label">Adresse</h4>
                     <a id="modalChantierAddress" href="#" target="_blank" rel="noopener noreferrer" class="site-address-link" style="color: var(--color-primary);"></a>
                 </div>
+                <div id="modalChantierEmailContainer">
+                    <h4 class="kpi-label">E-mail du client</h4>
+                    <div class="mail-row"><span id="modalChantierEmail" class="mail-address"></span><span id="modalChantierEmailBtn"></span></div>
+                </div>
                 <div>
                     <h4 class="kpi-label">Codes & accès</h4>
                     <div id="modalChantierKeybox" style="color: var(--color-text-base);"></div>
@@ -106,6 +111,11 @@ export async function render() {
                             <label for="formAddress" class="field-label">Adresse précise</label>
                             <input id="formAddress" type="text" class="input" placeholder="ex : Rue de la Gare 12, 6900 Marche-en-Famenne" autocomplete="off">
                             <p id="formGeoStatus" class="field-hint">Utilisée pour l'itinéraire et le calcul des kilomètres.</p>
+                        </div>
+                        <div class="field">
+                            <label for="formEmail" class="field-label">E-mail du client <span class="field-optional">(optionnel)</span></label>
+                            <input id="formEmail" type="email" inputmode="email" class="input" placeholder="ex : client@gmail.com" autocomplete="off" autocapitalize="off" spellcheck="false">
+                            <p class="field-hint">Les employés pourront lui envoyer un e-mail en un clic depuis la fiche du chantier.</p>
                         </div>
                         <div class="field">
                             <label for="formHours" class="field-label">Durée prévue par passage</label>
@@ -333,6 +343,7 @@ function readFormValues() {
     return {
         name: document.getElementById('formName').value.trim(),
         address: document.getElementById('formAddress').value.trim(),
+        email: document.getElementById('formEmail').value.trim().toLowerCase(),
         totalHeuresPrevues: parseFloat(document.getElementById('formHours').value) || 0,
         fixedAppointment: document.getElementById('formFixed').value,
         timeWindowStart: document.getElementById('formWindowStart').value,
@@ -361,6 +372,7 @@ function openChantierForm(chantier = null) {
     if (chantier) {
         document.getElementById('formName').value = chantier.name || '';
         document.getElementById('formAddress').value = chantier.address || '';
+        document.getElementById('formEmail').value = chantier.email || '';
         document.getElementById('formHours').value = chantier.totalHeuresPrevues || '';
         document.getElementById('formFixed').value = chantier.fixedAppointment || '';
         document.getElementById('formWindowStart').value = chantier.timeWindowStart || '';
@@ -402,6 +414,11 @@ async function saveChantier(e) {
     if (!values.name) {
         showInfoModal("Attention", "Le nom du chantier est obligatoire.");
         document.getElementById('formName').focus();
+        return;
+    }
+    if (values.email && !isValidEmail(values.email)) {
+        showInfoModal("Attention", "L'adresse e-mail n'est pas valide (ex : client@gmail.com).");
+        document.getElementById('formEmail').focus();
         return;
     }
 
@@ -543,6 +560,13 @@ function showDetailsModal(chantier) {
         addr.href = getGoogleMapsUrl(chantier.address);
         addrContainer.style.display = 'block';
     } else { addrContainer.style.display = 'none'; }
+
+    const mailContainer = document.getElementById('modalChantierEmailContainer');
+    if (isValidEmail(chantier.email)) {
+        document.getElementById('modalChantierEmail').textContent = chantier.email;
+        document.getElementById('modalChantierEmailBtn').innerHTML = mailButtonHTML(chantier);
+        mailContainer.style.display = 'block';
+    } else { mailContainer.style.display = 'none'; }
 
     const keybox = document.getElementById('modalChantierKeybox');
     keybox.innerHTML = '';

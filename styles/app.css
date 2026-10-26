@@ -2152,3 +2152,16 @@ html.glass #page-content [style*="background-color: var(--color-surface)"] {
     .cpick-sheet { max-width: none; max-height: 85dvh; border-radius: var(--radius-xl) var(--radius-xl) 0 0; border-bottom: 0; animation: sheet-up 0.22s var(--ease); }
     .cpick-handle { display: block; }
 }
+
+/* E-mail du chantier (v3.8.6) --------------------------------------------- */
+.field-optional { font-weight: 400; color: var(--color-text-muted); }
+.mail-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; margin-top: 0.25rem; }
+.mail-address { color: var(--color-text-base); overflow-wrap: anywhere; }
+.mail-btn {
+    display: inline-flex; align-items: center; gap: 0.5rem; min-height: 40px; padding: 0.5rem 0.875rem;
+    border-radius: var(--radius); background: #d93025; color: #fff; font-size: 0.875rem; font-weight: 600; text-decoration: none;
+    box-shadow: var(--shadow-xs);
+}
+.mail-btn:hover { background: #b3261e; }
+.mail-btn svg, .tracker-nav-btn.is-mail svg { width: 18px; height: 18px; flex-shrink: 0; }
+.tracker-nav-btn.is-mail { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 0.5rem; background: #d93025; }
