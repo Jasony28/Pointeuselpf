@@ -1,10 +1,21 @@
-<!-- Icône Pointeuse LPF : « LPF » (police Inter ExtraBold vectorisée) dans un anneau de temps, étoile de fée à midi. Tout tient dans la zone sûre des icônes « maskable ». -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-<defs><linearGradient id="dBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1e2647"/><stop offset="1" stop-color="#0a0f1f"/></linearGradient>
-<linearGradient id="dAc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a5b4fc"/><stop offset="1" stop-color="#7c6cf6"/></linearGradient></defs>
-<rect width="512" height="512" fill="url(#dBg)"/>
-<circle cx="256" cy="262" r="168" fill="none" stroke="#fff" stroke-opacity=".1" stroke-width="22"/>
-<path d="M256 94 A168 168 0 1 1 101 197" fill="none" stroke="url(#dAc)" stroke-width="22" stroke-linecap="round"/>
-<path d="M256 70 Q261 89 280 94 Q261 99 256 118 Q251 99 232 94 Q251 89 256 70Z" fill="#fcd34d"/>
-<path d="M212.41 304.92L156.18 304.92L156.18 219.08L176.52 219.08L176.52 288.33L212.41 288.33L212.41 304.92M242.06 304.92L221.72 304.92L221.72 219.08L256.86 219.08Q266.54 219.08 273.57 222.82Q280.60 226.57 284.38 233.25Q288.15 239.93 288.15 248.75Q288.15 257.62 284.29 264.19Q280.43 270.76 273.29 274.45Q266.14 278.13 256.29 278.13L242.06 278.13L242.06 304.92M242.06 235.55L242.06 262.06L252.60 262.06Q257.38 262.06 260.61 260.39Q263.84 258.72 265.45 255.72Q267.06 252.72 267.06 248.75Q267.06 244.71 265.45 241.75Q263.84 238.78 260.58 237.17Q257.33 235.55 252.54 235.55L242.06 235.55M317.80 304.92L297.46 304.92L297.46 219.08L355.82 219.08L355.82 235.67L317.80 235.67L317.80 257.45L352.08 257.45L352.08 273.70L317.80 273.70" fill="#fff"/>
+  <!-- Icône Pointeuse LPF : monogramme « LPF » (Inter ExtraBold vectorisée) et barre de temps de la journée. Tout tient dans la zone sûre des icônes « maskable ». -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d2750"/><stop offset=".55" stop-color="#111833"/><stop offset="1" stop-color="#080c19"/></linearGradient>
+    <radialGradient id="glow" cx="50%" cy="72%" r="45%"><stop offset="0" stop-color="#6366f1" stop-opacity=".38"/><stop offset="1" stop-color="#6366f1" stop-opacity="0"/></radialGradient>
+    <radialGradient id="sheen" cx="30%" cy="0%" r="80%"><stop offset="0" stop-color="#fff" stop-opacity=".10"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    <linearGradient id="txt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#dfe3ff"/></linearGradient>
+    <linearGradient id="bar" x1="0" x2="1"><stop offset="0" stop-color="#6366f1"/><stop offset="1" stop-color="#a78bfa"/></linearGradient>
+    <filter id="sh" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000" flood-opacity=".35"/></filter>
+    <filter id="kn" x="-100%" y="-100%" width="300%" height="300%"><feDropShadow dx="0" dy="0" stdDeviation="7" flood-color="#a78bfa" flood-opacity=".9"/></filter>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <rect width="512" height="512" fill="url(#glow)"/>
+  <rect width="512" height="512" fill="url(#sheen)"/>
+  <path d="M192.63 302.93L104.94 302.93L104.94 169.07L136.66 169.07L136.66 277.06L192.63 277.06L192.63 302.93M234.26 302.93L202.54 302.93L202.54 169.07L257.35 169.07Q272.44 169.07 283.40 174.91Q294.36 180.75 300.25 191.17Q306.13 201.59 306.13 215.34Q306.13 229.17 300.11 239.41Q294.09 249.66 282.95 255.41Q271.81 261.16 256.45 261.16L234.26 261.16L234.26 302.93M234.26 194.76L234.26 236.09L250.70 236.09Q258.16 236.09 263.19 233.48Q268.22 230.88 270.73 226.21Q273.25 221.54 273.25 215.34Q273.25 209.05 270.73 204.42Q268.22 199.79 263.14 197.28Q258.07 194.76 250.61 194.76L234.26 194.76M347.76 302.93L316.04 302.93L316.04 169.07L407.06 169.07L407.06 194.94L347.76 194.94L347.76 228.90L401.22 228.90L401.22 254.24L347.76 254.24" fill="url(#txt)" filter="url(#sh)"/>
+  <rect x="108.9" y="340.9" width="294.1" height="18" rx="9" fill="#fff" fill-opacity=".12"/>
+  <rect x="108.9" y="340.9" width="194.1" height="18" rx="9" fill="url(#bar)"/>
+  <rect x="107.4" y="370.9" width="3" height="12" rx="1.5" fill="#fff" fill-opacity="0.35"/><rect x="144.2" y="370.9" width="3" height="7" rx="1.5" fill="#fff" fill-opacity="0.18"/><rect x="181.0" y="370.9" width="3" height="7" rx="1.5" fill="#fff" fill-opacity="0.18"/><rect x="217.7" y="370.9" width="3" height="7" rx="1.5" fill="#fff" fill-opacity="0.18"/><rect x="254.5" y="370.9" width="3" height="12" rx="1.5" fill="#fff" fill-opacity="0.35"/><rect x="291.3" y="370.9" width="3" height="7" rx="1.5" fill="#fff" fill-opacity="0.18"/><rect x="328.0" y="370.9" width="3" height="7" rx="1.5" fill="#fff" fill-opacity="0.18"/><rect x="364.8" y="370.9" width="3" height="7" rx="1.5" fill="#fff" fill-opacity="0.18"/><rect x="401.6" y="370.9" width="3" height="12" rx="1.5" fill="#fff" fill-opacity="0.35"/>
+  <circle cx="303.1" cy="349.9" r="17" fill="#fff" filter="url(#kn)"/>
+  <circle cx="303.1" cy="349.9" r="6.5" fill="#6366f1"/>
 </svg>
