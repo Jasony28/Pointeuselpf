@@ -1,6 +1,6 @@
 import { updatesLog } from './modules/updates-data.js';
 
-const APP_VERSION = 'v3.8.1';
+const APP_VERSION = 'v3.8.2';
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, initializeAuth, indexedDBLocalPersistence, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
@@ -560,7 +560,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 toast.id = 'update-toast';
                 toast.setAttribute('role', 'status');
                 toast.innerHTML = `
-                    <img src="./icons/icon-192x192.png" alt="" class="update-toast-icon">
+                    <img src="./icons/lpf-192.png" alt="" class="update-toast-icon">
                     <div class="update-toast-text">
                         <strong>Nouvelle version disponible</strong>
                         <span>Mettez à jour pour profiter des dernières nouveautés.</span>

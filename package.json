@@ -1,6 +1,6 @@
 {
   "name": "pointeuse-lpf",
-  "version": "3.8.1",
+  "version": "3.8.2",
   "private": true,
   "description": "Pointeuse LPF — application web + applis iPhone / Android (Capacitor)",
   "scripts": {

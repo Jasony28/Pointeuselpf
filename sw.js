@@ -4,7 +4,7 @@ const { precaching, routing, strategies, core } = workbox;
 core.setCacheNameDetails({ prefix: 'pointeuse-lpf-cache' });
 
 // Version synchronisée avec app.js
-const APP_VERSION = 'v3.8.1'; // <--- CHANGEMENT ICI
+const APP_VERSION = 'v3.8.2'; // <--- CHANGEMENT ICI
 
 precaching.precacheAndRoute([
     { url: './', revision: APP_VERSION },
@@ -45,9 +45,9 @@ precaching.precacheAndRoute([
     { url: 'modules/admin-live-view.js', revision: APP_VERSION },
     
     // Ressources statiques
-    { url: 'icons/icon-192x192.png', revision: APP_VERSION },
-    { url: 'icons/apple-touch-icon.png', revision: APP_VERSION },
-    { url: 'icons/icon-512x512.png', revision: APP_VERSION },
+    { url: 'icons/lpf-192.png', revision: APP_VERSION },
+    { url: 'icons/lpf-180.png', revision: APP_VERSION },
+    { url: 'icons/lpf-512.png', revision: APP_VERSION },
 ]);
 
 // Stratégie pour les pages HTML

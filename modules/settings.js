@@ -346,7 +346,7 @@ function showIOSInstallSheet() {
         <div class="modal-panel">
             <div class="modal-body">
                 <div class="ios-install-head">
-                    <img src="./icons/icon-192x192.png" alt="" class="ios-install-icon">
+                    <img src="./icons/lpf-192.png" alt="" class="ios-install-icon">
                     <div>
                         <h3 class="modal-title">Installer Pointeuse LPF</h3>
                         <p class="modal-text" style="margin-top: 0.125rem;">2 appuis, et l'appli est sur votre écran d'accueil.</p>

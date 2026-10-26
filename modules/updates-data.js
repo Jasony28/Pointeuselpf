@@ -1,5 +1,12 @@
 export const updatesLog = [
     {
+        version: 'v3.8.2',
+        date: '26 octobre 2026',
+        changes: [
+            "La nouvelle icône s'installe aussi sur l'écran d'accueil du téléphone.",
+        ]
+    },
+    {
         version: 'v3.8.1',
         date: '26 octobre 2026',
         changes: [
