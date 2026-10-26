@@ -1,5 +1,13 @@
 export const updatesLog = [
     {
+        version: 'v3.8.1',
+        date: '26 octobre 2026',
+        changes: [
+            "**Nouvelle icône** de l'application.",
+            "**Mises à jour plus simples** : quand une nouvelle version sort, une fenêtre « Nouvelle version disponible » s'affiche. Appuyez sur « Mettre à jour » et l'application se recharge toute seule.",
+        ]
+    },
+    {
         version: 'v3.8.0',
         date: '26 octobre 2026',
         changes: [

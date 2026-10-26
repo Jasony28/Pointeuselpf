@@ -1,6 +1,6 @@
 import { updatesLog } from './modules/updates-data.js';
 
-const APP_VERSION = 'v3.8.0';
+const APP_VERSION = 'v3.8.1';
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, initializeAuth, indexedDBLocalPersistence, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
@@ -560,12 +560,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 toast.id = 'update-toast';
                 toast.setAttribute('role', 'status');
                 toast.innerHTML = `
-                    <span>Une nouvelle version est disponible.</span>
-                    <button id="reload-button" class="btn btn-primary">Mettre à jour</button>
+                    <img src="./icons/icon-192x192.png" alt="" class="update-toast-icon">
+                    <div class="update-toast-text">
+                        <strong>Nouvelle version disponible</strong>
+                        <span>Mettez à jour pour profiter des dernières nouveautés.</span>
+                    </div>
+                    <div class="update-toast-actions">
+                        <button id="later-button" class="btn btn-secondary">Plus tard</button>
+                        <button id="reload-button" class="btn btn-primary">Mettre à jour</button>
+                    </div>
                 `;
                 document.body.appendChild(toast);
-                document.getElementById('reload-button').onclick = () => {
+                document.getElementById('reload-button').onclick = (e) => {
+                    e.currentTarget.disabled = true;
+                    e.currentTarget.textContent = 'Mise à jour…';
                     wb.messageSkipWaiting();
+                };
+                document.getElementById('later-button').onclick = () => {
+                    toast.classList.remove('show');
+                    setTimeout(() => toast.remove(), 400);
                 };
                 setTimeout(() => toast.classList.add('show'), 100);
             };
@@ -575,6 +588,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (event.isUpdate) window.location.reload();
             });
             wb.register();
+            // L'appli installée reste souvent ouverte en arrière-plan : on vérifie s'il y a une
+            // nouvelle version à chaque retour dans l'appli et toutes les 30 minutes.
+            let lastCheck = Date.now();
+            const checkForNewVersion = () => {
+                if (!navigator.onLine || Date.now() - lastCheck < 60 * 1000) return;
+                lastCheck = Date.now();
+                wb.update().catch(() => {});
+            };
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') checkForNewVersion();
+            });
+            setInterval(checkForNewVersion, 30 * 60 * 1000);
         }).catch(() => navigator.serviceWorker.register('./sw.js').catch(() => {}));
     }
 

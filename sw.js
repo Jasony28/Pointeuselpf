@@ -4,7 +4,7 @@ const { precaching, routing, strategies, core } = workbox;
 core.setCacheNameDetails({ prefix: 'pointeuse-lpf-cache' });
 
 // Version synchronisée avec app.js
-const APP_VERSION = 'v3.8.0'; // <--- CHANGEMENT ICI
+const APP_VERSION = 'v3.8.1'; // <--- CHANGEMENT ICI
 
 precaching.precacheAndRoute([
     { url: './', revision: APP_VERSION },
@@ -77,8 +77,9 @@ routing.registerRoute(
     new strategies.StaleWhileRevalidate({ cacheName: 'app-files' })
 );
 
-self.addEventListener('install', () => {
-    self.skipWaiting();
+// La nouvelle version attend que l'utilisateur appuie sur « Mettre à jour » (pop-up dans app.js)
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
