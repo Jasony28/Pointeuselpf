@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Icône Pointeuse LPF : horloge + étoile de fée. Contenu dans la zone sûre (cercle de 80 %) pour les icônes « maskable ». -->
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="75%">
+      <stop offset="0" stop-color="#26355e"/>
+      <stop offset=".6" stop-color="#111a33"/>
+      <stop offset="1" stop-color="#080c18"/>
+    </radialGradient>
+    <linearGradient id="arc" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8fb0ff"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#7aa2ff" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#7aa2ff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <circle cx="246" cy="270" r="190" fill="url(#glow)"/>
+  <!-- cadran -->
+  <circle cx="246" cy="270" r="118" fill="#0d1428" stroke="#ffffff" stroke-opacity=".14" stroke-width="22"/>
+  <!-- temps pointé (arc de 12 h à 4 h) -->
+  <path d="M246 152 A118 118 0 0 1 348.2 329" fill="none" stroke="url(#arc)" stroke-width="22" stroke-linecap="round"/>
+  <!-- aiguilles -->
+  <line x1="246" y1="270" x2="246" y2="192" stroke="#fff" stroke-width="20" stroke-linecap="round"/>
+  <line x1="246" y1="270" x2="300" y2="301" stroke="#fff" stroke-width="20" stroke-linecap="round"/>
+  <circle cx="246" cy="270" r="15" fill="#fff"/>
+  <circle cx="246" cy="270" r="6" fill="#a78bfa"/>
+  <!-- étoiles de fée -->
+  <path d="M368 108 Q374 142 408 148 Q374 154 368 188 Q362 154 328 148 Q362 142 368 108Z" fill="#fcd34d"/>
+  <path d="M414 206 Q417 220 431 223 Q417 226 414 240 Q411 226 397 223 Q411 220 414 206Z" fill="#fde68a"/>
+</svg>

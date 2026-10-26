@@ -45,8 +45,9 @@ precaching.precacheAndRoute([
     { url: 'modules/admin-live-view.js', revision: APP_VERSION },
     
     // Ressources statiques
-    { url: 'icons/icon-192x192.png', revision: null },
-    { url: 'icons/icon-512x512.png', revision: null },
+    { url: 'icons/icon-192x192.png', revision: APP_VERSION },
+    { url: 'icons/apple-touch-icon.png', revision: APP_VERSION },
+    { url: 'icons/icon-512x512.png', revision: APP_VERSION },
 ]);
 
 // Stratégie pour les pages HTML

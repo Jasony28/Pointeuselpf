@@ -4,7 +4,7 @@
   "id": "/Pointeuse/",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#f5f6f8",
+  "background_color": "#0f172a",
   "theme_color": "#0f172a",
   "description": "Application de pointage pour équipes professionnelles.",
   "icons": [
@@ -17,6 +17,12 @@
       "src": "./icons/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png"
+    },
+    {
+      "src": "./icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "launch_handler": {
