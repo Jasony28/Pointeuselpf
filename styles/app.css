@@ -2086,3 +2086,69 @@ html.glass #page-content [style*="background-color: var(--color-surface)"] {
 }
 .missing-add-btn:hover { background: var(--color-primary); color: #fff; }
 .colleague-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.375rem 0.375rem 0.375rem 0.75rem; border: 1px solid var(--color-border); border-radius: var(--radius); background: var(--color-surface-2); }
+
+/* Liste des chantiers au pointage (v3.8.5) -------------------------------- */
+.cpick-native { position: absolute !important; width: 1px !important; height: 1px !important; opacity: 0 !important; pointer-events: none !important; overflow: hidden; }
+.cpick-trigger { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; min-height: 52px; text-align: left; cursor: pointer; }
+.cpick-trigger:disabled { cursor: default; opacity: 0.6; }
+.cpick-trigger-text { display: flex; flex-direction: column; min-width: 0; }
+.cpick-trigger-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cpick-trigger-group { font-size: 0.75rem; color: var(--color-text-muted); }
+.cpick-chevron { display: flex; color: var(--color-text-muted); flex-shrink: 0; }
+.cpick-chevron svg { width: 18px; height: 18px; }
+
+.cpick-overlay {
+    position: fixed; inset: 0; z-index: 80;
+    display: flex; align-items: center; justify-content: center; padding: 1rem;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+    animation: fade-in 0.15s var(--ease);
+}
+.cpick-overlay.is-closing { opacity: 0; transition: opacity 0.15s var(--ease); }
+.cpick-sheet {
+    width: 100%; max-width: 420px; max-height: min(640px, calc(100dvh - 2rem));
+    display: flex; flex-direction: column;
+    background: var(--color-surface); color: var(--color-text-base);
+    border: 1px solid var(--color-border); border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl); overflow: hidden;
+    animation: pop-in 0.2s var(--ease);
+}
+.cpick-handle { display: none; width: 40px; height: 4px; margin: 0.625rem auto 0; border-radius: 99px; background: var(--color-border-strong); }
+.cpick-head { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem 0.75rem; }
+.cpick-title { margin: 0; font-size: 1.0625rem; font-weight: 700; letter-spacing: -0.01em; }
+.cpick-close { width: 34px; height: 34px; border-radius: 99px; color: var(--color-text-muted); background: var(--color-surface-2); border: 1px solid var(--color-border); font-size: 0.9rem; }
+.cpick-search {
+    display: flex; align-items: center; gap: 0.5rem; margin: 0 1.25rem 0.75rem; padding: 0 0.875rem;
+    min-height: 44px; border-radius: var(--radius); background: var(--color-surface-2); border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+}
+.cpick-search:focus-within { border-color: var(--color-primary); box-shadow: 0 0 0 4px var(--color-primary-ring); }
+.cpick-search svg { width: 18px; height: 18px; flex-shrink: 0; }
+.cpick-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--color-text-base); font: inherit; font-size: 1rem; }
+.cpick-list { overflow-y: auto; overscroll-behavior: contain; padding: 0 0.75rem calc(0.75rem + env(safe-area-inset-bottom)); border-top: 1px solid var(--color-border); }
+.cpick-group {
+    position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between;
+    padding: 0.875rem 0.5rem 0.375rem; background: var(--color-surface);
+    font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-muted);
+}
+.cpick-group.is-today { color: var(--color-primary); }
+.cpick-group span { font-weight: 600; padding: 0.05rem 0.45rem; border-radius: 99px; background: var(--color-surface-3); color: var(--color-text-muted); letter-spacing: 0; }
+.cpick-item {
+    width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+    min-height: 50px; padding: 0.625rem 0.75rem; margin: 2px 0; text-align: left;
+    border-radius: var(--radius); border: 1px solid transparent; background: transparent; color: var(--color-text-base);
+    font-size: 1rem; cursor: pointer; transition: background 0.12s var(--ease);
+}
+.cpick-item:hover, .cpick-item:active { background: var(--color-surface-2); }
+.cpick-item.is-today { background: var(--color-primary-soft); }
+.cpick-item.is-selected { border-color: var(--color-primary); background: var(--color-primary-soft); font-weight: 600; }
+.cpick-item-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cpick-check { display: flex; width: 22px; height: 22px; flex-shrink: 0; color: var(--color-primary); }
+.cpick-check svg { width: 22px; height: 22px; }
+.cpick-empty { margin: 0; padding: 2rem 1rem; text-align: center; color: var(--color-text-muted); font-size: 0.9375rem; }
+
+@media (max-width: 639px) {
+    .cpick-overlay { align-items: flex-end; padding: 0; }
+    .cpick-sheet { max-width: none; max-height: 85dvh; border-radius: var(--radius-xl) var(--radius-xl) 0 0; border-bottom: 0; animation: sheet-up 0.22s var(--ease); }
+    .cpick-handle { display: block; }
+}

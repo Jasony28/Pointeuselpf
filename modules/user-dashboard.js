@@ -3,6 +3,7 @@ import { db, currentUser, pageContent, showInfoModal, showToast, navigateTo } fr
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 import { getActiveChantiers, getTeamMembers } from "./data-service.js";
 import { rebuildDayTrips, localDateKey, isDayOver, returnTripId, DEPOT_ADDRESS } from "./trips.js";
+import { enhanceChantierSelect } from './chantier-picker.js';
 
 
 let timerInterval = null;
@@ -440,12 +441,14 @@ async function openStartModal() {
     }
 
     chantierSelect.innerHTML = '<option>Chargement...</option>';
+    enhanceChantierSelect(chantierSelect);
     
     modal.classList.remove('hidden');
     
     const { weeklyChantiers, todaysChantiers } = await getContextualLists();
     const weeklyChantiersOnly = new Set([...weeklyChantiers].filter(chantier => !todaysChantiers.has(chantier)));
-    const otherChantiers = chantiersCache.filter(chantier => !weeklyChantiers.has(chantier.name));
+    const otherChantiers = chantiersCache.filter(chantier => !weeklyChantiers.has(chantier.name))
+        .sort((a, b) => String(a.name).localeCompare(String(b.name), 'fr', { sensitivity: 'base' }));
     
     let chantierOptionsHTML = '';
 
@@ -474,6 +477,7 @@ async function openStartModal() {
     if (!chantierSelect.innerHTML) {
          chantierSelect.innerHTML = '<option value="" disabled selected>-- Aucun chantier disponible --</option>';
     }
+    enhanceChantierSelect(chantierSelect);
     
     form.onsubmit = (e) => {
         e.preventDefault();
