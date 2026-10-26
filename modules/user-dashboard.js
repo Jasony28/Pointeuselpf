@@ -3,6 +3,8 @@ import { db, currentUser, pageContent, showInfoModal, showToast, navigateTo } fr
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 import { getActiveChantiers, getTeamMembers } from "./data-service.js";
 import { rebuildDayTrips, localDateKey, isDayOver, returnTripId, DEPOT_ADDRESS } from "./trips.js";
+import { enhanceChantierSelect } from './chantier-picker.js';
+import { mailButtonHTML } from './mail.js';
 
 
 let timerInterval = null;
@@ -194,12 +196,15 @@ function initLiveTracker() {
 // Boutons d'itinéraire vers le chantier en cours (Waze / Google Maps)
 function navButtonsHTML(chantierId) {
     const chantier = chantiersCache.find(c => c.id === chantierId);
-    if (!chantier || !chantier.address) return '';
-    const q = encodeURIComponent(chantier.address);
+    if (!chantier) return '';
+    const mail = mailButtonHTML(chantier, 'tracker-nav-btn is-mail');
+    if (!chantier.address && !mail) return '';
+    const q = encodeURIComponent(chantier.address || '');
     return `
         <div class="tracker-nav">
-            <a class="tracker-nav-btn is-waze" href="https://waze.com/ul?q=${q}&navigate=yes" target="_blank" rel="noopener noreferrer">Waze</a>
-            <a class="tracker-nav-btn is-maps" href="https://www.google.com/maps/dir/?api=1&destination=${q}" target="_blank" rel="noopener noreferrer">Google Maps</a>
+            ${chantier.address ? `<a class="tracker-nav-btn is-waze" href="https://waze.com/ul?q=${q}&navigate=yes" target="_blank" rel="noopener noreferrer">Waze</a>
+            <a class="tracker-nav-btn is-maps" href="https://www.google.com/maps/dir/?api=1&destination=${q}" target="_blank" rel="noopener noreferrer">Google Maps</a>` : ''}
+            ${mail}
         </div>`;
 }
 
@@ -440,12 +445,14 @@ async function openStartModal() {
     }
 
     chantierSelect.innerHTML = '<option>Chargement...</option>';
+    enhanceChantierSelect(chantierSelect);
     
     modal.classList.remove('hidden');
     
     const { weeklyChantiers, todaysChantiers } = await getContextualLists();
     const weeklyChantiersOnly = new Set([...weeklyChantiers].filter(chantier => !todaysChantiers.has(chantier)));
-    const otherChantiers = chantiersCache.filter(chantier => !weeklyChantiers.has(chantier.name));
+    const otherChantiers = chantiersCache.filter(chantier => !weeklyChantiers.has(chantier.name))
+        .sort((a, b) => String(a.name).localeCompare(String(b.name), 'fr', { sensitivity: 'base' }));
     
     let chantierOptionsHTML = '';
 
@@ -474,6 +481,7 @@ async function openStartModal() {
     if (!chantierSelect.innerHTML) {
          chantierSelect.innerHTML = '<option value="" disabled selected>-- Aucun chantier disponible --</option>';
     }
+    enhanceChantierSelect(chantierSelect);
     
     form.onsubmit = (e) => {
         e.preventDefault();

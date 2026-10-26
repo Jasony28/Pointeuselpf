@@ -1,5 +1,23 @@
 export const updatesLog = [
     {
+        version: 'v3.8.6',
+        date: '26 octobre 2026',
+        changes: [
+            "**Admin - Chantiers** : nouveau champ « E-mail du client » dans la fiche du chantier.",
+            "**Chantiers** : bouton « Envoyer un e-mail » sur la fiche : il ouvre Gmail avec l'adresse du client et le nom du chantier déjà remplis.",
+            "**Pointage** : pendant un pointage, le bouton e-mail apparaît aussi sous Waze et Google Maps.",
+        ]
+    },
+    {
+        version: 'v3.8.5',
+        date: '26 octobre 2026',
+        changes: [
+            "**Pointage** : la liste des chantiers a le nouveau style (fini la liste blanche du téléphone) et suit le mode sombre.",
+            "**Pointage** : les chantiers du jour apparaissent en premier, puis ceux de la semaine, puis tous les autres par ordre alphabétique.",
+            "**Pointage** : barre de recherche pour trouver un chantier en tapant quelques lettres.",
+        ]
+    },
+    {
         version: 'v3.8.4',
         date: '26 octobre 2026',
         changes: [
