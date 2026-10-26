@@ -2,7 +2,7 @@ import { collection, query, orderBy, getDocs, addDoc, updateDoc, doc, serverTime
 import { db, pageContent, showInfoModal, showConfirmationModal, showToast } from "../app.js";
 import { getGoogleMapsUrl } from "./utils.js";
 import { getActiveChantiers } from "./data-service.js";
-import { clearTripCaches, findDaysUsingAddress, rebuildDayTrips } from "./trips.js";
+import { clearTripCaches, findDaysUsingAddress, rebuildDayTrips, geocodeDetails, crowDistanceKm, DEPOT_ADDRESS } from "./trips.js";
 
 // Token Mapbox
 const MAPBOX_TOKEN = "pk.eyJ1IjoiamFzb255MjgiLCJhIjoiY21lMDcyYWhzMDIyODJsczl0cmM0aTVjciJ9.V14cJXdBNoq3yAQTDeUg-A";
@@ -44,10 +44,16 @@ export async function render() {
                     <h2 class="text-2xl font-bold" style="color: var(--color-text-base);">Gestion des Chantiers & Contraintes</h2>
                     <p class="mt-1 text-sm" style="color: var(--color-text-muted);">Adresses, durées, horaires imposés et codes d'accès de chaque chantier.</p>
                 </div>
-                <button id="openAddChantierBtn" class="btn btn-primary">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" style="pointer-events: none;"><path d="M12 5v14M5 12h14"/></svg>
-                    Nouveau chantier
-                </button>
+                <div class="flex flex-wrap gap-2">
+                    <button id="checkAddressesBtn" class="btn btn-secondary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events: none;"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><path d="m9 10 2 2 4-4"/></svg>
+                        Vérifier les adresses
+                    </button>
+                    <button id="openAddChantierBtn" class="btn btn-primary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" style="pointer-events: none;"><path d="M12 5v14M5 12h14"/></svg>
+                        Nouveau chantier
+                    </button>
+                </div>
             </div>
 
             <div class="hours-toolbar">
@@ -62,6 +68,21 @@ export async function render() {
             </div>
 
             <div id="chantiersGrid" class="site-grid"></div>
+        </div>
+
+        <div id="addressCheckModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="addressCheckTitle">
+            <div class="modal-panel modal-panel-lg">
+                <div class="modal-body space-y-3">
+                    <div>
+                        <h3 id="addressCheckTitle" class="modal-title">Vérification des adresses</h3>
+                        <p class="modal-text">Chaque adresse des chantiers actifs est recherchée sur la carte, comme pour le calcul des kilomètres. Les distances sont à vol d'oiseau depuis le dépôt (Marche-en-Famenne).</p>
+                    </div>
+                    <div id="addressCheckList" class="space-y-2"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" id="closeAddressCheckBtn" class="btn btn-secondary">Fermer</button>
+                </div>
+            </div>
         </div>
 
         <!-- Fiche détaillée -->
@@ -486,8 +507,82 @@ async function offerTripsRecalculation(oldAddress) {
                : `${done === 1 ? 'La journée a été recalculée' : `Les ${done} journées ont été recalculées`} avec la nouvelle adresse.`);
 }
 
+// Seuils du contrôle des adresses
+const FAR_KM = 100;          // plus loin que ça du dépôt : adresse sûrement fausse
+const GPS_GAP_KM = 2;        // écart toléré entre la position enregistrée et la position trouvée
+const PRECISE_TYPES = ['address', 'poi'];
+
+async function checkAddresses() {
+    const modal = document.getElementById('addressCheckModal');
+    const list = document.getElementById('addressCheckList');
+    modal.classList.remove('hidden');
+    if (!navigator.onLine) {
+        list.innerHTML = '<p class="hours-empty">Pas de connexion : impossible de vérifier les adresses.</p>';
+        return;
+    }
+    const chantiers = chantiersCache.filter(c => c.status === 'active');
+    list.innerHTML = `<p id="addressCheckProgress" class="text-sm" style="color: var(--color-text-muted);">Vérification de ${chantiers.length} chantier(s)…</p>`;
+
+    let depot = null;
+    try { depot = (await geocodeDetails(DEPOT_ADDRESS))?.center || null; } catch (e) { console.error(e); }
+
+    const results = [];
+    for (const [i, c] of chantiers.entries()) {
+        const progress = document.getElementById('addressCheckProgress');
+        if (progress) progress.textContent = `Vérification… ${i + 1} / ${chantiers.length}`;
+        const r = { chantier: c, issues: [], km: null, found: '' };
+        if (!c.address) {
+            r.issues.push({ level: 'danger', text: 'Aucune adresse : pas de kilomètres possibles' });
+        } else {
+            let geo = null;
+            try { geo = await geocodeDetails(c.address); } catch (e) { console.error(e); }
+            if (!geo) {
+                r.issues.push({ level: 'danger', text: 'Adresse introuvable sur la carte' });
+            } else {
+                r.found = geo.placeName;
+                if (depot) r.km = crowDistanceKm(depot, geo.center);
+                if (r.km !== null && r.km > FAR_KM) r.issues.push({ level: 'danger', text: `À plus de ${FAR_KM} km du dépôt` });
+                if (!PRECISE_TYPES.includes(geo.placeType)) r.issues.push({ level: 'warning', text: 'Adresse imprécise : seule la commune ou la région a été trouvée' });
+                const saved = c.coordinates?.lat ? [c.coordinates.lng, c.coordinates.lat] : null;
+                if (saved && crowDistanceKm(saved, geo.center) > GPS_GAP_KM) r.issues.push({ level: 'warning', text: 'La position GPS enregistrée ne correspond pas à l\'adresse (réenregistrez le chantier)' });
+            }
+        }
+        results.push(r);
+    }
+    if (!list.isConnected) return;
+
+    const rank = (r) => r.issues.some(x => x.level === 'danger') ? 0 : r.issues.length ? 1 : 2;
+    results.sort((a, b) => rank(a) - rank(b) || (b.km ?? 0) - (a.km ?? 0));
+    const problems = results.filter(r => r.issues.length).length;
+
+    list.innerHTML = `
+        <p class="address-check-summary ${problems ? 'is-warn' : 'is-ok'}">${problems
+            ? `${problems} chantier${problems > 1 ? 's' : ''} à vérifier sur ${results.length}.`
+            : `Les ${results.length} adresses ont été trouvées, toutes à moins de ${FAR_KM} km du dépôt.`}</p>
+        ${results.map((r, i) => `
+            <div class="address-check-row${r.issues.some(x => x.level === 'danger') ? ' is-danger' : r.issues.length ? ' is-warning' : ''}">
+                <div class="min-w-0" style="flex: 1;">
+                    <p class="address-check-name">${escapeHTML(r.chantier.name)}</p>
+                    <p class="address-check-line">${r.chantier.address ? escapeHTML(r.chantier.address) : '<em>Adresse non renseignée</em>'}</p>
+                    ${r.found && r.found !== r.chantier.address ? `<p class="address-check-line">Trouvée sur la carte : ${escapeHTML(r.found)}</p>` : ''}
+                    ${r.issues.map(x => `<p class="address-check-issue is-${x.level}">${escapeHTML(x.text)}</p>`).join('')}
+                </div>
+                <div class="address-check-side">
+                    ${r.km !== null ? `<span class="address-check-km">${r.km < 10 ? r.km.toFixed(1) : Math.round(r.km)} km</span>` : ''}
+                    <button type="button" class="icon-btn" data-check-edit="${i}" title="Modifier le chantier" aria-label="Modifier ${escapeHTML(r.chantier.name)}">${icon.edit}</button>
+                </div>
+            </div>`).join('')}
+    `;
+    list.querySelectorAll('[data-check-edit]').forEach(btn => btn.onclick = () => {
+        modal.classList.add('hidden');
+        openChantierForm(results[Number(btn.dataset.checkEdit)].chantier);
+    });
+}
+
 function setupEventListeners() {
     document.getElementById('openAddChantierBtn').onclick = () => openChantierForm(null);
+    document.getElementById('checkAddressesBtn').onclick = checkAddresses;
+    document.getElementById('closeAddressCheckBtn').onclick = () => document.getElementById('addressCheckModal').classList.add('hidden');
     document.getElementById('chantierForm').onsubmit = saveChantier;
     document.getElementById('cancelChantierFormBtn').onclick = closeChantierForm;
     document.getElementById('closeDetailsBtn').onclick = () => document.getElementById('detailsModal').classList.add('hidden');

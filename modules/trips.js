@@ -22,6 +22,23 @@ async function getCoordinates(address) {
     return data.features[0].center;
 }
 
+// Résultat détaillé du géocodage (même recherche que pour les trajets) : sert à contrôler les adresses
+export async function geocodeDetails(address) {
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${MAPBOX_ACCESS_TOKEN}&limit=1&country=BE`;
+    const data = await (await fetch(url)).json();
+    const f = data.features && data.features[0];
+    if (!f) return null;
+    coordsCache.set(address, f.center);
+    return { center: f.center, placeType: (f.place_type || [])[0] || '', placeName: f.place_name || '', relevance: f.relevance ?? 1 };
+}
+
+// Distance à vol d'oiseau entre deux points [lng, lat], en km
+export function crowDistanceKm([lng1, lat1], [lng2, lat2]) {
+    const rad = (d) => d * Math.PI / 180;
+    const a = Math.sin(rad(lat2 - lat1) / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(rad(lng2 - lng1) / 2) ** 2;
+    return 6371 * 2 * Math.asin(Math.sqrt(a));
+}
+
 // Itinéraire en voiture entre deux adresses : distance en km et durée en minutes
 export async function getDrivingRoute(startAddress, endAddress) {
     const key = `${startAddress}→${endAddress}`;
