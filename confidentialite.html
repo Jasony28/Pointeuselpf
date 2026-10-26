@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Confidentialité · Pointeuse LPF</title>
+    <meta name="description" content="Politique de confidentialité et suppression de compte de l'application Pointeuse LPF.">
+    <link rel="icon" href="icons/lpf-192.png">
+    <style>
+        :root {
+            --bg: #f5f6f8; --surface: #ffffff; --text: #0f172a; --muted: #475569; --border: #e2e8f0; --primary: #4f46e5; --soft: #eef2ff;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme="light"]) {
+                --bg: #0b1020; --surface: #111833; --text: #e5e7eb; --muted: #a3acc2; --border: #232c4d; --primary: #a5b4fc; --soft: #1b2347;
+            }
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 Inter, "Segoe UI", Roboto, Arial, sans-serif; }
+        main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+        header { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
+        header img { width: 52px; height: 52px; border-radius: 12px; }
+        h1 { margin: 0; font-size: 1.6rem; letter-spacing: -0.01em; }
+        .sub { margin: 2px 0 0; color: var(--muted); font-size: 0.9rem; }
+        section { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; margin-top: 16px; }
+        h2 { margin: 0 0 8px; font-size: 1.1rem; }
+        p, li { color: var(--muted); }
+        p { margin: 8px 0; }
+        ul { margin: 8px 0; padding-left: 1.2rem; }
+        strong { color: var(--text); }
+        a { color: var(--primary); }
+        .highlight { background: var(--soft); border-color: transparent; }
+        .mail { display: inline-block; margin-top: 6px; padding: 10px 16px; border-radius: 10px; background: var(--primary); color: #fff; font-weight: 600; text-decoration: none; }
+        @media (prefers-color-scheme: dark) { .mail { color: #0b1020; } }
+        footer { margin-top: 28px; color: var(--muted); font-size: 0.85rem; text-align: center; }
+    </style>
+</head>
+<body>
+<main>
+    <header>
+        <img src="icons/lpf-192.png" alt="">
+        <div>
+            <h1>Confidentialité</h1>
+            <p class="sub">Application Pointeuse LPF · Les Petites Fées, Marche-en-Famenne</p>
+        </div>
+    </header>
+
+    <section>
+        <h2>À quoi sert l'application</h2>
+        <p>Pointeuse LPF est l'outil interne de l'équipe des Petites Fées : pointage des heures de travail, planning, informations sur les chantiers, trajets, congés et messagerie entre collègues. Elle est réservée aux membres de l'équipe : un compte doit être approuvé par un administrateur.</p>
+    </section>
+
+    <section>
+        <h2>Les données enregistrées</h2>
+        <ul>
+            <li><strong>Compte</strong> : nom, adresse e-mail, mot de passe (chiffré, jamais lisible par nous).</li>
+            <li><strong>Fiche employé</strong>, si elle est remplie : numéro de GSM, adresse, numéro de registre national, IBAN, heures prévues au contrat. Ces informations servent à la gestion du personnel et à la paie.</li>
+            <li><strong>Travail</strong> : pointages (chantier, heures de début et de fin, pauses, collègues présents, notes), planning, demandes de congé.</li>
+            <li><strong>Trajets</strong> : kilomètres et temps de route entre le dépôt et les chantiers, calculés à partir de l'<strong>adresse des chantiers</strong>. L'application n'utilise <strong>pas</strong> la position GPS de votre téléphone.</li>
+            <li><strong>Messagerie</strong> : messages échangés dans l'application.</li>
+            <li><strong>Erreurs techniques</strong> : quand l'application rencontre un problème, un rapport est enregistré (message d'erreur, page, modèle de navigateur ou de téléphone) pour pouvoir le corriger.</li>
+        </ul>
+        <p>L'application n'affiche aucune publicité, ne vend aucune donnée et ne les utilise pas pour du profilage.</p>
+    </section>
+
+    <section>
+        <h2>Qui peut voir ces données</h2>
+        <ul>
+            <li><strong>Vous</strong> : vos pointages, votre planning, vos congés et vos messages.</li>
+            <li><strong>Les administrateurs de l'équipe</strong> : les données de travail de toute l'équipe et les fiches employés, pour organiser le travail et préparer la paie.</li>
+            <li><strong>Nos prestataires techniques</strong>, uniquement pour faire fonctionner l'application :
+                <ul>
+                    <li>Google Firebase (Google) : comptes et base de données ;</li>
+                    <li>Mapbox : recherche des adresses des chantiers et calcul des itinéraires (seules les adresses des chantiers lui sont envoyées) ;</li>
+                    <li>GitHub Pages (GitHub) : hébergement de l'application.</li>
+                </ul>
+            </li>
+        </ul>
+        <p>Les échanges entre l'application et ces services sont chiffrés (HTTPS).</p>
+    </section>
+
+    <section>
+        <h2>Combien de temps elles sont gardées</h2>
+        <p>Les données sont gardées tant que votre compte est actif. Après la suppression d'un compte, les données de travail utiles à la paie et aux obligations légales (heures prestées, congés) sont conservées pendant la durée imposée par la loi, puis supprimées. Le reste est supprimé.</p>
+    </section>
+
+    <section id="suppression" class="highlight">
+        <h2>Supprimer votre compte et vos données</h2>
+        <p>Vous pouvez demander à tout moment la suppression de votre compte Pointeuse LPF et des données qui y sont liées :</p>
+        <ul>
+            <li>par e-mail, avec l'objet « Suppression de mon compte Pointeuse LPF », depuis l'adresse e-mail de votre compte ;</li>
+            <li>ou en le demandant directement à un administrateur de l'équipe.</li>
+        </ul>
+        <a class="mail" href="mailto:jasonpougin1@gmail.com?subject=Suppression%20de%20mon%20compte%20Pointeuse%20LPF">Demander la suppression par e-mail</a>
+        <p>La demande est traitée dans un délai de 30 jours. Sont supprimés : le compte (connexion), la fiche employé, les messages et les rapports d'erreur. Les heures prestées et les congés peuvent être conservés le temps exigé par la loi, comme expliqué ci-dessus.</p>
+    </section>
+
+    <section>
+        <h2>Vos droits</h2>
+        <p>Vous pouvez demander l'accès à vos données, leur correction ou leur suppression, en écrivant à <a href="mailto:jasonpougin1@gmail.com">jasonpougin1@gmail.com</a>. Vous pouvez aussi introduire une réclamation auprès de l'Autorité de protection des données (<a href="https://www.autoriteprotectiondonnees.be" rel="noopener">autoriteprotectiondonnees.be</a>).</p>
+    </section>
+
+    <footer>Dernière mise à jour : 26 octobre 2026</footer>
+</main>
+</body>
+</html>

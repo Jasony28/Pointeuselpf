@@ -1,0 +1,114 @@
+# Compile l'appli Android de Pointeuse LPF (Capacitor).
+#
+# - Avec la clé de signature (secrets ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
+#   ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD) : fichier .aab à envoyer sur le Play Store,
+#   et .apk signé pour installer directement sur un téléphone.
+# - Sans la clé : seulement un .apk de test.
+#
+# Lancement : onglet « Actions » du dépôt → « Appli Android » → « Run workflow ».
+# Les fichiers produits sont en bas de la page du lancement, rubrique « Artifacts ».
+name: Appli Android
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/android.yml'
+      - 'scripts/android-config.mjs'
+      - 'capacitor.config.json'
+      - 'assets/**'
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Outils Capacitor
+        run: npm install --no-audit --no-fund
+
+      - name: Projet Android
+        run: |
+          npm run build
+          node scripts/android-config.mjs
+          npx cap add android
+          npx --yes @capacitor/assets@3 generate --android \
+            --iconBackgroundColor '#111833' --iconBackgroundColorDark '#111833' \
+            --splashBackgroundColor '#0f172a' --splashBackgroundColorDark '#0f172a'
+          npx cap sync android
+
+      - name: Numéro de version
+        run: |
+          VERSION_NAME=$(sed -n "s/^const APP_VERSION = 'v\([0-9.]*\)'.*/\1/p" app.js)
+          # Le Play Store exige un numéro qui augmente à chaque envoi : on prend le numéro du lancement
+          VERSION_CODE=$(( 100 + ${{ github.run_number }} ))
+          sed -i "s/versionCode [0-9]*/versionCode $VERSION_CODE/; s/versionName \"[^\"]*\"/versionName \"$VERSION_NAME\"/" android/app/build.gradle
+          grep -E "versionCode|versionName" android/app/build.gradle
+          echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+
+      - name: Signature
+        if: env.HAS_KEYSTORE == 'true'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload.jks
+          cat >> android/app/build.gradle <<'EOF'
+
+          android {
+              signingConfigs {
+                  release {
+                      storeFile file('upload.jks')
+                      storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                      keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                      keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+                  }
+              }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.release
+                  }
+              }
+          }
+          EOF
+
+      - name: Compilation (version Play Store)
+        if: env.HAS_KEYSTORE == 'true'
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon bundleRelease assembleRelease
+          mkdir -p ../sortie
+          cp app/build/outputs/bundle/release/app-release.aab "../sortie/pointeuse-lpf-${VERSION_NAME}-${VERSION_CODE}.aab"
+          cp app/build/outputs/apk/release/app-release.apk "../sortie/pointeuse-lpf-${VERSION_NAME}-${VERSION_CODE}.apk"
+
+      - name: Compilation (version de test, sans clé)
+        if: env.HAS_KEYSTORE != 'true'
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+          mkdir -p ../sortie
+          cp app/build/outputs/apk/debug/app-debug.apk "../sortie/pointeuse-lpf-${VERSION_NAME}-test.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pointeuse-lpf-android-${{ env.VERSION_NAME }}-${{ env.VERSION_CODE }}
+          path: sortie/
+          retention-days: 30

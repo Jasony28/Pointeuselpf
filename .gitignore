@@ -1,0 +1,8 @@
+# Fichiers générés (ne pas mettre sur GitHub)
+node_modules/
+www/
+android/
+
+# Clés de signature : JAMAIS dans le dépôt (il est public)
+*.jks
+*.keystore

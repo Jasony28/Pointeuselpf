@@ -50,6 +50,16 @@ export async function render() {
                         Changer l'e-mail
                     </button>
                 </div>
+
+                <div class="border-t my-4" style="border-color: var(--color-border);"></div>
+
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+                    <p class="text-sm" style="color: var(--color-text-muted);">Vos données, et comment demander la suppression de votre compte.</p>
+                    <div class="flex flex-wrap gap-2">
+                        <a href="confidentialite.html" target="_blank" rel="noopener" class="btn btn-secondary">Confidentialité</a>
+                        <a href="confidentialite.html#suppression" target="_blank" rel="noopener" class="btn btn-secondary">Supprimer mon compte</a>
+                    </div>
+                </div>
             </div>
 
             <!-- Export PDF -->

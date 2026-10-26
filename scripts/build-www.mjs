@@ -14,6 +14,7 @@ const entries = [
     'splash.js',
     'sw.js',
     'manifest.json',
+    'confidentialite.html',
     'maincoon1.jpg',
     'maincoon3.jpg',
     'styles',
