@@ -4,12 +4,13 @@ const { precaching, routing, strategies, core } = workbox;
 core.setCacheNameDetails({ prefix: 'pointeuse-lpf-cache' });
 
 // Version synchronisée avec app.js
-const APP_VERSION = 'v3.7.4'; // <--- CHANGEMENT ICI
+const APP_VERSION = 'v3.8.0'; // <--- CHANGEMENT ICI
 
 precaching.precacheAndRoute([
     { url: './', revision: APP_VERSION },
     { url: 'index.html', revision: APP_VERSION },
     { url: 'app.js', revision: APP_VERSION },
+    { url: 'splash.js', revision: APP_VERSION },
     { url: 'styles/app.css', revision: APP_VERSION },
     { url: 'manifest.json', revision: APP_VERSION },
     
@@ -22,6 +23,7 @@ precaching.precacheAndRoute([
 
     // Modules Utilisateur
     { url: 'modules/user-dashboard.js', revision: APP_VERSION },
+    { url: 'modules/trips.js', revision: APP_VERSION },
     { url: 'modules/user-history.js', revision: APP_VERSION },
     { url: 'modules/user-leave.js', revision: APP_VERSION },
     { url: 'modules/user-stats.js', revision: APP_VERSION },

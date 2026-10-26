@@ -1,6 +1,6 @@
 import { updatesLog } from './modules/updates-data.js';
 
-const APP_VERSION = 'v3.7.4';
+const APP_VERSION = 'v3.8.0';
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, initializeAuth, indexedDBLocalPersistence, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
@@ -770,7 +770,12 @@ export function reportError(error, context = '') {
     }
 }
 
-window.addEventListener('error', (event) => reportError(event.error || event.message, 'Erreur JavaScript'));
+window.addEventListener('error', (event) => {
+    // « Script error. » vient d'un script externe (Tailwind, Chart.js, extension du navigateur) :
+    // le navigateur cache le détail, il n'y a rien à corriger côté appli, on ne l'enregistre donc pas.
+    if (!event.error && /^Script error\.?$/i.test(String(event.message || '').trim())) return;
+    reportError(event.error || event.message, 'Erreur JavaScript');
+});
 window.addEventListener('unhandledrejection', (event) => reportError(event.reason, 'Promesse non gérée'));
 // Les erreurs déjà attrapées par les pages (console.error) sont aussi remontées
 console.error = (...args) => {
