@@ -1,5 +1,5 @@
 import { collection, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc, addDoc, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { rebuildDayTrips, localDateKey, isDayOver } from "./trips.js";
+import { rebuildDayTrips, localDateKey, isDayOver, clearTripCaches } from "./trips.js";
 import { db, currentUser, pageContent, showConfirmationModal, showInfoModal, navigateTo } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 import { getUsers } from "./data-service.js";
@@ -649,7 +649,10 @@ async function displayHistoryList(startDate, endDate, chantierFilter = null) {
                 </div>
                 <div class="text-right">
                     ${isEmptyDay ? '<span class="history-day-none">Aucun pointage</span>' : `<div class="stat-row-value">${formatMilliseconds(dayData.dailyTotalMs)}</div>`}
-                    ${dayData.dailyTotalKm > 0 ? `<div class="text-xs" style="color: var(--color-text-muted);">${dayData.dailyTotalKm.toFixed(1)} km / ${formatMinutes(dayData.dailyTotalMin)}</div>` : ''}
+                    ${(dayData.dailyTotalKm > 0 || (!isEmptyDay && currentUser.role === 'admin' && !localStealthMode)) ? `<div class="history-day-km">
+                        ${dayData.dailyTotalKm > 0 ? `<span>${dayData.dailyTotalKm.toFixed(1)} km / ${formatMinutes(dayData.dailyTotalMin)}</span>` : ''}
+                        ${(!isEmptyDay && currentUser.role === 'admin' && !localStealthMode) ? `<button type="button" class="recalc-km-btn" data-date="${dateString}" title="Recalculer les km de cette journée" aria-label="Recalculer les km de cette journée"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg><span>Recalculer</span></button>` : ''}
+                    </div>` : ''}
                 </div>
             </div>`;
 
@@ -886,10 +889,29 @@ function updatePdfButtonState(hasData) {
     }
 }
 
+// Bouton admin : refait tous les trajets de la journée (adresses relues, distances recalculées)
+async function recalculateDayKm(button) {
+    if (button.disabled) return;
+    if (!navigator.onLine) {
+        showInfoModal("Hors ligne", "Pas de connexion : impossible de recalculer les kilomètres.");
+        return;
+    }
+    button.disabled = true;
+    button.classList.add('is-loading');
+    clearTripCaches();
+    const ok = await rebuildDayTrips(targetUser.uid, button.dataset.date, { force: true });
+    if (lastLoadedState.start) await displayHistoryList(lastLoadedState.start, lastLoadedState.end, lastLoadedState.chantier);
+    if (!ok) {
+        showInfoModal("Recalcul impossible", "Les kilomètres n'ont pas pu être recalculés. Vérifiez que chaque chantier de cette journée a une adresse trouvable sur la carte (Admin → Chantiers).");
+    }
+}
+
 function handleHistoryClick(e) {
     if (currentUser.role !== 'admin' || localStealthMode === true) return;
     const target = e.target;
-    if (target.closest('.add-pointage-btn')) {
+    if (target.closest('.recalc-km-btn')) {
+        recalculateDayKm(target.closest('.recalc-km-btn'));
+    } else if (target.closest('.add-pointage-btn')) {
         openEntryModal({ isEditing: false, date: target.closest('.add-pointage-btn').dataset.date });
     } else if (target.closest('.edit-btn')) {
         const pointageId = target.closest('.edit-btn').dataset.id;

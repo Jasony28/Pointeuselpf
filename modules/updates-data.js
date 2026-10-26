@@ -1,5 +1,15 @@
 export const updatesLog = [
     {
+        version: 'v3.8.4',
+        date: '26 octobre 2026',
+        changes: [
+            "**Pointage** : les fenêtres « Démarrer un pointage » et « Finaliser le pointage » ont le nouveau style et suivent le mode sombre.",
+            "**Admin - Kilomètres** : quand vous corrigez l'adresse d'un chantier, l'application propose de recalculer les km des journées déjà enregistrées avec l'ancienne adresse.",
+            "**Admin - Historique** : nouveau bouton « Recalculer » sur chaque journée pour refaire le calcul des kilomètres.",
+            "**Admin - Équipe et Congés** : finitions du nouveau style (fenêtre Transférer / Dupliquer, collègues externes, demandes de congés).",
+        ]
+    },
+    {
         version: 'v3.8.3',
         date: '26 octobre 2026',
         changes: [

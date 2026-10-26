@@ -2,6 +2,7 @@ import { collection, query, orderBy, getDocs, addDoc, updateDoc, doc, serverTime
 import { db, pageContent, showInfoModal, showConfirmationModal, showToast } from "../app.js";
 import { getGoogleMapsUrl } from "./utils.js";
 import { getActiveChantiers } from "./data-service.js";
+import { clearTripCaches, findDaysUsingAddress, rebuildDayTrips } from "./trips.js";
 
 // Token Mapbox
 const MAPBOX_TOKEN = "pk.eyJ1IjoiamFzb255MjgiLCJhIjoiY21lMDcyYWhzMDIyODJsczl0cmM0aTVjciJ9.V14cJXdBNoq3yAQTDeUg-A";
@@ -423,6 +424,8 @@ async function saveChantier(e) {
 
         const data = { ...values, coordinates };
         const isEdit = !!editingChantier;
+        const oldAddress = isEdit ? (editingChantier.address || '') : '';
+        const addressChanged = isEdit && oldAddress && values.address && values.address !== oldAddress;
         if (isEdit) {
             await updateDoc(doc(db, "chantiers", editingChantier.id), data);
         } else {
@@ -431,12 +434,15 @@ async function saveChantier(e) {
         await getActiveChantiers(true);
 
         closeChantierForm();
+        await loadChantiers();
+        if (addressChanged) clearTripCaches();
         if (geoFailed) {
             showInfoModal("Chantier enregistré", "Attention : l'adresse n'a pas été trouvée sur la carte. L'itinéraire et le calcul des kilomètres ne fonctionneront pas pour ce chantier tant que l'adresse n'est pas corrigée.");
+        } else if (addressChanged) {
+            await offerTripsRecalculation(oldAddress);
         } else {
             showInfoModal("Succès", isEdit ? "Chantier mis à jour." : "Chantier ajouté.");
         }
-        await loadChantiers();
     } catch (error) {
         console.error("Erreur enregistrement:", error);
         showInfoModal("Erreur", "L'enregistrement du chantier a échoué.");
@@ -444,6 +450,40 @@ async function saveChantier(e) {
         saveBtn.disabled = false;
         saveBtn.textContent = 'Enregistrer';
     }
+}
+
+// L'adresse d'un chantier a été corrigée : on propose de recalculer les km des journées déjà enregistrées
+async function offerTripsRecalculation(oldAddress) {
+    let days = [];
+    try {
+        days = await findDaysUsingAddress(oldAddress);
+    } catch (error) {
+        console.error("Recherche des trajets à recalculer:", error);
+    }
+    if (!days.length) {
+        showInfoModal("Succès", "Chantier mis à jour. Les prochains trajets utiliseront la nouvelle adresse.");
+        return;
+    }
+    const fmt = (key) => new Date(`${key}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+    const first = days[days.length - 1].dayKey, last = days[0].dayKey;
+    const period = first === last ? `le ${fmt(first)}` : `du ${fmt(first)} au ${fmt(last)}`;
+    const label = days.length === 1 ? '1 journée' : `${days.length} journées`;
+    const ok = await showConfirmationModal("Recalculer les kilomètres ?",
+        `Chantier mis à jour. ${days.length === 1 ? `Les trajets d'une journée (${period}) utilisent` : `Les trajets de ${label} (${period}) utilisent`} encore l'ancienne adresse. Recalculer leurs kilomètres avec la nouvelle adresse ?`);
+    if (!ok) return;
+
+    if (!navigator.onLine) {
+        showInfoModal("Hors ligne", "Pas de connexion : le recalcul n'a pas pu être lancé.");
+        return;
+    }
+    showToast(`Recalcul des km de ${label}…`);
+    let done = 0, failed = 0;
+    for (const { uid, dayKey } of days) {
+        if (await rebuildDayTrips(uid, dayKey)) done++; else failed++;
+    }
+    showInfoModal(failed ? "Recalcul terminé avec des erreurs" : "Kilomètres recalculés",
+        failed ? `${done} journée(s) recalculée(s), ${failed} en échec (vérifiez les adresses des autres chantiers de ces journées).`
+               : `${done === 1 ? 'La journée a été recalculée' : `Les ${done} journées ont été recalculées`} avec la nouvelle adresse.`);
 }
 
 function setupEventListeners() {

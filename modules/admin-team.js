@@ -42,52 +42,45 @@ export async function render() {
             </div>
             
             ${isStealthMode() ? `
-            <div class="p-4 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <h3 class="text-xl font-semibold mb-3 border-b pb-2" style="border-color: var(--color-border); color: var(--color-text-base);">Autres Collègues Externes</h3>
-                <div class="flex gap-2 mb-4">
-                    <input type="text" id="new-colleague-name" placeholder="Nom du nouveau collègue..." 
-                           class="border p-2 text-sm rounded flex-1" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);">
-                    <button id="add-colleague-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-lg text-sm transition-colors">
-                        Ajouter
-                    </button>
+            <div class="team-card">
+                <h3 class="text-lg font-semibold" style="color: var(--color-text-base);">Autres collègues externes</h3>
+                <div class="flex gap-2">
+                    <input type="text" id="new-colleague-name" placeholder="Nom du nouveau collègue…" class="input flex-1">
+                    <button id="add-colleague-btn" class="btn btn-primary">Ajouter</button>
                 </div>
-                <div id="colleagues-list-container" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div id="colleagues-list-container" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <p class="text-center" style="color: var(--color-text-muted);">Chargement des collègues...</p>
                 </div>
             </div>
             ` : ''}
         </div>
 
-        <div id="transferModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4">
-            <div class="p-6 rounded-lg shadow-xl w-full max-w-md space-y-4" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <h3 class="text-xl font-bold" style="color: var(--color-text-base);">Transférer ou Dupliquer des données</h3>
-                <p class="text-xs" style="color: var(--color-text-muted);">Copie ou déplace les pointages et plannings d'un employé vers un autre.</p>
-                
-                <div class="space-y-3 text-sm">
+        <div id="transferModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="transferModalTitle">
+            <div class="modal-panel">
+                <div class="modal-body space-y-4">
                     <div>
-                        <label class="block font-semibold mb-1" style="color: var(--color-text-base);">Employé Source :</label>
-                        <select id="transferSource" class="w-full border p-2 rounded-lg" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);"></select>
+                        <h3 id="transferModalTitle" class="modal-title">Transférer ou dupliquer des données</h3>
+                        <p class="modal-text">Copie ou déplace les pointages et plannings d'un employé vers un autre.</p>
                     </div>
-                    <div>
-                        <label class="block font-semibold mb-1" style="color: var(--color-text-base);">Employé de Destination :</label>
-                        <select id="transferTarget" class="w-full border p-2 rounded-lg" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);"></select>
+                    <div class="space-y-1">
+                        <label for="transferSource" class="field-label">Employé source</label>
+                        <select id="transferSource" class="input"></select>
                     </div>
-                    <div>
-                        <label class="block font-semibold mb-1" style="color: var(--color-text-base);">Mode d'opération :</label>
-                        <select id="transferMode" class="w-full border p-2 rounded-lg" style="background-color: var(--color-background); border-color: var(--color-border); color: var(--color-text-base);">
-                            <option value="duplicate">Dupliquer (Garder les données sur la source)</option>
-                            <option value="transfer">Transférer (Déplacer et nettoyer la source)</option>
+                    <div class="space-y-1">
+                        <label for="transferTarget" class="field-label">Employé de destination</label>
+                        <select id="transferTarget" class="input"></select>
+                    </div>
+                    <div class="space-y-1">
+                        <label for="transferMode" class="field-label">Mode d'opération</label>
+                        <select id="transferMode" class="input">
+                            <option value="duplicate">Dupliquer (garder les données sur la source)</option>
+                            <option value="transfer">Transférer (déplacer et nettoyer la source)</option>
                         </select>
                     </div>
                 </div>
-
-                <div class="flex justify-end gap-3 pt-2 text-sm">
-                    <button id="closeTransferBtn" class="px-4 py-2 rounded-lg border font-medium" style="border-color: var(--color-border); color: var(--color-text-muted);">
-                        Annuler
-                    </button>
-                    <button id="confirmTransferBtn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-4 py-2 rounded-lg transition-colors">
-                        Confirmer l'opération
-                    </button>
+                <div class="modal-footer">
+                    <button id="closeTransferBtn" class="btn btn-secondary">Annuler</button>
+                    <button id="confirmTransferBtn" class="btn btn-primary">Confirmer l'opération</button>
                 </div>
             </div>
         </div>
@@ -471,7 +464,7 @@ async function loadColleagues() {
         listContainer.innerHTML = "";
         
         if (querySnapshot.empty) {
-            listContainer.innerHTML = "<p class='text-gray-500'>Aucun collègue externe trouvé.</p>";
+            listContainer.innerHTML = "<p class='hours-empty col-span-full'>Aucun collègue externe trouvé.</p>";
             return;
         }
         
@@ -479,7 +472,7 @@ async function loadColleagues() {
             listContainer.appendChild(createColleagueElement(docSnap.id, docSnap.data().name));
         });
     } catch (error) {
-        listContainer.innerHTML = "<p class='text-red-500'>Erreur de chargement des collègues.</p>";
+        listContainer.innerHTML = "<p class='hours-empty col-span-full'>Erreur de chargement des collègues.</p>";
     }
 }
 
@@ -488,15 +481,14 @@ async function loadColleagues() {
  */
 function createColleagueElement(id, name) {
     const div = document.createElement('div');
-    div.className = 'p-3 border rounded flex justify-between items-center';
-    div.style.backgroundColor = 'var(--color-background)';
-    div.style.borderColor = 'var(--color-border)';
-    
-    div.innerHTML = `<span class="font-medium">${name}</span>`;
-    
+    div.className = 'colleague-row';
+    div.innerHTML = `<span class="font-medium">${escapeHTML(name)}</span>`;
+
     const deleteBtn = document.createElement('button');
-    deleteBtn.textContent = 'Supprimer';
-    deleteBtn.className = 'px-3 py-1 text-sm rounded bg-red-500 hover:bg-red-600 text-white font-medium';
+    deleteBtn.innerHTML = teamIcons.trash;
+    deleteBtn.className = 'icon-btn is-danger';
+    deleteBtn.title = 'Supprimer';
+    deleteBtn.setAttribute('aria-label', `Supprimer ${name}`);
     deleteBtn.onclick = async () => {
         if (await showConfirmationModal("Confirmation", `Vraiment supprimer "${name}" ?`)) {
             try {

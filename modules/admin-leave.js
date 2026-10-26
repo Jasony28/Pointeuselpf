@@ -32,6 +32,9 @@ export async function render() {
             </div>
         </div>
     `;
+    // Un seul écouteur par liste : les rechargements de la liste n'en ajoutent pas d'autres
+    document.getElementById('pending-requests-list').addEventListener('click', handleAdminAction);
+    document.getElementById('processed-requests-list').addEventListener('click', handleAdminAction);
     setTimeout(loadAllRequests, 0);
 }
 
@@ -47,8 +50,8 @@ async function loadAllRequests() {
         processedContainer.innerHTML = '';
 
         if (snapshot.empty) {
-            pendingContainer.innerHTML = '<p class="text-center italic py-4 text-gray-500">Aucune demande en attente.</p>';
-            processedContainer.innerHTML = '<p class="text-center italic py-4 text-gray-500">Aucun historique.</p>';
+            pendingContainer.innerHTML = '<p class="hours-empty">Aucune demande en attente.</p>';
+            processedContainer.innerHTML = '<p class="hours-empty">Aucun historique.</p>';
             return;
         }
 
@@ -67,15 +70,13 @@ async function loadAllRequests() {
             }
         });
 
-        if (pendingCount === 0) pendingContainer.innerHTML = '<div class="text-center py-8"><p class="font-bold mt-2" style="color: var(--color-success);">Tout est à jour !</p><p class="text-sm text-gray-500">Aucune demande en attente.</p></div>';
-        if (processedCount === 0) processedContainer.innerHTML = '<p class="text-center italic py-4 text-gray-500">Aucun historique.</p>';
+        if (pendingCount === 0) pendingContainer.innerHTML = '<div class="text-center py-8"><p class="font-bold mt-2" style="color: var(--color-success);">Tout est à jour !</p><p class="text-sm" style="color: var(--color-text-muted);">Aucune demande en attente.</p></div>';
+        if (processedCount === 0) processedContainer.innerHTML = '<p class="hours-empty">Aucun historique.</p>';
 
-        document.getElementById('pending-requests-list').addEventListener('click', handleAdminAction);
-        document.getElementById('processed-requests-list').addEventListener('click', handleAdminAction);
         
     } catch (error) {
         console.error("Erreur de chargement des demandes:", error);
-        pendingContainer.innerHTML = '<p class="text-center text-red-500 font-bold">Erreur de chargement.</p>';
+        pendingContainer.innerHTML = '<p class="hours-empty">Erreur de chargement.</p>';
     }
 }
 
@@ -123,8 +124,8 @@ function createRequestElement(id, data) {
             </div>
             <div>${statusBadge}</div>
         </div>
-        <div class="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg text-sm border border-gray-100 dark:border-gray-700">
-            <span class="font-bold text-gray-500 uppercase text-xs">Motif</span><br>
+        <div class="p-3 rounded-lg text-sm" style="background-color: var(--color-surface-2); border: 1px solid var(--color-border);">
+            <span class="kpi-label">Motif</span><br>
             <span style="color: var(--color-text-base);">${data.reason}</span>
             ${data.startTime ? `<br><span class="leave-hours mt-1">de ${data.startTime} à ${data.endTime}</span>` : ''}
         </div>

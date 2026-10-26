@@ -46,39 +46,37 @@ export async function render() {
             </div>
         </div>
 
-        <div id="startPointageModal" class="hidden fixed inset-0 z-50 bg-black bg-opacity-50 flex justify-center items-center p-4">
-            <div class="p-6 rounded-lg w-full max-w-md bg-white text-gray-900 shadow-xl">
-                <h3 class="text-xl font-bold mb-4 text-black">Démarrer un pointage</h3>
-                <form id="startPointageForm" class="space-y-4">
-                    <div>
-                        <label class="text-sm font-medium text-gray-700">Chantier</label>
-                        <select id="startChantierSelect" class="w-full border p-2 rounded mt-1 bg-white text-gray-900 border-gray-300" required></select>
+        <div id="startPointageModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="startPointageTitle">
+            <form id="startPointageForm" class="modal-panel">
+                <div class="modal-body space-y-4">
+                    <h3 id="startPointageTitle" class="modal-title">Démarrer un pointage</h3>
+                    <div class="space-y-1">
+                        <label for="startChantierSelect" class="field-label">Chantier</label>
+                        <select id="startChantierSelect" class="input" required></select>
                     </div>
                     <p class="auto-km-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Les kilomètres et le temps de route sont calculés automatiquement.</p>
-                    <div class="flex justify-end gap-4 pt-4">
-                        <button type="button" id="cancelStartPointage" class="px-4 py-2 rounded bg-gray-200 text-gray-800 hover:bg-gray-300 border border-gray-300 transition-colors">Annuler</button>
-                        <button type="submit" class="text-white px-4 py-2 rounded font-bold transition-colors" style="background-color: var(--color-primary);">Démarrer</button>
-                    </div>
-                </form>
-            </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" id="cancelStartPointage" class="btn btn-secondary">Annuler</button>
+                    <button type="submit" class="btn btn-primary">Démarrer</button>
+                </div>
+            </form>
         </div>
 
-        <div id="stopPointageModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
-            <div class="p-6 rounded-lg shadow-xl w-full max-w-md bg-white text-gray-900">
-                <h3 class="text-xl font-bold mb-4 text-black">Finaliser le pointage</h3>
-                <form id="stopPointageForm">
-                    <div class="space-y-4">
-                        <div>
-                            <label for="pointageNotes" class="text-sm font-medium text-gray-700">Note (facultatif)</label>
-                            <textarea id="pointageNotes" placeholder="Ex: Matériel manquant..." class="w-full border p-2 rounded mt-1 h-24 bg-white text-gray-900 border-gray-300 focus:ring-blue-500 focus:border-blue-500"></textarea>
-                        </div>
-                        <div class="flex justify-end gap-4 pt-4">
-                            <button type="button" id="cancelStopPointage" class="px-4 py-2 rounded bg-gray-200 text-gray-800 hover:bg-gray-300 border border-gray-300 transition-colors">Annuler</button>
-                            <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded transition-colors">Arrêter et Enregistrer</button>
-                        </div>
+        <div id="stopPointageModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="stopPointageTitle">
+            <form id="stopPointageForm" class="modal-panel">
+                <div class="modal-body space-y-4">
+                    <h3 id="stopPointageTitle" class="modal-title">Finaliser le pointage</h3>
+                    <div class="space-y-1">
+                        <label for="pointageNotes" class="field-label">Note (facultatif)</label>
+                        <textarea id="pointageNotes" placeholder="Ex : matériel manquant…" class="input h-24" style="resize: vertical;"></textarea>
                     </div>
-                </form>
-            </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" id="cancelStopPointage" class="btn btn-secondary">Annuler</button>
+                    <button type="submit" class="btn btn-danger">Arrêter et enregistrer</button>
+                </div>
+            </form>
         </div>
     `;
 
@@ -753,15 +751,15 @@ function renderSuggestions(suggestions) {
         const timeFormat = { hour: '2-digit', minute: '2-digit' };
         const card = document.createElement('div');
         card.className = 'border-l-4 p-4 rounded-r-lg shadow-sm';
-        card.style.borderColor = 'orange';
+        card.style.borderColor = 'var(--color-warning)';
         card.style.backgroundColor = 'var(--color-surface)';
         card.innerHTML = `
             <p class="font-semibold">${sugg.userName} a pointé sur le chantier <strong style="color: var(--color-primary);">${sugg.chantier}</strong>.</p>
             <p class="text-sm" style="color: var(--color-text-muted);">Le ${start.toLocaleDateString('fr-FR')} de ${start.toLocaleTimeString('fr-FR', timeFormat)} à ${end.toLocaleTimeString('fr-FR', timeFormat)}.</p>
             <p class="mt-2 font-medium">Étiez-vous avec cette personne ?</p>
-            <div class="flex gap-4 mt-3">
-                <button class="accept-suggestion-btn bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded-lg" data-sugg-id="${sugg.id}">Oui, accepter</button>
-                <button class="refuse-suggestion-btn font-bold px-4 py-2 rounded-lg" data-sugg-id="${sugg.id}" style="background-color: var(--color-background);">Non, refuser</button>
+            <div class="flex gap-3 mt-3">
+                <button class="accept-suggestion-btn btn btn-primary" data-sugg-id="${sugg.id}">Oui, accepter</button>
+                <button class="refuse-suggestion-btn btn btn-secondary" data-sugg-id="${sugg.id}">Non, refuser</button>
             </div>
         `;
         container.appendChild(card);
@@ -823,20 +821,20 @@ function initUnreadMessagesListener() {
         if (totalUnread > 0) {
             const senderNames = Array.from(senders).join(', '), isMultiple = senders.size > 1;
             container.innerHTML = `
-                <div class="bg-white border-l-4 p-4 rounded-r-lg shadow-md flex items-center justify-between group" style="background-color: var(--color-surface); border-color: var(--color-primary);">
+                <div class="border-l-4 p-4 rounded-r-lg shadow-md flex items-center justify-between group cursor-pointer" style="background-color: var(--color-surface); border-color: var(--color-primary);">
                     <div class="flex items-center gap-4">
                         <div class="relative">
                             <div class="w-12 h-12 rounded-full flex items-center justify-center text-white shadow-sm" style="background-color: var(--color-primary);">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
                             </div>
-                            <span class="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white ring-2 ring-white animate-pulse">${totalUnread}</span>
+                            <span class="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-white" style="background-color: var(--color-danger); box-shadow: 0 0 0 2px var(--color-surface);">${totalUnread}</span>
                         </div>
                         <div>
                             <h3 class="font-bold text-lg" style="color: var(--color-text-base);">${isMultiple ? 'Nouveaux messages' : `Message de ${senderNames}`}</h3>
-                            <p class="text-sm text-gray-500 line-clamp-1" style="color: var(--color-text-muted);">${isMultiple ? `Vous avez des messages de : ${senderNames}` : `"${lastMessagePreview}"`}</p>
+                            <p class="text-sm line-clamp-1" style="color: var(--color-text-muted);">${isMultiple ? `Vous avez des messages de : ${senderNames}` : `"${lastMessagePreview}"`}</p>
                         </div>
                     </div>
-                    <div class="text-gray-400 group-hover:translate-x-1 transition-transform">
+                    <div class="group-hover:translate-x-1 transition-transform" style="color: var(--color-text-subtle);">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
                     </div>
                 </div>

@@ -50,11 +50,15 @@ export function isDayOver(dayKey, now = new Date()) {
     return dayKey < today || (dayKey === today && now.getHours() >= RETURN_TRIP_HOUR);
 }
 
+// Adresses des chantiers, relues au plus tard toutes les 2 minutes (une adresse corrigée est vite prise en compte)
+const ADDRESSES_TTL_MS = 2 * 60 * 1000;
 let chantierAddresses = null;
+let chantierAddressesAt = 0;
 async function getChantierAddresses() {
-    if (chantierAddresses) return chantierAddresses;
+    if (chantierAddresses && Date.now() - chantierAddressesAt < ADDRESSES_TTL_MS) return chantierAddresses;
     const snap = await getDocs(collection(db, "chantiers"));
     chantierAddresses = { byId: new Map(), byName: new Map() };
+    chantierAddressesAt = Date.now();
     snap.forEach(d => {
         const c = d.data();
         if (!c.address) return;
@@ -62,6 +66,13 @@ async function getChantierAddresses() {
         if (c.name) chantierAddresses.byName.set(c.name, c.address);
     });
     return chantierAddresses;
+}
+
+// À appeler après la modification d'une adresse de chantier
+export function clearTripCaches() {
+    chantierAddresses = null;
+    coordsCache.clear();
+    routeCache.clear();
 }
 
 async function addressOf(pointage) {
@@ -72,10 +83,12 @@ async function addressOf(pointage) {
 /**
  * Recalcule tous les trajets d'une journée pour un employé, à partir de ses pointages.
  * Appelé quand un pointage est ajouté, modifié, déplacé ou supprimé depuis l'Historique.
- * Les trajets inchangés (mêmes adresses) sont gardés tels quels, sans nouvel appel à Mapbox.
+ * Les trajets inchangés (mêmes adresses) sont gardés tels quels, sans nouvel appel à Mapbox,
+ * sauf avec { force: true } (bouton « Recalculer les km » de l'admin).
+ * Renvoie true si le recalcul a abouti.
  */
-export async function rebuildDayTrips(uid, dayKey) {
-    if (!uid || !dayKey || !navigator.onLine) return;
+export async function rebuildDayTrips(uid, dayKey, { force = false } = {}) {
+    if (!uid || !dayKey || !navigator.onLine) return false;
     try {
         const dayStart = new Date(`${dayKey}T00:00:00`);
         const dayEnd = new Date(`${dayKey}T23:59:59`);
@@ -115,14 +128,37 @@ export async function rebuildDayTrips(uid, dayKey) {
             const old = existing.get(id);
             const same = old && old.adresse_depart === t.adresse_depart && old.adresse_arrivee === t.adresse_arrivee
                 && old.id_pointage_arrivee === t.id_pointage_arrivee && old.id_pointage_depart === t.id_pointage_depart;
-            if (same) continue;
+            if (same && !force) continue;
             const { distanceKm, durationMin } = await getDrivingRoute(t.adresse_depart, t.adresse_arrivee);
             await setDoc(doc(db, "trajets", id), { ...t, distance_km: distanceKm, duree_min: durationMin });
         }
         for (const id of existing.keys()) {
             if (!wanted.has(id)) await deleteDoc(doc(db, "trajets", id));
         }
+        return true;
     } catch (error) {
         console.error("Erreur lors du recalcul des trajets du jour:", error);
+        return false;
     }
+}
+
+/**
+ * Journées (employé + jour) dont un trajet part de cette adresse ou y arrive.
+ * Sert à recalculer les km quand l'adresse d'un chantier est corrigée.
+ */
+export async function findDaysUsingAddress(address) {
+    if (!address) return [];
+    const [arrivals, departures] = await Promise.all([
+        getDocs(query(collection(db, "trajets"), where("adresse_arrivee", "==", address))),
+        getDocs(query(collection(db, "trajets"), where("adresse_depart", "==", address))),
+    ]);
+    const days = new Map();
+    [...arrivals.docs, ...departures.docs].forEach(d => {
+        const t = d.data();
+        const date = t.date_creation?.toDate ? t.date_creation.toDate() : null;
+        if (!t.id_utilisateur || !date) return;
+        const dayKey = localDateKey(date);
+        days.set(`${t.id_utilisateur}|${dayKey}`, { uid: t.id_utilisateur, dayKey });
+    });
+    return [...days.values()].sort((a, b) => b.dayKey.localeCompare(a.dayKey));
 }
