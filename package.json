@@ -5,6 +5,7 @@
   "description": "Pointeuse LPF — application web + applis iPhone / Android (Capacitor)",
   "scripts": {
     "build": "node scripts/build-www.mjs",
+    "css": "npx -y tailwindcss@3.4.17 -i styles/tailwind.src.css -o styles/tailwind.css --minify",
     "ios:init": "npm run build && npx cap add ios",
     "ios": "npm run build && npx cap sync ios && npx cap open ios",
     "android:init": "npm run build && npx cap add android",

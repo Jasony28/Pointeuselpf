@@ -1,0 +1,28 @@
+# Régénère styles/tailwind.css quand le HTML ou le JS change (classes Tailwind ajoutées ou retirées).
+name: Styles
+
+on:
+  push:
+    branches: [main]
+    paths: ['index.html', 'app.js', 'splash.js', 'modules/**', 'tailwind.config.js', 'styles/tailwind.src.css']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  css:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm run css
+      - name: Enregistrer si le fichier a changé
+        run: |
+          if git diff --quiet styles/tailwind.css; then echo "Styles à jour"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Styles : tailwind.css régénéré"
+          git push
