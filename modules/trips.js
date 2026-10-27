@@ -7,9 +7,8 @@ import { db } from "../app.js";
 
 export const MAPBOX_ACCESS_TOKEN = "pk.eyJ1IjoiamFzb255MjgiLCJhIjoiY21lMDcyYWhzMDIyODJsczl0cmM0aTVjciJ9.V14cJXdBNoq3yAQTDeUg-A";
 export const DEPOT_ADDRESS = "Marche-en-Famenne, Belgium";
-// Règles des kilomètres jusqu'au 25 octobre 2026 (avant la v3.8.0) : seul le conducteur avait des km
-// (case « Je suis le conducteur », champ isDriver du pointage) et il n'y avait pas de retour au dépôt.
-// Depuis le 26 octobre : km pour chaque employé et retour au dépôt. Un recalcul suit la règle du jour concerné.
+// Chaque employé a ses km, comme s'il était conducteur (l'ancienne case « Je suis le conducteur » est ignorée).
+// Le retour au dépôt n'est compté qu'à partir du 26 octobre 2026 (v3.8.0) : avant, il n'existait pas.
 export const NEW_KM_RULES_SINCE = '2026-10-26';
 
 // À partir de cette heure, la journée en cours est considérée comme terminée (trajet retour ajouté)
@@ -130,7 +129,6 @@ export async function rebuildDayTrips(uid, dayKey, { force = false } = {}) {
 
         // Ce que la journée devrait contenir
         const oldRules = dayKey < NEW_KM_RULES_SINCE;
-        const passengerTrips = new Set(); // anciens pointages « passager » : trajet à 0 km
         const wanted = new Map();
         let from = DEPOT_ADDRESS;
         for (const p of pointages) {
@@ -139,7 +137,6 @@ export async function rebuildDayTrips(uid, dayKey, { force = false } = {}) {
             if (to !== from) {
                 const key = [...existing].find(([, t]) => t.type !== 'retour' && t.id_pointage_arrivee === p.id)?.[0] || doc(collection(db, "trajets")).id;
                 wanted.set(key, { id_utilisateur: uid, id_pointage_arrivee: p.id, adresse_depart: from, adresse_arrivee: to, date_creation: Timestamp.fromDate(new Date(p.timestamp)) });
-                if (oldRules && p.isDriver === false) passengerTrips.add(key);
             }
             from = to;
         }
@@ -157,10 +154,10 @@ export async function rebuildDayTrips(uid, dayKey, { force = false } = {}) {
             const old = existing.get(id);
             const same = old && old.adresse_depart === t.adresse_depart && old.adresse_arrivee === t.adresse_arrivee
                 && old.id_pointage_arrivee === t.id_pointage_arrivee && old.id_pointage_depart === t.id_pointage_depart
-                && (!passengerTrips.has(id) || old.distance_km === 0);
+                && old.distance_km > 0; // un ancien trajet « passager » à 0 km est recalculé
             if (same && !force) continue;
             const { distanceKm, durationMin } = await getDrivingRoute(t.adresse_depart, t.adresse_arrivee);
-            await setDoc(doc(db, "trajets", id), { ...t, distance_km: passengerTrips.has(id) ? 0 : distanceKm, duree_min: durationMin });
+            await setDoc(doc(db, "trajets", id), { ...t, distance_km: distanceKm, duree_min: durationMin });
         }
         for (const id of existing.keys()) {
             if (!wanted.has(id)) await deleteDoc(doc(db, "trajets", id));

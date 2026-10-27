@@ -184,7 +184,6 @@ async function exportTravelDetail() {
             const notes = [];
             if (!p) notes.push('pointage introuvable sur la période');
             if (p && isRegularisation(p)) notes.push('régularisation');
-            if (p && p.isDriver === false && (t.distance_km || 0) === 0) notes.push('passager (ancienne règle)');
             rows.push({
                 emp: names.get(t.id_utilisateur) || t.id_utilisateur || '?', day: date ? localDateKey(date) : '', start: time(p?.timestamp),
                 type: t.type === 'retour' ? 'retour dépôt' : 'aller', chantier: p?.chantier || '', conducteur: driver(p),
@@ -206,7 +205,7 @@ async function exportTravelDetail() {
         const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
         const header = ['Employé', 'Jour', 'Début pointage', 'Type', 'Chantier', 'Conducteur', 'Départ', 'Arrivée', 'Km', 'Minutes', 'Règle', 'Remarque'];
         const lines = rows.map(r => [r.emp, r.day, r.start, r.type, r.chantier, r.conducteur, r.from, r.to, r.km, r.min,
-            r.day && r.day < NEW_KM_RULES_SINCE ? 'ancienne (conducteur seul, pas de retour)' : 'nouvelle', r.note].map(cell).join(';'));
+            r.day && r.day < NEW_KM_RULES_SINCE ? 'avant le 26/10 : pas de retour au dépôt' : 'avec retour au dépôt', r.note].map(cell).join(';'));
         const csv = '﻿' + [header.map(cell).join(';'), ...lines].join('\r\n');
         const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
         const link = document.createElement('a');
