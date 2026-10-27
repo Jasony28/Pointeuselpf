@@ -14,27 +14,73 @@ export const NEW_KM_RULES_SINCE = '2026-10-26';
 // À partir de cette heure, la journée en cours est considérée comme terminée (trajet retour ajouté)
 export const RETURN_TRIP_HOUR = 23;
 
-const coordsCache = new Map();
 const routeCache = new Map();
 
-async function getCoordinates(address) {
-    if (coordsCache.has(address)) return coordsCache.get(address);
-    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${MAPBOX_ACCESS_TOKEN}&limit=1&country=BE&proximity=5.3444,50.2277`;
-    const data = await (await fetch(url)).json();
-    if (!data.features || data.features.length === 0) throw new Error(`Adresse non trouvée : ${address}`);
-    coordsCache.set(address, data.features[0].center);
-    return data.features[0].center;
+// --- Recherche d'adresse sur la carte ------------------------------------------------
+// La carte renvoie plusieurs lieux possibles. On garde celui qui est dans la commune (ou le code postal)
+// écrite dans l'adresse, de préférence à moins de 100 km du dépôt : « Rue du facteur 5 soy » doit tomber
+// à Soy, pas dans une autre « rue du Facteur » à 130 km.
+const DEPOT_COORDS = [5.3444, 50.2277];
+const WORK_RADIUS_KM = 100;
+const geocodeCache = new Map();
+const normText = (s) => ` ${String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()} `;
+
+// Noms de la commune / localité / code postal d'un résultat de la carte
+function featurePlaces(f) {
+    const items = [...(f.context || [])];
+    if ((f.place_type || []).some(t => ['place', 'locality', 'postcode', 'neighborhood'].includes(t))) items.push({ id: f.place_type[0] + '.', text: f.text });
+    return {
+        postcodes: items.filter(c => String(c.id).startsWith('postcode')).map(c => String(c.text)),
+        names: items.filter(c => /^(place|locality|neighborhood)/.test(c.id)).map(c => c.text),
+    };
 }
 
-// Résultat détaillé du géocodage (même recherche que pour les trajets) : sert à contrôler les adresses
-export async function geocodeDetails(address) {
-    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${MAPBOX_ACCESS_TOKEN}&limit=1&country=BE&proximity=5.3444,50.2277`;
-    const data = await (await fetch(url)).json();
-    const f = data.features && data.features[0];
-    if (!f) return null;
-    coordsCache.set(address, f.center);
-    return { center: f.center, placeType: (f.place_type || [])[0] || '', placeName: f.place_name || '', relevance: f.relevance ?? 1 };
+// La commune écrite dans l'adresse correspond-elle à ce résultat ? (« Marche » ↔ « Marche-en-Famenne »)
+function placeNameMatches(addressText, name) {
+    const n = normText(name);
+    if (n.trim().length < 3) return false;
+    if (addressText.includes(n)) return true;
+    const mainWord = n.trim().split(' ').find(w => w.length >= 4);
+    return !!mainWord && addressText.includes(` ${mainWord} `);
 }
+
+export async function geocode(address) {
+    if (geocodeCache.has(address)) return geocodeCache.get(address);
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${MAPBOX_ACCESS_TOKEN}&limit=5&country=BE&language=fr&proximity=${DEPOT_COORDS.join(',')}`;
+    const data = await (await fetch(url)).json();
+    const features = data.features || [];
+    if (!features.length) return null;
+
+    const text = normText(address);
+    const postcode = (text.match(/ ([1-9]\d{3}) /) || [])[1] || null;
+    const scored = features.map((f, index) => {
+        const { postcodes, names } = featurePlaces(f);
+        const postcodeOk = !!postcode && postcodes.includes(postcode);
+        const nameOk = names.some(n => placeNameMatches(text, n));
+        const near = crowDistanceKm(DEPOT_COORDS, f.center) <= WORK_RADIUS_KM;
+        return { f, index, matched: postcodeOk || nameOk, score: (postcodeOk ? 4 : 0) + (nameOk ? 2 : 0) + (near ? 1 : 0) };
+    });
+    // Meilleur score ; à égalité, l'ordre de la carte (pertinence + proximité de Marche)
+    const best = scored.sort((a, b) => b.score - a.score || a.index - b.index)[0];
+    const result = {
+        center: best.f.center,
+        placeType: (best.f.place_type || [])[0] || '',
+        placeName: best.f.place_name || '',
+        relevance: best.f.relevance ?? 1,
+        matched: best.matched, // false : la commune / le code postal de l'adresse n'a pas été reconnu
+    };
+    geocodeCache.set(address, result);
+    return result;
+}
+
+async function getCoordinates(address) {
+    const geo = await geocode(address);
+    if (!geo) throw new Error(`Adresse non trouvée : ${address}`);
+    return geo.center;
+}
+
+// Résultat détaillé de la recherche (la même que pour les trajets) : sert à contrôler les adresses
+export const geocodeDetails = geocode;
 
 // Distance à vol d'oiseau entre deux points [lng, lat], en km
 export function crowDistanceKm([lng1, lat1], [lng2, lat2]) {
@@ -92,7 +138,7 @@ async function getChantierAddresses() {
 // À appeler après la modification d'une adresse de chantier
 export function clearTripCaches() {
     chantierAddresses = null;
-    coordsCache.clear();
+    geocodeCache.clear();
     routeCache.clear();
 }
 

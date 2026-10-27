@@ -5,8 +5,6 @@ import { getActiveChantiers } from "./data-service.js";
 import { clearTripCaches, findDaysUsingAddress, rebuildDayTrips, geocodeDetails, crowDistanceKm, DEPOT_ADDRESS } from "./trips.js";
 import { isValidEmail, mailButtonHTML } from "./mail.js";
 
-// Token Mapbox
-const MAPBOX_TOKEN = "pk.eyJ1IjoiamFzb255MjgiLCJhIjoiY21lMDcyYWhzMDIyODJsczl0cmM0aTVjciJ9.V14cJXdBNoq3yAQTDeUg-A";
 
 // Champs horaires d'un chantier (lus aussi par planning-optimizer.js — ne pas renommer) :
 //  - fixedAppointment : heure de début imposée (RDV), "HH:MM"
@@ -208,11 +206,10 @@ export async function render() {
 async function geocodeAddress(address) {
     if (!address) return null;
     try {
-        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${MAPBOX_TOKEN}&limit=1&country=BE&proximity=5.3444,50.2277`;
-        const response = await fetch(url);
-        const data = await response.json();
-        if (data.features && data.features.length > 0) {
-            const [lng, lat] = data.features[0].center;
+        // Même recherche que pour les kilomètres (commune de l'adresse respectée)
+        const geo = await geocodeDetails(address);
+        if (geo) {
+            const [lng, lat] = geo.center;
             return { lat, lng };
         }
     } catch (e) {
@@ -559,6 +556,7 @@ async function checkAddresses() {
                 if (depot) r.km = crowDistanceKm(depot, geo.center);
                 if (r.km !== null && r.km > FAR_KM) r.issues.push({ level: 'danger', text: `À plus de ${FAR_KM} km du dépôt` });
                 if (!PRECISE_TYPES.includes(geo.placeType)) r.issues.push({ level: 'warning', text: 'Adresse imprécise : seule la commune ou la région a été trouvée' });
+                if (!geo.matched) r.issues.push({ level: 'warning', text: 'Commune ou code postal non reconnus : vérifiez « Trouvée sur la carte » et écrivez l\'adresse complète (rue, numéro, code postal, commune)' });
                 const saved = c.coordinates?.lat ? [c.coordinates.lng, c.coordinates.lat] : null;
                 if (saved && crowDistanceKm(saved, geo.center) > GPS_GAP_KM) r.issues.push({ level: 'warning', text: 'La position GPS enregistrée ne correspond pas à l\'adresse (réenregistrez le chantier)' });
             }
