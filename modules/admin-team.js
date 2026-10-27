@@ -4,6 +4,7 @@ import { collection, query, getDocs, doc, updateDoc, deleteDoc, orderBy, where, 
 import { db, pageContent, navigateTo, currentUser, showConfirmationModal, showInfoModal, isStealthMode } from "../app.js";
 import { getUsers, transferOrDuplicateUserData } from "./data-service.js";
 import { formatMilliseconds } from "./utils.js";
+import { clearTripCaches, findWorkedDays, rebuildDayTrips } from "./trips.js";
 
 /**
  * Point d'entrée principal : Rend l'interface de gestion de l'équipe
@@ -16,10 +17,16 @@ export async function render() {
                     <h2 class="text-2xl font-bold" style="color: var(--color-text-base);">Gestion de l'Équipe</h2>
                     <p class="mt-1 text-sm" style="color: var(--color-text-muted);">Comptes, accès et rôles des membres de l'équipe.</p>
                 </div>
-                <button id="btn-open-transfer" class="btn btn-secondary">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events: none;"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
-                    Transférer / Dupliquer
-                </button>
+                <div class="flex flex-wrap gap-2">
+                    <button id="btn-open-km-recalc" class="btn btn-secondary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events: none;"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+                        Recalculer les km
+                    </button>
+                    <button id="btn-open-transfer" class="btn btn-secondary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events: none;"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+                        Transférer / Dupliquer
+                    </button>
+                </div>
             </div>
 
             <div id="team-stats" class="team-stats"></div>
@@ -53,6 +60,32 @@ export async function render() {
                 </div>
             </div>
             ` : ''}
+        </div>
+
+        <div id="kmRecalcModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="kmRecalcTitle">
+            <div class="modal-panel">
+                <div class="modal-body space-y-4">
+                    <div>
+                        <h3 id="kmRecalcTitle" class="modal-title">Recalculer les kilomètres</h3>
+                        <p class="modal-text">Refait tous les trajets de toute l'équipe sur la période choisie, avec les adresses actuelles des chantiers.</p>
+                    </div>
+                    <div class="segmented km-recalc-periods" role="group" aria-label="Période">
+                        <button type="button" data-period="week" class="km-period is-active">Cette semaine</button>
+                        <button type="button" data-period="lastWeek" class="km-period">Sem. dernière</button>
+                        <button type="button" data-period="month" class="km-period">Ce mois-ci</button>
+                        <button type="button" data-period="lastMonth" class="km-period">Mois dernier</button>
+                    </div>
+                    <p id="kmRecalcSummary" class="text-sm" style="color: var(--color-text-muted);"></p>
+                    <div id="kmRecalcProgress" class="km-progress hidden" aria-live="polite">
+                        <div class="km-progress-bar"><span id="kmRecalcBar"></span></div>
+                        <p id="kmRecalcStatus" class="text-sm" style="color: var(--color-text-muted);"></p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" id="kmRecalcCloseBtn" class="btn btn-secondary">Fermer</button>
+                    <button type="button" id="kmRecalcStartBtn" class="btn btn-primary" disabled>Recalculer</button>
+                </div>
+            </div>
         </div>
 
         <div id="transferModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="transferModalTitle">
@@ -110,6 +143,7 @@ export async function render() {
  * Configure les écouteurs sur les éléments persistants et les modales
  */
 function setupGlobalHandlers() {
+    document.getElementById('btn-open-km-recalc').onclick = openKmRecalc;
     document.getElementById('team-search')?.addEventListener('input', renderUserList);
     document.querySelectorAll('.team-filter').forEach(btn => btn.onclick = () => {
         teamFilter = btn.dataset.filter;
@@ -501,4 +535,105 @@ function createColleagueElement(id, name) {
     };
     div.appendChild(deleteBtn);
     return div;
+}
+
+// --- Recalcul des kilomètres de toute l'équipe ---------------------------------
+
+const KM_WORKERS = 3; // journées recalculées en parallèle
+let kmRecalc = { days: [], running: false, cancelled: false };
+
+function kmPeriodRange(period) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+    const endOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+    switch (period) {
+        case 'lastWeek': { const start = new Date(monday); start.setDate(monday.getDate() - 7); const end = new Date(monday); end.setDate(monday.getDate() - 1); return { start, end: endOfDay(end) }; }
+        case 'month': return { start: new Date(today.getFullYear(), today.getMonth(), 1), end: endOfDay(today) };
+        case 'lastMonth': return { start: new Date(today.getFullYear(), today.getMonth() - 1, 1), end: endOfDay(new Date(today.getFullYear(), today.getMonth(), 0)) };
+        default: return { start: monday, end: endOfDay(today) };
+    }
+}
+
+async function selectKmPeriod(period) {
+    document.querySelectorAll('.km-period').forEach(b => b.classList.toggle('is-active', b.dataset.period === period));
+    const summary = document.getElementById('kmRecalcSummary');
+    const startBtn = document.getElementById('kmRecalcStartBtn');
+    startBtn.disabled = true;
+    summary.textContent = 'Recherche des journées pointées…';
+    const { start, end } = kmPeriodRange(period);
+    try {
+        kmRecalc.days = await findWorkedDays(start, end);
+    } catch (error) {
+        console.error("Recherche des journées à recalculer:", error);
+        summary.textContent = 'Impossible de lire les pointages. Vérifiez la connexion.';
+        return;
+    }
+    const fmt = (d) => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+    const people = new Set(kmRecalc.days.map(d => d.uid)).size;
+    summary.textContent = kmRecalc.days.length
+        ? `Du ${fmt(start)} au ${fmt(end)} : ${kmRecalc.days.length} journée${kmRecalc.days.length > 1 ? 's' : ''} pointée${kmRecalc.days.length > 1 ? 's' : ''}, ${people} personne${people > 1 ? 's' : ''}.`
+        : `Du ${fmt(start)} au ${fmt(end)} : aucune journée pointée.`;
+    startBtn.disabled = !kmRecalc.days.length;
+}
+
+function openKmRecalc() {
+    if (kmRecalc.running) return;
+    document.getElementById('kmRecalcModal').classList.remove('hidden');
+    document.getElementById('kmRecalcProgress').classList.add('hidden');
+    const startBtn = document.getElementById('kmRecalcStartBtn');
+    startBtn.textContent = 'Recalculer';
+    document.querySelectorAll('.km-period').forEach(b => { b.disabled = false; b.onclick = () => selectKmPeriod(b.dataset.period); });
+    document.getElementById('kmRecalcCloseBtn').onclick = () => {
+        kmRecalc.cancelled = true;
+        document.getElementById('kmRecalcModal').classList.add('hidden');
+    };
+    startBtn.onclick = runKmRecalc;
+    selectKmPeriod('week');
+}
+
+async function runKmRecalc() {
+    const days = kmRecalc.days;
+    if (!days.length || kmRecalc.running) return;
+    if (!navigator.onLine) {
+        showInfoModal("Hors ligne", "Pas de connexion : impossible de recalculer les kilomètres.");
+        return;
+    }
+    const startBtn = document.getElementById('kmRecalcStartBtn');
+    const bar = document.getElementById('kmRecalcBar');
+    const status = document.getElementById('kmRecalcStatus');
+    document.getElementById('kmRecalcProgress').classList.remove('hidden');
+    document.querySelectorAll('.km-period').forEach(b => { b.disabled = true; });
+    startBtn.disabled = true;
+    startBtn.textContent = 'En cours…';
+    kmRecalc.running = true;
+    kmRecalc.cancelled = false;
+    clearTripCaches();
+
+    let next = 0, done = 0, failed = 0;
+    const update = () => {
+        bar.style.width = `${Math.round((done + failed) / days.length * 100)}%`;
+        status.textContent = `${done + failed} / ${days.length} journées${failed ? ` · ${failed} en échec` : ''}. Gardez cette fenêtre ouverte.`;
+    };
+    update();
+    const worker = async () => {
+        while (next < days.length && !kmRecalc.cancelled) {
+            const { uid, dayKey } = days[next++];
+            if (await rebuildDayTrips(uid, dayKey, { force: true })) done++; else failed++;
+            update();
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(KM_WORKERS, days.length) }, worker));
+    kmRecalc.running = false;
+
+    const stopped = kmRecalc.cancelled && done + failed < days.length;
+    if (!stopped) bar.style.width = '100%';
+    status.textContent = stopped
+        ? `Arrêté : ${done} journée(s) recalculée(s) sur ${days.length}.`
+        : failed
+            ? `Terminé : ${done} journée(s) recalculée(s), ${failed} en échec (adresse de chantier introuvable ? Utilisez « Vérifier les adresses » dans Chantiers).`
+            : `Terminé : les ${done} journées ont été recalculées.`;
+    startBtn.textContent = 'Recalculer';
+    startBtn.disabled = false;
+    document.querySelectorAll('.km-period').forEach(b => { b.disabled = false; });
 }

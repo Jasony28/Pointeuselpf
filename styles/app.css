@@ -2178,3 +2178,7 @@ html.glass #page-content [style*="background-color: var(--color-surface)"] {
 .mail-btn:hover { background: #b3261e; }
 .mail-btn svg, .tracker-nav-btn.is-mail svg { width: 18px; height: 18px; flex-shrink: 0; }
 .tracker-nav-btn.is-mail { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 0.5rem; background: #d93025; }
+.km-recalc-periods { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.km-progress-bar { height: 8px; border-radius: 999px; background: var(--color-surface-3, var(--color-border)); overflow: hidden; }
+.km-progress-bar span { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--color-primary); transition: width 0.25s var(--ease, ease); }
+.km-progress .text-sm { margin-top: 0.5rem; }

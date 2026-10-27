@@ -160,6 +160,22 @@ export async function rebuildDayTrips(uid, dayKey, { force = false } = {}) {
 }
 
 /**
+ * Journées (employé + jour) pointées entre deux dates : sert au recalcul des km de toute l'équipe.
+ */
+export async function findWorkedDays(start, end) {
+    const snap = await getDocs(query(collection(db, "pointages"),
+        where("timestamp", ">=", start.toISOString()), where("timestamp", "<=", end.toISOString())));
+    const days = new Map();
+    snap.forEach(d => {
+        const p = d.data();
+        if (!p.uid || !p.timestamp) return;
+        const dayKey = localDateKey(p.timestamp);
+        days.set(`${p.uid}|${dayKey}`, { uid: p.uid, dayKey });
+    });
+    return [...days.values()].sort((a, b) => a.dayKey.localeCompare(b.dayKey));
+}
+
+/**
  * Journées (employé + jour) dont un trajet part de cette adresse ou y arrive.
  * Sert à recalculer les km quand l'adresse d'un chantier est corrigée.
  */
