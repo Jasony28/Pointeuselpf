@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 import { installNativeFileSaving } from './modules/native-files.js';
 
-const APP_VERSION = 'v3.9.8';
+const APP_VERSION = 'v3.9.9';
 
 // Appli Android / iPhone : PDF et CSV proposés dans le menu « Partager » du téléphone
 installNativeFileSaving();
@@ -28,6 +28,33 @@ export const themes = {
     carbone:  {
         name: 'Sombre', preview: '#0f172a', dark: true,
         colors: { '--color-primary': '#6366f1', '--color-primary-hover': '#818cf8', '--color-background': '#0b1120', '--color-surface': '#111827', '--color-text-base': '#e5e7eb', '--color-text-muted': '#94a3b8', '--color-border': '#1f2937' }
+    },
+    // Thème « Chat » : illustrations dans themes/chat (scripts/theme-chat.py), suit le mode Clair / Sombre
+    chat: {
+        name: 'Chat',
+        preview: '#E9965A',
+        previewBackground: "#FBEBD8 url('./themes/chat/chat-coucou-jour.svg') center 22% / 230% no-repeat",
+        cat: true,
+        colors: {
+            '--color-primary': '#B45F25',
+            '--color-primary-hover': '#984D1C',
+            '--color-background': '#FBF3E8',
+            '--color-surface': 'rgba(255, 252, 247, 0.88)',
+            '--color-text-base': '#3B2416',
+            '--color-text-muted': '#86624C',
+            '--color-border': 'rgba(150, 100, 60, 0.2)',
+            '--glass-blur': 'blur(10px)',
+        },
+        darkColors: {
+            '--color-primary': '#7C6BD6',
+            '--color-primary-hover': '#9787EA',
+            '--color-background': '#14151F',
+            '--color-surface': 'rgba(30, 32, 46, 0.88)',
+            '--color-text-base': '#ECE9F5',
+            '--color-text-muted': '#A6A9C4',
+            '--color-border': 'rgba(160, 165, 210, 0.16)',
+            '--glass-blur': 'blur(10px)',
+        }
     },
     chat_clair: {
         name: 'Maine Coon ☀️',
@@ -97,15 +124,19 @@ export function applyTheme(themeName) {
     const mode = getAppMode();
     const wantsDark = mode === 'dark' || (mode === 'auto' && systemDark.matches);
     // Les thèmes Maine Coon gardent leur propre ambiance ; les autres couleurs suivent le mode choisi
+    // (le thème Chat a ses propres couleurs de nuit)
     const dark = theme.glass ? !!theme.dark : (theme.dark || wantsDark);
-    const colors = (dark && !theme.dark && !theme.glass) ? { ...theme.colors, ...darkBase } : theme.colors;
+    const colors = theme.cat
+        ? (dark ? theme.darkColors : theme.colors)
+        : (dark && !theme.dark && !theme.glass) ? { ...theme.colors, ...darkBase } : theme.colors;
 
     themeVariables.forEach(key => root.style.removeProperty(key));
     for (const [key, value] of Object.entries(colors)) {
         root.style.setProperty(key, value);
     }
     root.classList.toggle('dark', dark);
-    root.classList.toggle('glass', !!theme.glass);
+    root.classList.toggle('glass', !!theme.glass || !!theme.cat);
+    root.classList.toggle('cat', !!theme.cat);
 
     applyChartDefaults();
     localStorage.setItem('appTheme', themeName);

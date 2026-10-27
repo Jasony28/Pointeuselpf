@@ -93,7 +93,7 @@ export async function render() {
                 <div id="theme-selector" class="grid grid-cols-3 sm:grid-cols-5 gap-3 mt-2">
                     ${Object.entries(themes).map(([key, theme]) => `
                         <button class="theme-option flex flex-col items-center p-3 rounded-lg border-2 transition-all" data-theme-key="${key}" style="border-color: transparent;" aria-label="Thème ${theme.name}">
-                            <div class="w-10 h-10 rounded-full mb-2 border shadow-inner" style="background-color: ${theme.preview}; border-color: var(--color-border);"></div>
+                            <div class="w-10 h-10 rounded-full mb-2 border shadow-inner" style="background: ${theme.previewBackground || theme.preview}; border-color: var(--color-border);"></div>
                             <span class="text-sm font-medium" style="color: var(--color-text-base);">${theme.name}</span>
                         </button>
                     `).join('')}

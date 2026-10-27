@@ -4,7 +4,7 @@ const { precaching, routing, strategies, core } = workbox;
 core.setCacheNameDetails({ prefix: 'pointeuse-lpf-cache' });
 
 // Version synchronisée avec app.js
-const APP_VERSION = 'v3.9.8'; // <--- CHANGEMENT ICI
+const APP_VERSION = 'v3.9.9'; // <--- CHANGEMENT ICI
 
 precaching.precacheAndRoute([
     { url: './', revision: APP_VERSION },
@@ -52,6 +52,19 @@ precaching.precacheAndRoute([
     { url: 'icons/lpf-192.png', revision: APP_VERSION },
     { url: 'icons/lpf-180.png', revision: APP_VERSION },
     { url: 'icons/lpf-512.png', revision: APP_VERSION },
+    // Thème « Chat »
+    { url: 'themes/chat/chat-assis-jour.svg', revision: APP_VERSION },
+    { url: 'themes/chat/chat-assis-nuit.svg', revision: APP_VERSION },
+    { url: 'themes/chat/chat-coucou-jour.svg', revision: APP_VERSION },
+    { url: 'themes/chat/chat-coucou-nuit.svg', revision: APP_VERSION },
+    { url: 'themes/chat/chat-dodo-jour.svg', revision: APP_VERSION },
+    { url: 'themes/chat/chat-dodo-nuit.svg', revision: APP_VERSION },
+    { url: 'themes/chat/etoiles.svg', revision: APP_VERSION },
+    { url: 'themes/chat/motif-pattes-jour.svg', revision: APP_VERSION },
+    { url: 'themes/chat/motif-pattes-nuit.svg', revision: APP_VERSION },
+    { url: 'themes/chat/patte.svg', revision: APP_VERSION },
+    { url: 'themes/chat/pelote-jour.svg', revision: APP_VERSION },
+    { url: 'themes/chat/pelote-nuit.svg', revision: APP_VERSION },
 ]);
 
 // Stratégie pour les pages HTML

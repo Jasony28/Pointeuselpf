@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><style>
+  .blink { transform-box: fill-box; transform-origin: center; animation: blink 6s infinite; }
+  @keyframes blink { 0%, 94%, 100% { transform: scaleY(1); } 96% { transform: scaleY(.1); } }
+  .tail { transform-origin: 262px 432px; animation: tail 3.2s ease-in-out infinite; }
+  @keyframes tail { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-7deg); } }
+  .breathe { transform-origin: 200px 240px; animation: breathe 3.6s ease-in-out infinite; }
+  @keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.025, 1.04); } }
+  .zzz text { animation: zzz 3.6s ease-in-out infinite; }
+  .zzz text:nth-child(2) { animation-delay: .6s; } .zzz text:nth-child(3) { animation-delay: 1.2s; }
+  @keyframes zzz { 0%, 100% { opacity: .25; transform: translateY(4px); } 50% { opacity: 1; transform: translateY(-4px); } }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style><g fill="#000"><ellipse cx="50" cy="80" rx="27" ry="21"/><ellipse cx="22" cy="50" rx="10" ry="13" transform="rotate(-20 22 50)"/>
+  <ellipse cx="78" cy="50" rx="10" ry="13" transform="rotate(20 78 50)"/><ellipse cx="38" cy="30" rx="10" ry="13" transform="rotate(-6 38 30)"/>
+  <ellipse cx="62" cy="30" rx="10" ry="13" transform="rotate(6 62 30)"/></g>
+</svg>

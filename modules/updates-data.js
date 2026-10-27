@@ -1,5 +1,13 @@
 export const updatesLog = [
     {
+        version: 'v3.9.9',
+        date: '27 octobre 2026',
+        changes: [
+            "**Nouveau thème Chat** : dans Paramètres → Thème, choisissez « Chat ». Un chat roux veille sur vos journées, passe la tête au-dessus du chrono, fait la sieste quand il n'y a rien de prévu, et laisse ses empreintes un peu partout.",
+            "En mode Sombre, c'est un chat noir aux yeux dorés, sous la lune et les étoiles.",
+        ]
+    },
+    {
         version: 'v3.8.6',
         date: '26 octobre 2026',
         changes: [

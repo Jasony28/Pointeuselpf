@@ -20,6 +20,7 @@ const entries = [
     'styles',
     'modules',
     'icons',
+    'themes',
 ];
 
 rmSync(out, { recursive: true, force: true });
