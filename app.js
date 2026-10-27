@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 import { installNativeFileSaving } from './modules/native-files.js';
 
-const APP_VERSION = 'v3.9.9';
+const APP_VERSION = 'v3.10.0';
 
 // Appli Android / iPhone : PDF et CSV proposés dans le menu « Partager » du téléphone
 installNativeFileSaving();
@@ -29,11 +29,11 @@ export const themes = {
         name: 'Sombre', preview: '#0f172a', dark: true,
         colors: { '--color-primary': '#6366f1', '--color-primary-hover': '#818cf8', '--color-background': '#0b1120', '--color-surface': '#111827', '--color-text-base': '#e5e7eb', '--color-text-muted': '#94a3b8', '--color-border': '#1f2937' }
     },
-    // Thème « Chat » : illustrations dans themes/chat (scripts/theme-chat.py), suit le mode Clair / Sombre
+    // Thème « Chat » : photos des Maine Coon (fond + portraits dans themes/chat), suit le mode Clair / Sombre
     chat: {
         name: 'Chat',
         preview: '#E9965A',
-        previewBackground: "#FBEBD8 url('./themes/chat/chat-coucou-jour.svg') center 22% / 230% no-repeat",
+        previewBackground: "#FBEBD8 url('./themes/chat/portrait-jour.jpg') center / cover no-repeat",
         cat: true,
         colors: {
             '--color-primary': '#B45F25',
@@ -741,12 +741,23 @@ export function showUpdatesModal(updatesToShow, callbackOnClose = null) {
     };
 }
 
+// Compare deux versions « vX.Y.Z » chiffre par chiffre (« v3.10.0 » est plus récente que « v3.9.9 »)
+function compareVersions(a, b) {
+    const pa = String(a).replace(/^v/, '').split('.').map(Number);
+    const pb = String(b).replace(/^v/, '').split('.').map(Number);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const d = (pa[i] || 0) - (pb[i] || 0);
+        if (d) return d;
+    }
+    return 0;
+}
+
 function checkForUpdates(userData, userRef) {
     const lastSeenVersion = userData.lastSeenAppVersion;
     const currentVersion = APP_VERSION;
 
     if (lastSeenVersion !== currentVersion) {
-        const updatesToShow = updatesLog ? updatesLog.filter(u => u.version > (lastSeenVersion || 'v0.0.0')) : [];
+        const updatesToShow = updatesLog ? updatesLog.filter(u => compareVersions(u.version, lastSeenVersion || 'v0.0.0') > 0) : [];
 
         if (updatesToShow.length > 0) {
             const markVersionAsSeen = async () => {

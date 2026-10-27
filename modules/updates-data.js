@@ -1,5 +1,12 @@
 export const updatesLog = [
     {
+        version: 'v3.10.0',
+        date: '27 octobre 2026',
+        changes: [
+            "**Thème Chat** : de vraies photos de chat ! Le chaton à la pelote veille sur vos journées, et la nuit c'est le Maine Coon noir aux yeux dorés. Son portrait vous accueille au-dessus du chrono.",
+        ]
+    },
+    {
         version: 'v3.9.9',
         date: '27 octobre 2026',
         changes: [

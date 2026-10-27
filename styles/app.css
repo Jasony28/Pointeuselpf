@@ -2201,43 +2201,18 @@ html.cat.dark {
     --sidebar-active-bg: rgba(180, 170, 255, 0.12);
 }
 
-/* Fond : motif d'empreintes, pelote et grand chat assis (fixes, derrière les cartes en verre) */
+/* Fond : vraies photos (le chaton à la pelote le jour, le chat noir aux yeux dorés la nuit) */
 html.cat body {
     background-color: var(--color-background);
-    background-image:
-        url("../themes/chat/chat-assis-jour.svg"),
-        url("../themes/chat/pelote-jour.svg"),
-        url("../themes/chat/motif-pattes-jour.svg"),
-        radial-gradient(120% 80% at 100% 100%, #F8D9B6 0%, transparent 60%);
-    background-repeat: no-repeat, no-repeat, repeat, no-repeat;
-    background-size: auto min(48vh, 440px), auto min(13vh, 120px), 220px 220px, 100% 100%;
-    background-position: right 2vw bottom 1.5vh, right calc(2vw + min(48vh, 440px) * 0.8) bottom 2vh, 0 0, 0 0;
+    background-image: linear-gradient(rgba(251, 243, 232, 0.25), rgba(251, 243, 232, 0.7)), url("../maincoon1.jpg");
+    background-size: cover;
+    background-position: 45% center;
+    background-repeat: no-repeat;
     background-attachment: fixed;
 }
 html.cat.dark body {
-    background-image:
-        url("../themes/chat/chat-assis-nuit.svg"),
-        url("../themes/chat/pelote-nuit.svg"),
-        radial-gradient(circle at 86% 14%, #F4E9C8 0 38px, transparent 39px),
-        radial-gradient(circle at 86% 14%, rgba(244, 233, 200, 0.28) 0, transparent 120px),
-        url("../themes/chat/etoiles.svg"),
-        url("../themes/chat/motif-pattes-nuit.svg"),
-        linear-gradient(180deg, #1B1C2E 0%, #14151F 70%);
-    background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat, repeat, no-repeat;
-    background-size: auto min(48vh, 440px), auto min(13vh, 120px), 100% 100%, 100% 100%, 260px 260px, 220px 220px, 100% 100%;
-    background-position: right 2vw bottom 1.5vh, right calc(2vw + min(48vh, 440px) * 0.8) bottom 2vh, 0 0, 0 0, 0 0, 0 0, 0 0;
-    background-attachment: fixed;
-}
-/* Sur ordinateur, le chat s'assoit à droite du contenu ; sur téléphone, au-dessus de la barre d'onglets */
-@media (max-width: 1023px) {
-    html.cat body, html.cat.dark body {
-        background-size: auto min(30vh, 260px), auto min(9vh, 80px), 220px 220px, 100% 100%;
-        background-position: right 2vw bottom calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 6px), right calc(2vw + min(30vh, 260px) * 0.78) bottom calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 8px), 0 0, 0 0;
-    }
-    html.cat.dark body {
-        background-size: auto min(30vh, 260px), auto min(9vh, 80px), 100% 100%, 100% 100%, 260px 260px, 220px 220px, 100% 100%;
-        background-position: right 2vw bottom calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 6px), right calc(2vw + min(30vh, 260px) * 0.78) bottom calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 8px), 0 0, 0 0, 0 0, 0 0, 0 0;
-    }
+    background-image: linear-gradient(rgba(14, 15, 22, 0.35), rgba(14, 15, 22, 0.75)), url("../maincoon3.jpg");
+    background-position: 45% 60%;
 }
 
 /* Cartes en verre (le chat se devine derrière) */
@@ -2285,13 +2260,15 @@ html.cat .bottom-nav-item.is-active::after {
 }
 @keyframes cat-pop { from { transform: rotate(18deg) scale(0); } }
 
-/* Chrono de pointage : un chat passe la tête au-dessus de la carte */
-html.cat #live-tracker-container { position: relative; overflow: visible; margin-top: 84px; border-radius: 22px; }
+/* Chrono de pointage : le chat en médaillon au-dessus de la carte */
+html.cat #live-tracker-container { position: relative; overflow: visible; margin-top: 56px; border-radius: 22px; padding-top: 3.25rem; }
 html.cat #live-tracker-container::before {
-    content: ""; position: absolute; left: 50%; top: -88px; width: 176px; height: 101px; transform: translateX(-50%);
-    background: url("../themes/chat/chat-coucou-jour.svg") center bottom / contain no-repeat; pointer-events: none;
+    content: ""; position: absolute; left: 50%; top: -52px; width: 104px; height: 104px; transform: translateX(-50%);
+    border-radius: 50%; border: 4px solid var(--color-surface);
+    background: #fff url("../themes/chat/portrait-jour.jpg") center / cover no-repeat;
+    box-shadow: 0 10px 24px -10px rgba(0, 0, 0, 0.45); pointer-events: none;
 }
-html.cat.dark #live-tracker-container::before { background-image: url("../themes/chat/chat-coucou-nuit.svg"); }
+html.cat.dark #live-tracker-container::before { background-image: url("../themes/chat/portrait-nuit.jpg"); background-color: #111; }
 html.cat .tracker-btn { border-radius: 999px; }
 html.cat .tracker-btn-start { box-shadow: 0 10px 22px -10px color-mix(in srgb, var(--color-primary) 80%, transparent); }
 html.cat .tracker-btn-start::before {
@@ -2318,13 +2295,14 @@ html.cat .spinner {
     100% { transform: translate(14px, 0) rotate(14deg); opacity: .5; }
 }
 
-/* Listes vides : un chat qui fait la sieste */
+/* Listes vides : le chat tient compagnie */
 html.cat .hours-empty::before, html.cat .schedule-day-empty::before {
-    content: ""; display: block; margin: 0 auto 0.5rem; width: 150px; height: 98px;
-    background: url("../themes/chat/chat-dodo-jour.svg") center / contain no-repeat;
+    content: ""; display: block; margin: 0 auto 0.5rem; width: 72px; height: 72px; border-radius: 50%;
+    border: 3px solid var(--color-surface); box-shadow: 0 6px 16px -8px rgba(0, 0, 0, 0.4);
+    background: url("../themes/chat/portrait-jour.jpg") center / cover no-repeat;
 }
-html.cat.dark .hours-empty::before, html.cat.dark .schedule-day-empty::before { background-image: url("../themes/chat/chat-dodo-nuit.svg"); }
-html.cat .schedule-day-empty::before { width: 64px; height: 42px; }
+html.cat.dark .hours-empty::before, html.cat.dark .schedule-day-empty::before { background-image: url("../themes/chat/portrait-nuit.jpg"); }
+html.cat .schedule-day-empty::before { width: 40px; height: 40px; border-width: 2px; }
 
 /* Jour du planning et de l'historique : empreinte sur aujourd'hui */
 html.cat .schedule-day.is-today, html.cat .history-day.is-today { position: relative; }

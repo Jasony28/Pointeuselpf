@@ -24,7 +24,8 @@
     display:flex;flex-direction:column;align-items:center;justify-content:center;
     transition:opacity .7s ease, transform .7s ease}
   #pt-splash.pt-out{opacity:0;transform:scale(1.06);pointer-events:none}
-  #pt-splash .pt-cat{width:170px;max-width:46vw;margin:-10px 0 -18px;position:relative;z-index:1;
+  #pt-splash .pt-cat{width:120px;height:120px;border-radius:50%;object-fit:cover;border:4px solid rgba(255,255,255,.85);
+    box-shadow:0 12px 30px -8px rgba(0,0,0,.6);margin:6px 0 10px;position:relative;z-index:1;
     opacity:0;transform:translateY(24px);animation:ptCat 1.4s .4s cubic-bezier(.2,1.4,.4,1) forwards}
   @keyframes ptCat{to{opacity:1;transform:none}}
   #pt-splash .pt-stars i{position:absolute;width:2px;height:2px;border-radius:50%;background:#fff;opacity:0;
@@ -126,7 +127,7 @@
         <circle cx="75" cy="75" r="6" fill="#fff"/>
       </svg>
     </div>
-    ${catTheme ? '<img class="pt-cat" src="./themes/chat/chat-coucou-jour.svg" alt="">' : ''}
+    ${catTheme ? '<img class="pt-cat" src="./themes/chat/portrait-jour.jpg" alt="">' : ''}
     <div class="pt-title">${title}</div>
     <div class="pt-sub">Vos heures, vos chantiers, vos trajets.</div>
     <div class="pt-msg"><b>Préparation de votre journée…</b></div>
