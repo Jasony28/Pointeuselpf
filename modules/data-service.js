@@ -1,6 +1,7 @@
 import { isStealthMode } from "../app.js";
 import { collection, query, where, orderBy, getDocs, writeBatch, doc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db } from "../app.js";
+import { localDateKey, returnTripId } from "./trips.js";
 
 let chantiersCache = null;
 let teamMembersCache = null;
@@ -41,6 +42,7 @@ export async function transferOrDuplicateUserData(oldUid, newUid, copyMode = tru
     const collectionsToMigrate = ['pointages', 'leaveRequests']; 
     let totalItemsProcessed = 0;
     let batchOpCount = 0;
+    const copiedPointageIds = new Map(); // ancien pointage → copie (mode « Dupliquer »)
 
     for (const colName of collectionsToMigrate) {
         const colRef = collection(db, colName);
@@ -55,6 +57,7 @@ export async function transferOrDuplicateUserData(oldUid, newUid, copyMode = tru
 
             if (copyMode) {
                 const newDocRef = doc(collection(db, colName));
+                if (colName === 'pointages') copiedPointageIds.set(documentSnapshot.id, newDocRef.id);
                 const newData = { ...data, [userField]: newUid, duplicatedFrom: oldUid, updatedAt: new Date() };
                 if (colName === 'pointages') newData.userName = verifiedDisplayName;
                 batch.set(newDocRef, newData);
@@ -67,6 +70,24 @@ export async function transferOrDuplicateUserData(oldUid, newUid, copyMode = tru
             if (batchOpCount >= 400) { await batch.commit(); batch = writeBatch(db); batchOpCount = 0; }
         }
     }
+
+    // Les trajets (km) suivent leurs pointages : sinon ils resteraient comptés à l'ancien employé
+    const tripsSnapshot = await getDocs(query(collection(db, "trajets"), where("id_utilisateur", "==", oldUid)));
+    for (const tripSnapshot of tripsSnapshot.docs) {
+        const trip = tripSnapshot.data();
+        const remap = (id) => (copyMode ? copiedPointageIds.get(id) : id) || id;
+        const newTrip = { ...trip, id_utilisateur: newUid };
+        if (trip.id_pointage_arrivee) newTrip.id_pointage_arrivee = remap(trip.id_pointage_arrivee);
+        if (trip.id_pointage_depart) newTrip.id_pointage_depart = remap(trip.id_pointage_depart);
+        // Le retour au dépôt a un identifiant par employé et par jour
+        const day = trip.date_creation?.toDate ? localDateKey(trip.date_creation.toDate()) : null;
+        const newId = trip.type === 'retour' && day ? returnTripId(newUid, day) : (copyMode ? doc(collection(db, "trajets")).id : tripSnapshot.id);
+        batch.set(doc(db, "trajets", newId), newTrip);
+        batchOpCount++;
+        if (!copyMode && newId !== tripSnapshot.id) { batch.delete(tripSnapshot.ref); batchOpCount++; }
+        if (batchOpCount >= 400) { await batch.commit(); batch = writeBatch(db); batchOpCount = 0; }
+    }
+
     if (batchOpCount > 0) await batch.commit();
     return totalItemsProcessed > 0 ? { success: true, count: totalItemsProcessed } : { success: true, count: 0, message: "Aucune donnée trouvée." };
 }

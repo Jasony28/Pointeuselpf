@@ -4,7 +4,7 @@ import { collection, query, getDocs, doc, updateDoc, deleteDoc, orderBy, where, 
 import { db, pageContent, navigateTo, currentUser, showConfirmationModal, showInfoModal, isStealthMode } from "../app.js";
 import { getUsers, transferOrDuplicateUserData } from "./data-service.js";
 import { formatMilliseconds } from "./utils.js";
-import { clearTripCaches, findWorkedDays, rebuildDayTrips } from "./trips.js";
+import { clearTripCaches, findWorkedDays, rebuildDayTrips, localDateKey } from "./trips.js";
 
 /**
  * Point d'entrée principal : Rend l'interface de gestion de l'équipe
@@ -541,7 +541,7 @@ function createColleagueElement(id, name) {
 // --- Recalcul des kilomètres de toute l'équipe ---------------------------------
 
 const KM_WORKERS = 3; // journées recalculées en parallèle
-let kmRecalc = { days: [], running: false, cancelled: false };
+let kmRecalc = { days: [], range: null, running: false, cancelled: false };
 
 function kmPeriodRange(period) {
     const now = new Date();
@@ -563,6 +563,7 @@ async function selectKmPeriod(period) {
     startBtn.disabled = true;
     summary.textContent = 'Recherche des journées pointées…';
     const { start, end } = kmPeriodRange(period);
+    kmRecalc.range = { start, end };
     try {
         kmRecalc.days = await findWorkedDays(start, end);
     } catch (error) {
@@ -612,6 +613,8 @@ async function runKmRecalc() {
     clearTripCaches();
 
     let next = 0, done = 0, failed = 0;
+    const keptTrips = new Set();
+    const failedDays = new Set();
     const update = () => {
         bar.style.width = `${Math.round((done + failed) / days.length * 100)}%`;
         status.textContent = `${done + failed} / ${days.length} journées${failed ? ` · ${failed} en échec` : ''}. Gardez cette fenêtre ouverte.`;
@@ -620,11 +623,31 @@ async function runKmRecalc() {
     const worker = async () => {
         while (next < days.length && !kmRecalc.cancelled) {
             const { uid, dayKey } = days[next++];
-            if (await rebuildDayTrips(uid, dayKey, { force: true })) done++; else failed++;
+            const kept = await rebuildDayTrips(uid, dayKey, { force: true });
+            if (kept) { done++; kept.forEach(id => keptTrips.add(id)); } else { failed++; failedDays.add(`${uid}|${dayKey}`); }
             update();
         }
     };
     await Promise.all(Array.from({ length: Math.min(KM_WORKERS, days.length) }, worker));
+
+    // Trajets orphelins de la période : plus aucun pointage ce jour-là (pointage supprimé, déplacé,
+    // régularisation…). Ils gonflaient le rapport des trajets sans apparaître dans l'historique.
+    let orphans = 0;
+    if (!kmRecalc.cancelled && kmRecalc.range) {
+        try {
+            const snap = await getDocs(query(collection(db, "trajets"),
+                where("date_creation", ">=", kmRecalc.range.start), where("date_creation", "<=", kmRecalc.range.end)));
+            for (const d of snap.docs) {
+                const t = d.data();
+                if (keptTrips.has(d.id) || !t.id_utilisateur || !t.date_creation?.toDate) continue;
+                if (failedDays.has(`${t.id_utilisateur}|${localDateKey(t.date_creation.toDate())}`)) continue;
+                await deleteDoc(d.ref);
+                orphans++;
+            }
+        } catch (error) {
+            console.error("Nettoyage des trajets orphelins:", error);
+        }
+    }
     kmRecalc.running = false;
 
     const stopped = kmRecalc.cancelled && done + failed < days.length;
@@ -634,6 +657,7 @@ async function runKmRecalc() {
         : failed
             ? `Terminé : ${done} journée(s) recalculée(s), ${failed} en échec (adresse de chantier introuvable ? Utilisez « Vérifier les adresses » dans Chantiers).`
             : `Terminé : les ${done} journées ont été recalculées.`;
+    if (orphans) status.textContent += ` ${orphans} trajet${orphans > 1 ? 's' : ''} sans pointage supprimé${orphans > 1 ? 's' : ''}.`;
     startBtn.textContent = 'Recalculer';
     startBtn.disabled = false;
     document.querySelectorAll('.km-period').forEach(b => { b.disabled = false; });

@@ -801,6 +801,7 @@ async function handleSuggestionClick(e) {
         try {
             await addDoc(collection(db, "pointages"), newPointageData);
             showInfoModal("Succès", "Le pointage a été ajouté à votre historique.");
+            rebuildDayTrips(currentUser.uid, localDateKey(newPointageData.timestamp)).then(loadTodaySummary);
         } catch (error) { showInfoModal("Erreur", "Impossible d'ajouter le pointage."); }
     } else if (button.classList.contains('refuse-suggestion-btn')) {
         const refusedPointages = JSON.parse(localStorage.getItem('refusedPointages') || '[]');

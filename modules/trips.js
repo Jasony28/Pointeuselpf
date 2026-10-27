@@ -97,6 +97,9 @@ export function clearTripCaches() {
     routeCache.clear();
 }
 
+// « Régularisation rapide » de la page Écarts d'heures : du temps ajouté au nom de l'admin, pas un déplacement
+export const isRegularisation = (p) => p.userName === 'Régularisation' || /^\(Saisie Rapide/.test(p.notes || '');
+
 async function addressOf(pointage) {
     const map = await getChantierAddresses();
     return (pointage.chantierId && map.byId.get(pointage.chantierId)) || map.byName.get(pointage.chantier) || null;
@@ -107,7 +110,7 @@ async function addressOf(pointage) {
  * Appelé quand un pointage est ajouté, modifié, déplacé ou supprimé depuis l'Historique.
  * Les trajets inchangés (mêmes adresses) sont gardés tels quels, sans nouvel appel à Mapbox,
  * sauf avec { force: true } (bouton « Recalculer les km » de l'admin).
- * Renvoie true si le recalcul a abouti.
+ * Renvoie la liste des trajets de la journée si le recalcul a abouti, sinon false.
  */
 export async function rebuildDayTrips(uid, dayKey, { force = false } = {}) {
     if (!uid || !dayKey || !navigator.onLine) return false;
@@ -121,6 +124,7 @@ export async function rebuildDayTrips(uid, dayKey, { force = false } = {}) {
                 where("date_creation", ">=", dayStart), where("date_creation", "<=", dayEnd))),
         ]);
         const pointages = pointagesSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+            .filter(p => !isRegularisation(p))
             .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
         const existing = new Map(tripsSnap.docs.map(d => [d.id, d.data()]));
 
@@ -161,7 +165,7 @@ export async function rebuildDayTrips(uid, dayKey, { force = false } = {}) {
         for (const id of existing.keys()) {
             if (!wanted.has(id)) await deleteDoc(doc(db, "trajets", id));
         }
-        return true;
+        return [...wanted.keys()];
     } catch (error) {
         console.error("Erreur lors du recalcul des trajets du jour:", error);
         return false;
@@ -177,7 +181,7 @@ export async function findWorkedDays(start, end) {
     const days = new Map();
     snap.forEach(d => {
         const p = d.data();
-        if (!p.uid || !p.timestamp) return;
+        if (!p.uid || !p.timestamp || isRegularisation(p)) return;
         const dayKey = localDateKey(p.timestamp);
         days.set(`${p.uid}|${dayKey}`, { uid: p.uid, dayKey });
     });
