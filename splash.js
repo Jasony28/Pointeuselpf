@@ -1,10 +1,11 @@
 /* =========================================================
-   Pointeuse — animation de démarrage (10 s, touchez pour passer)
+   Pointeuse — animation de démarrage (3 s, touchez pour passer)
    Fichier autonome : il suffit de l'inclure dans index.html,
    juste après <body> :  <script src="./splash.js"></script>
    ========================================================= */
 (function () {
-  const DURATION = 10000; // 10 secondes
+  const DURATION = 3000; // 3 secondes : l'animation (dessinée sur 10 s) est jouée en accéléré
+  const SPEED = 10000 / DURATION;
 
   // Une seule fois par ouverture de l'application (pas à chaque rechargement interne)
   try {
@@ -136,7 +137,7 @@
   // Messages qui défilent (avec la route : départ dépôt → chantiers → retour)
   const msgs = ['Préparation de votre journée…', 'Départ du dépôt', 'En route vers les chantiers', 'Calcul des kilomètres', 'Retour au dépôt', "C'est parti !"];
   const msgEl = el.querySelector('.pt-msg');
-  const timers = msgs.slice(1).map((m, i) => setTimeout(() => { msgEl.innerHTML = `<b>${m}</b>`; }, 1300 + i * 1800));
+  const timers = msgs.slice(1).map((m, i) => setTimeout(() => { msgEl.innerHTML = `<b>${m}</b>`; }, (1300 + i * 1800) / SPEED));
 
   let closed = false;
   function close() {
@@ -152,6 +153,9 @@
   el.addEventListener('keydown', close);
 
   // S'affiche immédiatement, avant même que l'application ne charge
-  if (document.body) document.body.prepend(el);
-  else document.addEventListener('DOMContentLoaded', () => document.body.prepend(el));
+  // Toutes les animations CSS jouées à la même vitesse accélérée
+  const speedUp = () => { try { el.getAnimations({ subtree: true }).forEach((a) => { a.playbackRate = SPEED; }); } catch (e) { /* navigateur ancien : vitesse normale */ } };
+  const show = () => { document.body.prepend(el); speedUp(); };
+  if (document.body) show();
+  else document.addEventListener('DOMContentLoaded', show);
 })();
