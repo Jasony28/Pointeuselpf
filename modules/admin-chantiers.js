@@ -208,7 +208,7 @@ export async function render() {
 async function geocodeAddress(address) {
     if (!address) return null;
     try {
-        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${MAPBOX_TOKEN}&limit=1&country=BE`;
+        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${MAPBOX_TOKEN}&limit=1&country=BE&proximity=5.3444,50.2277`;
         const response = await fetch(url);
         const data = await response.json();
         if (data.features && data.features.length > 0) {
@@ -423,7 +423,7 @@ function updateGeoStatus() {
         status.textContent = "Utilisée pour l'itinéraire et le calcul des kilomètres.";
     } else if (editingChantier && address === editingChantier.address && editingChantier.coordinates?.lat) {
         status.classList.add('is-ok');
-        status.textContent = '✓ Position GPS connue.';
+        status.textContent = '✓ Position GPS connue (recherchée à nouveau à l\'enregistrement).';
     } else {
         status.textContent = "La position GPS sera recherchée à l'enregistrement.";
     }
@@ -448,16 +448,15 @@ async function saveChantier(e) {
     saveBtn.textContent = 'Enregistrement…';
 
     try {
-        // Position GPS : réutilisée si l'adresse n'a pas changé, sinon recherchée à nouveau
+        // Position GPS recherchée à chaque enregistrement (corrige une ancienne position mal placée) ;
+        // si la recherche échoue alors que l'adresse n'a pas changé, l'ancienne position est gardée
         let coordinates = null;
         let geoFailed = false;
         if (values.address) {
-            if (editingChantier && values.address === editingChantier.address && editingChantier.coordinates?.lat) {
-                coordinates = editingChantier.coordinates;
-            } else {
-                coordinates = await geocodeAddress(values.address);
-                geoFailed = !coordinates;
-            }
+            coordinates = await geocodeAddress(values.address);
+            const sameAddress = editingChantier && values.address === editingChantier.address;
+            if (!coordinates && sameAddress && editingChantier.coordinates?.lat) coordinates = editingChantier.coordinates;
+            geoFailed = !coordinates;
         }
 
         const data = { ...values, coordinates };

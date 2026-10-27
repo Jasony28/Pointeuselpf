@@ -15,7 +15,7 @@ const routeCache = new Map();
 
 async function getCoordinates(address) {
     if (coordsCache.has(address)) return coordsCache.get(address);
-    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${MAPBOX_ACCESS_TOKEN}&limit=1&country=BE`;
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${MAPBOX_ACCESS_TOKEN}&limit=1&country=BE&proximity=5.3444,50.2277`;
     const data = await (await fetch(url)).json();
     if (!data.features || data.features.length === 0) throw new Error(`Adresse non trouvée : ${address}`);
     coordsCache.set(address, data.features[0].center);
@@ -24,7 +24,7 @@ async function getCoordinates(address) {
 
 // Résultat détaillé du géocodage (même recherche que pour les trajets) : sert à contrôler les adresses
 export async function geocodeDetails(address) {
-    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${MAPBOX_ACCESS_TOKEN}&limit=1&country=BE`;
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(address)}.json?access_token=${MAPBOX_ACCESS_TOKEN}&limit=1&country=BE&proximity=5.3444,50.2277`;
     const data = await (await fetch(url)).json();
     const f = data.features && data.features[0];
     if (!f) return null;

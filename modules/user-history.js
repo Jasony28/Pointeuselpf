@@ -264,6 +264,7 @@ export async function render(params = {}) {
             }
         }
 
+        if (!document.getElementById('historyList')) return; // page quittée pendant le chargement
         setupEventListeners();
         setupReassignModalListeners();
         currentWeekOffset = 0;
@@ -699,6 +700,7 @@ async function renderCalendar() {
     }, {});
 
     const grid = document.getElementById("calendar-grid");
+    if (!grid) return; // page quittée pendant le chargement
     grid.innerHTML = '';
     const days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
     days.forEach(day => grid.innerHTML += `<div class="font-semibold text-center text-sm p-2" style="color: var(--color-text-muted);">${day}</div>`);
@@ -738,6 +740,7 @@ async function renderCalendar() {
 
 function setupEventListeners() {
     const toggleBtn = document.getElementById('toggleFiltersBtn');
+    if (!toggleBtn) return; // page quittée pendant le chargement
     const filtersContent = document.getElementById('filters-content');
     const toggleLabel = toggleBtn.innerHTML;
     toggleBtn.addEventListener('click', () => {

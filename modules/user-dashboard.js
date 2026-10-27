@@ -595,11 +595,17 @@ function displayWeekView() {
 
 async function loadUserScheduleForWeek(start, end) {
     const weekId = start.toISOString().split('T')[0];
-    const publishDoc = await getDoc(doc(db, "publishedSchedules", weekId));
+    // Hors connexion, la lecture échoue si la semaine n'est pas en mémoire : on reprend le dernier état connu
+    const publishedKey = `weekPublished_${weekId}`;
+    let isPublished;
+    try {
+        isPublished = (await getDoc(doc(db, "publishedSchedules", weekId))).exists();
+        try { localStorage.setItem(publishedKey, isPublished ? '1' : '0'); } catch (e) { /* stockage indisponible */ }
+    } catch (error) {
+        try { isPublished = localStorage.getItem(publishedKey) === '1'; } catch (e) { isPublished = false; }
+    }
     const scheduleGrid = document.getElementById("schedule-grid");
     const totalHoursElement = document.getElementById("currentWeekTotalHours");
-
-    const isPublished = publishDoc.exists();
 
     const planningQuery = query(collection(db, "planning"), 
         where("date", ">=", start.toISOString().split('T')[0]), 
@@ -608,6 +614,7 @@ async function loadUserScheduleForWeek(start, end) {
         orderBy("order")
     );
     const planningSnapshot = await getDocs(planningQuery);
+    if (!document.getElementById("schedule-grid")) return; // page quittée pendant le chargement
 
     const scheduleData = planningSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
     // Planning publié par l'admin + chantiers ajoutés par l'employé lui-même (visibles même avant publication)

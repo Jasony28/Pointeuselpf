@@ -93,11 +93,12 @@ async function loadUserProfile() {
         if (userDoc.exists()) {
             const userData = { id: userDoc.id, ...userDoc.data() };
             const container = document.getElementById('user-profile-container');
-            renderProfileView(container, userData);
+            if (container) renderProfileView(container, userData);
         }
     } catch (error) {
         console.error("Erreur lors du chargement du profil:", error);
-        document.getElementById('user-profile-container').innerHTML = `<p class="text-red-500">Erreur de chargement du profil.</p>`;
+        const container = document.getElementById('user-profile-container');
+        if (container) container.innerHTML = `<p class="text-red-500">Erreur de chargement du profil.</p>`;
     }
 }
 
@@ -287,7 +288,8 @@ async function loadMonthlyStats() {
 
     } catch (error) {
         console.error("Erreur lors du chargement des statistiques:", error);
-        document.getElementById('stats-content').innerHTML = `<p class="text-red-500 text-center">Impossible de charger les statistiques.</p>`;
+        const content = document.getElementById('stats-content');
+        if (content) content.innerHTML = `<p class="text-red-500 text-center">Impossible de charger les statistiques.</p>`;
     } finally {
         toggleLoading(false);
     }

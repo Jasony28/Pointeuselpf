@@ -201,7 +201,7 @@ async function estimateHoursPerVisit(chantierName) {
 async function geocodeDepot() {
     const cached = storage.get('depotCoordinates');
     if (cached) return cached;
-    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(DEPOT.address)}.json?access_token=${MAPBOX_TOKEN}&limit=1&country=BE`;
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(DEPOT.address)}.json?access_token=${MAPBOX_TOKEN}&limit=1&country=BE&proximity=5.3444,50.2277`;
     const data = await (await fetch(url)).json();
     const [lng, lat] = data.features[0].center;
     storage.set('depotCoordinates', { lat, lng });

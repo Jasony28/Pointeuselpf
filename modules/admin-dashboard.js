@@ -114,6 +114,7 @@ export async function render() {
     `;
     
     setTimeout(() => {
+        if (!document.getElementById('user-stats-list')) return; // page quittée entre-temps
         // --- CHARGEMENT PRIORITAIRE (rapide) ---
         loadTodoPanel();
         loadGlobalStats();
@@ -127,6 +128,7 @@ export async function render() {
 
         // --- CHARGEMENT DIFFÉRÉ (plus lent) ---
         setTimeout(() => {
+            if (!document.getElementById('user-stats-list')) return;
             loadUserStats();
             loadChantierStats();
         }, 200);
@@ -451,7 +453,9 @@ async function loadChantierStats() {
 
 
 function updateFilterUI(type, filter, displayText) {
-    document.getElementById(`${type}-stats-period-display`).textContent = displayText;
+    const periodDisplay = document.getElementById(`${type}-stats-period-display`);
+    if (!periodDisplay) return; // page quittée pendant le chargement
+    periodDisplay.textContent = displayText;
     document.querySelectorAll(`.${type}-stats-filter-btn`).forEach(btn => {
         const isSelected = btn.dataset.period === filter.period;
         if (isSelected) {
