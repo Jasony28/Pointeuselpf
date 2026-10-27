@@ -1,14 +1,14 @@
 import { updatesLog } from './modules/updates-data.js';
 import { installNativeFileSaving } from './modules/native-files.js';
 
-const APP_VERSION = 'v3.9.5';
+const APP_VERSION = 'v3.9.6';
 
 // Appli Android / iPhone : PDF et CSV proposés dans le menu « Partager » du téléphone
 installNativeFileSaving();
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
 import { getAuth, initializeAuth, indexedDBLocalPersistence, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, serverTimestamp, updateDoc, deleteField, initializeFirestore, CACHE_SIZE_UNLIMITED, persistentLocalCache, persistentMultipleTabManager, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, getDocFromCache, setDoc, serverTimestamp, updateDoc, deleteField, initializeFirestore, CACHE_SIZE_UNLIMITED, persistentLocalCache, persistentMultipleTabManager, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 
 // L'événement d'installation (beforeinstallprompt) est capturé dans index.html, avant le chargement de Firebase.
 
@@ -464,16 +464,35 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { showInfoModal("Erreur", "Impossible d'envoyer l'email."); }
     });
 
+    // Réseau lent : on le dit au lieu de laisser « Chargement… » sans explication
+    const loaderText = loader.querySelector('p');
+    let slowTimer = null;
+    const showLoader = () => {
+        loader.style.display = 'flex';
+        if (loaderText) loaderText.textContent = 'Chargement…';
+        clearTimeout(slowTimer);
+        slowTimer = setTimeout(() => { if (loaderText) loaderText.textContent = 'Connexion lente… on continue d\'essayer'; }, 6000);
+    };
+    const hideLoader = () => { clearTimeout(slowTimer); loader.style.display = 'none'; };
+
     onAuthStateChanged(auth, async (user) => {
         authContainer.style.display = 'none';
         pendingContainer.style.display = 'none';
         appContainer.style.display = 'none';
-        loader.style.display = 'flex';
+        showLoader();
 
         if (user) {
             const userRef = doc(db, "users", user.uid);
             try {
-                const userDoc = await getDoc(userRef);
+                // Démarrage immédiat avec le profil gardé sur le téléphone ; le serveur n'est attendu
+                // qu'à la toute première connexion. Le profil à jour est vérifié juste après, en arrière-plan.
+                let userDoc = null;
+                let fromCache = false;
+                try {
+                    userDoc = await getDocFromCache(userRef);
+                    fromCache = userDoc.exists();
+                } catch (cacheError) { /* pas encore en cache */ }
+                if (!fromCache) userDoc = await getDoc(userRef);
                 if (userDoc.exists()) {
                     const userData = userDoc.data();
                     currentUser = { ...user, ...userData };
@@ -483,7 +502,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     isShowingAllHours = false;
 
                     switch (userData.status) {
-                        case 'pending': pendingContainer.style.display = 'flex'; break;
+                        case 'pending': pendingContainer.style.display = 'flex'; if (fromCache) refreshProfile(userRef, userData); break;
                         case 'banned': showInfoModal("Compte banni", "Votre compte a été banni."); signOut(auth); break;
                         case 'approved': {
                             const displayName = userData.displayName || user.email;
@@ -493,12 +512,16 @@ document.addEventListener('DOMContentLoaded', () => {
                             document.getElementById('app-version-display').textContent = APP_VERSION;
                             setupNavigation();
 
-                            await checkPersonalNotifications(userRef, userData);
-                            checkForUpdates(userData, userRef);
-
                             navigateTo('user-dashboard');
                             prefetchPages();
                             appContainer.style.display = 'block';
+                            hideLoader();
+
+                            if (fromCache) refreshProfile(userRef, userData);
+                            else {
+                                checkPersonalNotifications(userRef, userData).catch(console.error);
+                                checkForUpdates(userData, userRef);
+                            }
                             break;
                         }
                         default: showInfoModal("Erreur de compte", "Statut inconnu."); signOut(auth);
@@ -516,8 +539,25 @@ document.addEventListener('DOMContentLoaded', () => {
             authContainer.style.display = 'block';
             showAuthForm('login-form');
         }
-        loader.style.display = 'none';
+        hideLoader();
     });
+
+    // Profil relu sur le serveur après un démarrage depuis le téléphone : statut ou rôle changé
+    // entre-temps → on applique (déconnexion si banni, rechargement si le rôle a changé).
+    async function refreshProfile(userRef, cachedData) {
+        try {
+            const fresh = await getDoc(userRef);
+            if (!fresh.exists()) { signOut(auth); return; }
+            const data = fresh.data();
+            if (data.status !== cachedData.status || data.role !== cachedData.role) { window.location.reload(); return; }
+            if (data.status !== 'approved') return;
+            if (currentUser) Object.assign(currentUser, data);
+            await checkPersonalNotifications(userRef, data);
+            checkForUpdates(data, userRef);
+        } catch (error) {
+            console.warn("Profil non vérifié (hors ligne ?) :", error);
+        }
+    }
 
     const pinModal = document.getElementById('pinModal');
     const pinForm = document.getElementById('pinForm');
