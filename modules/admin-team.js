@@ -68,6 +68,7 @@ export async function render() {
                     <div>
                         <h3 id="kmRecalcTitle" class="modal-title">Recalculer les kilomètres</h3>
                         <p class="modal-text">Refait tous les trajets de toute l'équipe sur la période choisie, avec les adresses actuelles des chantiers.</p>
+                        <p class="modal-text">Chaque journée suit la règle de son époque : jusqu'au 25 octobre 2026, seul le conducteur a des km et il n'y a pas de retour au dépôt ; depuis le 26 octobre, km pour chacun et retour au dépôt.</p>
                     </div>
                     <div class="segmented km-recalc-periods" role="group" aria-label="Période">
                         <button type="button" data-period="week" class="km-period is-active">Cette semaine</button>
