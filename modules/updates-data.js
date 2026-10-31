@@ -1,5 +1,15 @@
 export const updatesLog = [
     {
+        version: 'v4.0.0',
+        date: '31 octobre 2026',
+        changes: [
+            "**Mes statistiques → Mon profil de travail** : « Je suis conducteur·rice » en un clic, vos compétences notées de 1 à 5 par tâche (lits, salles de bain, cuisine, sols, poussière, vitres, repassage, gros nettoyage) et les collègues avec qui vous aimez travailler (visible uniquement par l'administrateur).",
+            "**Admin - Planification** : nouveau bouton « Proposer le planning ». L'application compose les équipes de la semaine : contrats remplis au maximum (ou même pourcentage du contrat pour tout le monde quand il y a moins de travail), un conducteur par équipe, congés respectés, une personne à l'aise sur chaque tâche importante, quelqu'un qui connaît déjà le chantier, et les binômes qui s'entendent. Vous voyez pourquoi chaque équipe a été choisie, puis vous appliquez et ajustez à la main.",
+            "**Admin - Chantiers** : nouvelle partie « Équipe & tâches » (nombre de personnes et importance de chaque tâche, avec des réglages rapides Gîte, Maison, Bureau, Fin de chantier).",
+            "**Admin - Fiches de l'équipe** : profil de travail de chaque membre, avec la possibilité de corriger les notes et le statut conducteur.",
+        ]
+    },
+    {
         version: 'v3.9.9',
         date: '27 octobre 2026',
         changes: [

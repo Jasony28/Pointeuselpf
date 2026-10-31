@@ -1,6 +1,7 @@
-import { doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { doc, updateDoc, collection, getDocs, deleteField } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, showInfoModal, showToast } from "../app.js";
 import { getUsers } from "./data-service.js";
+import { THEMES, effectiveSkill, ratingRowHTML } from "./work-profile.js";
 
 export async function render() {
     pageContent.innerHTML = `
@@ -31,11 +32,16 @@ export async function render() {
 }
 
 let allTeam = [];
+let affinities = new Map(); // uid → { like: [], avoid: [] } (privé : admin uniquement)
 
 async function displayUserCards() {
     const container = document.getElementById('user-cards-container');
     try {
-        const users = await getUsers();
+        const [users, affSnap] = await Promise.all([
+            getUsers(),
+            getDocs(collection(db, "affinites")).catch((e) => { console.warn("Affinités illisibles (règles Firebase ?)", e); return null; }),
+        ]);
+        affinities = new Map((affSnap?.docs || []).map(d => [d.id, d.data()]));
         allTeam = users.filter(user => user.status !== 'banned');
         if (!container.isConnected) return;
         drawCards();
@@ -168,6 +174,8 @@ function renderCardView(cardElement, user) {
             ${sensitiveRow('iban', 'IBAN', user.iban, 'bank')}
         </div>
 
+        ${workProfileHTML(user)}
+
         <details class="emp-history">
             <summary>Historique des contrats <span>${sorted.length || 1}</span></summary>
             <ol class="emp-timeline">${contractRows}</ol>
@@ -195,6 +203,75 @@ function renderCardView(cardElement, user) {
         }
     }));
     cardElement.querySelector('.edit-btn').addEventListener('click', () => renderCardEdit(cardElement, user));
+    cardElement.querySelector('.wp-edit-btn')?.addEventListener('click', () => renderWorkEdit(cardElement, user));
+}
+
+const nameOf = (uid) => allTeam.find(u => u.id === uid)?.displayName || 'Ancien membre';
+
+// Résumé du profil de travail (conducteur, compétences, affinités) sur la fiche
+function workProfileHTML(user) {
+    const aff = affinities.get(user.id) || {};
+    const skills = THEMES.map(t => ({ ...t, value: effectiveSkill(user, t.key), corrected: user.skillsAdmin?.[t.key] >= 1 }));
+    const rated = skills.filter(s => s.value);
+    const likedBy = [...affinities.entries()].filter(([uid, a]) => uid !== user.id && (a.like || []).includes(user.id)).map(([uid]) => nameOf(uid));
+    return `
+        <details class="emp-history wp-summary">
+            <summary>Profil de travail ${user.isDriver ? '<span class="wp-badge">🚗 Conducteur</span>' : '<span class="wp-badge is-muted">Pas conducteur</span>'}</summary>
+            <div class="wp-summary-body">
+                ${rated.length ? `<ul class="wp-skill-bars">${skills.map(s => `
+                    <li><span>${s.label}${s.corrected ? ' <small title="Note corrigée par l\'admin">✎</small>' : ''}</span>
+                        <span class="wp-bar"><i style="width:${(s.value || 0) * 20}%"></i></span><b>${s.value || '–'}</b></li>`).join('')}</ul>`
+                    : '<p class="wp-hint">Compétences pas encore renseignées par l\'employé.</p>'}
+                <p class="wp-hint">💚 Aime travailler avec : ${(aff.like || []).length ? aff.like.map(nameOf).map(esc).join(', ') : '—'}</p>
+                <p class="wp-hint">🚫 Préfère éviter : ${(aff.avoid || []).length ? aff.avoid.map(nameOf).map(esc).join(', ') : '—'}</p>
+                <p class="wp-hint">Choisi·e par : ${likedBy.length ? likedBy.map(esc).join(', ') : '—'}</p>
+                <button type="button" class="btn btn-secondary btn-block wp-edit-btn">Ajuster conducteur & compétences</button>
+            </div>
+        </details>`;
+}
+
+// L'admin peut corriger les notes (prioritaires sur l'auto-évaluation) et le statut conducteur
+function renderWorkEdit(cardElement, user) {
+    const admin = { ...(user.skillsAdmin || {}) };
+    let isDriver = user.isDriver === true;
+    const draw = () => {
+        cardElement.innerHTML = `
+            <header class="emp-top">
+                <div class="emp-avatar" aria-hidden="true">${esc(initials(user.displayName))}</div>
+                <div class="emp-id"><h3 class="emp-name">Profil de travail</h3><p class="emp-meta">${esc(user.displayName || '')}</p></div>
+            </header>
+            <button type="button" class="wp-driver${isDriver ? ' is-on' : ''}" data-driver aria-pressed="${isDriver}">
+                <span class="wp-driver-text"><strong>Conducteur·rice</strong><small>${isDriver ? 'Oui' : 'Non'}</small></span>
+                <span class="wp-switch" aria-hidden="true"></span>
+            </button>
+            <p class="wp-hint mt-3">Votre note remplace celle de l'employé (indiquée entre parenthèses). Touchez à nouveau la note choisie pour revenir à l'auto-évaluation.</p>
+            <div>${THEMES.map(t => ratingRowHTML(t, admin[t.key], { hint: `(auto : ${user.skillsSelf?.[t.key] || '–'})` })).join('')}</div>
+            <div class="mt-6 flex gap-3">
+                <button class="cancel-btn btn btn-secondary btn-block">Annuler</button>
+                <button class="save-btn btn btn-primary btn-block">Enregistrer</button>
+            </div>`;
+        cardElement.querySelector('[data-driver]').onclick = () => { isDriver = !isDriver; draw(); };
+        cardElement.querySelectorAll('.wp-rate').forEach(btn => btn.onclick = () => {
+            const v = Number(btn.dataset.value);
+            if (admin[btn.dataset.theme] === v) delete admin[btn.dataset.theme]; else admin[btn.dataset.theme] = v;
+            draw();
+        });
+        cardElement.querySelector('.cancel-btn').onclick = () => renderCardView(cardElement, user);
+        cardElement.querySelector('.save-btn').onclick = async () => {
+            try {
+                const skillsAdmin = Object.keys(admin).length ? admin : deleteField();
+                await updateDoc(doc(db, "users", user.id), { isDriver, skillsAdmin });
+                user.isDriver = isDriver;
+                user.skillsAdmin = Object.keys(admin).length ? { ...admin } : undefined;
+                showToast('Profil de travail enregistré.', 'success');
+                renderCardView(cardElement, user);
+            } catch (e) {
+                console.error(e);
+                showInfoModal("Erreur", "L'enregistrement a échoué.");
+            }
+        };
+    };
+    draw();
 }
 
 // Affiche la carte en mode "édition"

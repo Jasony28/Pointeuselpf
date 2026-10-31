@@ -1,7 +1,9 @@
 import { collection, query, where, getDocs, addDoc, deleteDoc, doc, orderBy, serverTimestamp, updateDoc, setDoc, getDoc, writeBatch, arrayUnion } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, currentUser, showConfirmationModal, showInfoModal } from "../app.js";
 import { getWeekDateRange } from "./utils.js";
-import { getActiveChantiers, getTeamMembers } from "./data-service.js";
+import { getActiveChantiers, getTeamMembers, getUsers } from "./data-service.js";
+import { planWeek, DEFAULT_WEIGHTS, WEIGHT_LABELS } from "./auto-planner.js";
+import { escapeHTML } from "./work-profile.js";
 
 const state = {
     currentWeekOffset: 0,
@@ -33,6 +35,7 @@ export async function render() {
                     </div>
                     <div class="flex items-center justify-center sm:justify-end gap-2 flex-wrap">
                         <button id="downloadPdfBtn" class="btn btn-secondary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events: none;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>PDF</button>
+                        <button id="autoPlanBtn" class="btn btn-primary" title="Composer les équipes automatiquement"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events: none;"><path d="M12 3l1.9 5.8L20 10l-5 3.8L16.5 20 12 16.6 7.5 20 9 13.8 4 10l6.1-1.2z"/></svg>Proposer le planning</button>
                         <button id="selectionModeBtn" class="btn btn-secondary">Sélectionner</button>
                         <button id="deleteSelectionBtn" class="hidden btn btn-danger">Supprimer la sélection</button>
                         <div class="flex flex-col items-end">
@@ -95,6 +98,7 @@ function setupEventListeners() {
     document.getElementById("prevWeekBtn").onclick = () => { state.currentWeekOffset--; display(); };
     document.getElementById("nextWeekBtn").onclick = () => { state.currentWeekOffset++; display(); };
     document.getElementById("downloadPdfBtn").onclick = generatePlanningPDF;
+    document.getElementById("autoPlanBtn").onclick = openAutoPlanner;
     document.getElementById("selectionModeBtn").onclick = toggleSelectionMode;
     document.getElementById("deleteSelectionBtn").onclick = deleteSelectedItems;
     document.getElementById("clear-team-selection").onclick = () => {
@@ -340,3 +344,183 @@ async function checkAndRenderPublishButton(startOfWeek) {
 
 async function publishWeek() { const { startOfWeek } = getWeekDateRange(state.currentWeekOffset); const weekId = startOfWeek.toISOString().split('T')[0]; const weekString = startOfWeek.toLocaleDateString('fr-FR', { timeZone: 'UTC', day: 'numeric', month: 'long' }); if (await showConfirmationModal("Publication", `Voulez-vous PUBLIER le planning pour la semaine du ${weekString} ?`)) { try { await setDoc(doc(db, "publishedSchedules", weekId), { published: true, publishedAt: serverTimestamp(), publishedBy: currentUser.displayName }); showInfoModal("Succès", "Planning publié."); await checkAndRenderPublishButton(startOfWeek); } catch (error) { console.error(error); showInfoModal("Erreur", "La publication a échoué."); } } }
 async function sendUpdateNotification() { showInfoModal("Information", "Les notifications sont maintenant envoyées automatiquement à chaque modification."); }
+
+// =============================================
+// PLANIFICATION AUTOMATIQUE DES ÉQUIPES
+// =============================================
+
+const WEIGHTS_KEY = 'autoPlanWeights';
+function loadWeights() { try { return { ...DEFAULT_WEIGHTS, ...JSON.parse(localStorage.getItem(WEIGHTS_KEY) || '{}') }; } catch (e) { return { ...DEFAULT_WEIGHTS }; } }
+function saveWeights(w) { try { localStorage.setItem(WEIGHTS_KEY, JSON.stringify(w)); } catch (e) { /* stockage indisponible */ } }
+
+const autoPlan = { data: null, outcome: null, keepExisting: true, weights: loadWeights() };
+
+async function openAutoPlanner() {
+    const { startOfWeek, endOfWeek } = getWeekDateRange(state.currentWeekOffset);
+    const weekStart = startOfWeek.toISOString().split('T')[0];
+    const weekEnd = endOfWeek.toISOString().split('T')[0];
+    const modal = ensureAutoPlanModal();
+    modal.classList.remove('hidden');
+    modal.querySelector('.ap-body').innerHTML = '<p class="ap-muted">Chargement des données et calcul…</p>';
+
+    try {
+        const from = new Date(startOfWeek); from.setUTCDate(from.getUTCDate() - 56);
+        const monthStart = weekStart.slice(0, 8) + '01';
+        const pastFrom = [from.toISOString().split('T')[0], monthStart].sort()[0];
+        const [weekSnap, pastSnap, users, chantiers, affSnap, leaveSnap] = await Promise.all([
+            getDocs(query(collection(db, "planning"), where("date", ">=", weekStart), where("date", "<=", weekEnd))),
+            getDocs(query(collection(db, "planning"), where("date", ">=", pastFrom), where("date", "<", weekStart))),
+            getUsers(true),
+            getActiveChantiers(true),
+            getDocs(collection(db, "affinites")).catch((e) => { console.warn("Affinités illisibles", e); return null; }),
+            getDocs(query(collection(db, "leaveRequests"), where("status", "==", "approved"))),
+        ]);
+        const lines = weekSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.date.localeCompare(b.date) || (a.order ?? 0) - (b.order ?? 0));
+        if (!lines.length) {
+            modal.querySelector('.ap-body').innerHTML = '<p class="ap-muted">Aucun chantier dans le planning de cette semaine : ajoutez d\'abord les chantiers (ou attendez l\'envoi automatique des Petites Fées), puis relancez.</p>';
+            return;
+        }
+        autoPlan.data = {
+            weekStart, lines, users, chantiers,
+            affinities: new Map((affSnap?.docs || []).map(d => [d.id, d.data()])),
+            affinitiesMissing: !affSnap,
+            leaves: leaveSnap.docs.map(d => d.data()).filter(l => l.startDate <= weekEnd && (l.endDate || l.startDate) >= weekStart),
+            pastLines: pastSnap.docs.map(d => d.data()),
+        };
+        runAutoPlan();
+    } catch (error) {
+        console.error("Planification automatique :", error);
+        modal.querySelector('.ap-body').innerHTML = `<p class="text-red-500">Impossible de préparer la proposition : ${escapeHTML(error.message || error)}</p>`;
+    }
+}
+
+function runAutoPlan() {
+    const d = autoPlan.data;
+    if (!d) return;
+    autoPlan.outcome = planWeek({ ...d, keepExisting: autoPlan.keepExisting, weights: autoPlan.weights });
+    renderAutoPlan();
+}
+
+function ensureAutoPlanModal() {
+    let modal = document.getElementById('autoPlanModal');
+    if (modal) return modal;
+    modal = document.createElement('div');
+    modal.id = 'autoPlanModal';
+    modal.className = 'hidden fixed inset-0 bg-black bg-opacity-50 overflow-y-auto z-30 p-4';
+    modal.innerHTML = `
+        <div class="ap-dialog" role="dialog" aria-modal="true" aria-labelledby="apTitle">
+            <div class="ap-head">
+                <h3 id="apTitle">Proposition de planning</h3>
+                <button type="button" class="ap-close icon-btn" aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+            </div>
+            <div class="ap-body"></div>
+            <div class="ap-foot">
+                <button type="button" class="btn btn-secondary ap-close">Annuler</button>
+                <button type="button" class="btn btn-secondary" id="apRerun">Autre proposition</button>
+                <button type="button" class="btn btn-primary" id="apApply">Appliquer</button>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+    modal.querySelectorAll('.ap-close').forEach(b => b.onclick = () => modal.classList.add('hidden'));
+    modal.querySelector('#apRerun').onclick = runAutoPlan;
+    modal.querySelector('#apApply').onclick = applyAutoPlan;
+    return modal;
+}
+
+function renderAutoPlan() {
+    const modal = document.getElementById('autoPlanModal');
+    const body = modal.querySelector('.ap-body');
+    const o = autoPlan.outcome;
+    const applyBtn = modal.querySelector('#apApply');
+    if (o.error) { body.innerHTML = `<p class="ap-muted">${escapeHTML(o.error)}</p>`; applyBtn.disabled = true; return; }
+
+    const changed = o.result.filter(r => r.changed).length;
+    applyBtn.disabled = changed === 0;
+    applyBtn.textContent = changed ? `Appliquer (${changed} chantier${changed > 1 ? 's' : ''})` : 'Rien à changer';
+    const pct = Math.round(o.ratio * 100);
+    const dayName = (date) => new Date(date + 'T12:00:00Z').toLocaleDateString('fr-FR', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'short' });
+    const byDay = new Map();
+    o.result.forEach(r => { if (!byDay.has(r.line.date)) byDay.set(r.line.date, []); byDay.get(r.line.date).push(r); });
+
+    body.innerHTML = `
+        <p class="ap-summary">Travail : <b>${o.totalWork} h</b> · Contrats disponibles (congés déduits) : <b>${o.totalAvail} h</b> →
+            ${pct >= 100 ? '<b>tout le monde est rempli à son contrat</b>.' : `chacun reçoit environ <b>${pct} % de son contrat</b>.`}</p>
+        ${autoPlan.data.affinitiesMissing ? '<p class="ap-warn">Les affinités ne sont pas lisibles : ajoutez la règle Firebase « affinites » (voir la note de mise à jour).</p>' : ''}
+        ${o.warnings.length ? `<ul class="ap-warn">${o.warnings.map(w => `<li>${escapeHTML(w)}</li>`).join('')}</ul>` : ''}
+
+        <div class="ap-options">
+            <label class="ap-check"><input type="checkbox" id="apKeep" ${autoPlan.keepExisting ? 'checked' : ''}> Garder les personnes déjà placées à la main</label>
+            <details>
+                <summary>Réglages des priorités</summary>
+                <div class="ap-weights">${Object.keys(DEFAULT_WEIGHTS).map(k => `
+                    <label><span>${WEIGHT_LABELS[k]}</span><input type="range" min="0" max="${DEFAULT_WEIGHTS[k] * 3}" step="1" value="${autoPlan.weights[k]}" data-weight="${k}"></label>`).join('')}
+                    <button type="button" class="btn btn-secondary" id="apResetWeights">Valeurs par défaut</button>
+                </div>
+            </details>
+        </div>
+
+        <h4 class="ap-subtitle">Heures de la semaine</h4>
+        <div class="ap-people">${o.people.map(p => {
+            const fill = p.avail ? Math.min(100, p.hours / p.avail * 100) : 0;
+            const off = Math.abs(p.hours - p.target) > 1.5;
+            return `<div class="ap-person${off ? ' is-off' : ''}">
+                <div class="ap-person-top"><b>${escapeHTML(p.name)}</b>${p.isDriver ? ' <span title="Conducteur">🚗</span>' : ''}<span>${p.hours} h / ${p.target} h</span></div>
+                <div class="wp-bar"><i style="width:${fill}%"></i></div>
+                <small>Contrat ${p.contract} h${p.leaveDays ? ` · ${p.leaveDays} j de congé` : ''}</small>
+            </div>`;
+        }).join('')}</div>
+
+        ${[...byDay.entries()].map(([date, rows]) => `
+            <h4 class="ap-subtitle">${dayName(date)}</h4>
+            <div class="ap-lines">${rows.map(r => `
+                <div class="ap-line${r.changed ? ' is-changed' : ''}${r.issues.length ? ' has-issue' : ''}">
+                    <div class="ap-line-top"><b>${escapeHTML(r.line.chantierName)}</b><span>${r.line.startTime ? escapeHTML(r.line.startTime) + ' · ' : ''}${r.personHours} h/pers.</span></div>
+                    <div class="ap-team">${r.teamNames.map(n => `<span class="team-member-tag">${escapeHTML(n)}</span>`).join('') || '<span class="ap-muted">Personne</span>'}</div>
+                    ${r.reasons.length ? `<p class="ap-reasons">${r.reasons.map(escapeHTML).join(' · ')}</p>` : ''}
+                    ${r.issues.length ? `<p class="ap-issues">⚠ ${r.issues.map(escapeHTML).join(' · ')}</p>` : ''}
+                </div>`).join('')}</div>`).join('')}
+    `;
+
+    body.querySelector('#apKeep').onchange = (e) => { autoPlan.keepExisting = e.target.checked; runAutoPlan(); };
+    body.querySelectorAll('[data-weight]').forEach(input => input.onchange = () => {
+        autoPlan.weights[input.dataset.weight] = Number(input.value);
+        saveWeights(autoPlan.weights);
+        runAutoPlan();
+    });
+    body.querySelector('#apResetWeights').onclick = () => { autoPlan.weights = { ...DEFAULT_WEIGHTS }; saveWeights(autoPlan.weights); runAutoPlan(); };
+}
+
+async function applyAutoPlan() {
+    const o = autoPlan.outcome;
+    const rows = (o?.result || []).filter(r => r.changed);
+    if (!rows.length) return;
+    if (!await showConfirmationModal("Appliquer la proposition", `Mettre à jour les équipes de ${rows.length} chantier(s) ? Les personnes concernées seront prévenues comme d'habitude.`)) return;
+    const t = new Date().toISOString();
+    const idByName = new Map(state.teamMembers.map(m => [m.name, m.id]));
+    try {
+        let batch = writeBatch(db);
+        let ops = 0;
+        const flush = async () => { if (ops) { await batch.commit(); batch = writeBatch(db); ops = 0; } };
+        for (const r of rows) {
+            const before = r.line.teamNames || [];
+            batch.update(doc(db, "planning", r.line.id), { teamNames: r.teamNames, autoPlannedAt: serverTimestamp() });
+            ops++;
+            const notify = (name, type) => {
+                const uid = idByName.get(name);
+                if (!uid) return;
+                batch.update(doc(db, "users", uid), { pendingChanges: arrayUnion({ date: r.line.date, type, chantier: r.line.chantierName, timestamp: t }) });
+                ops++;
+            };
+            r.teamNames.filter(n => !before.includes(n)).forEach(n => notify(n, 'ajout'));
+            before.filter(n => !r.teamNames.includes(n)).forEach(n => notify(n, 'retrait'));
+            if (ops > 400) await flush();
+        }
+        await flush();
+        document.getElementById('autoPlanModal').classList.add('hidden');
+        showInfoModal("Planning mis à jour", `${rows.length} chantier(s) ont reçu leur équipe. Vous pouvez encore ajuster à la main, puis publier la semaine.`);
+        display();
+    } catch (error) {
+        console.error("Application du planning :", error);
+        showInfoModal("Erreur", "La mise à jour s'est arrêtée en cours de route. Rechargez le planning pour voir ce qui a été appliqué, puis relancez la proposition.");
+    }
+}

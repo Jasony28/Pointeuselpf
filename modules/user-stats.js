@@ -2,8 +2,10 @@
  Fichier: modules/user-stats.js
  Description: Page de statistiques utilisateur et gestion du profil personnel.
 */
-import { collection, query, where, getDocs, orderBy, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, currentUser, pageContent, showInfoModal } from "../app.js";
+import { collection, query, where, getDocs, orderBy, doc, getDoc, updateDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { db, currentUser, pageContent, showInfoModal, showToast } from "../app.js";
+import { getTeamMembers } from "./data-service.js";
+import { THEMES, MAX_LIKES, MAX_AVOIDS, ratingRowHTML, escapeHTML } from "./work-profile.js";
 
 // Garde en mémoire le mois actuellement affiché (0 = mois en cours, -1 = mois dernier, etc.)
 let currentMonthOffset = 0;
@@ -20,6 +22,15 @@ export async function render() {
                 <h1 class="text-2xl font-bold mb-4">Mes informations</h1>
                 <div id="user-profile-container" class="p-6 rounded-xl shadow-sm transition-all duration-300" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
                     <p class="text-center text-sm" style="color: var(--color-text-muted);">Chargement du profil...</p>
+                </div>
+            </div>
+
+            <!-- SECTION PROFIL DE TRAVAIL (utilisé pour composer les équipes du planning) -->
+            <div>
+                <h1 class="text-2xl font-bold mb-1">Mon profil de travail</h1>
+                <p class="text-sm mb-4" style="color: var(--color-text-muted);">Aide à composer les équipes du planning. Modifiable à tout moment, enregistré automatiquement.</p>
+                <div id="work-profile-container" class="wp-card">
+                    <p class="text-center text-sm" style="color: var(--color-text-muted);">Chargement…</p>
                 </div>
             </div>
 
@@ -80,7 +91,121 @@ export async function render() {
 
     // Charger les données
     loadUserProfile();
+    loadWorkProfile();
     loadMonthlyStats();
+}
+
+// =============================================
+// PROFIL DE TRAVAIL : CONDUCTEUR, COMPÉTENCES, AFFINITÉS
+// =============================================
+
+async function loadWorkProfile() {
+    const container = document.getElementById('work-profile-container');
+    if (!container) return;
+    try {
+        const [userSnap, affSnap, members] = await Promise.all([
+            getDoc(doc(db, "users", currentUser.uid)),
+            getDoc(doc(db, "affinites", currentUser.uid)).catch(() => null),
+            getTeamMembers(),
+        ]);
+        const user = userSnap.exists() ? userSnap.data() : {};
+        const aff = affSnap?.exists() ? affSnap.data() : {};
+        const state = {
+            isDriver: user.isDriver === true,
+            skills: { ...(user.skillsSelf || {}) },
+            like: (aff.like || []).filter(id => id !== currentUser.uid),
+            avoid: (aff.avoid || []).filter(id => id !== currentUser.uid),
+            colleagues: members.filter(m => m.id !== currentUser.uid),
+        };
+        if (!container.isConnected) return;
+        renderWorkProfile(container, state);
+    } catch (error) {
+        console.error("Erreur profil de travail:", error);
+        container.innerHTML = `<p class="text-red-500">Erreur de chargement du profil de travail.</p>`;
+    }
+}
+
+function renderWorkProfile(container, state) {
+    const rated = THEMES.filter(t => state.skills[t.key]).length;
+    container.innerHTML = `
+        <button type="button" id="wp-driver" class="wp-driver${state.isDriver ? ' is-on' : ''}" aria-pressed="${state.isDriver}">
+            <span class="wp-driver-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M6 17v2M18 17v2M3 13l2-6a2 2 0 0 1 2-1.4h10A2 2 0 0 1 19 7l2 6v4H3z"/><circle cx="7.5" cy="13.5" r="1"/><circle cx="16.5" cy="13.5" r="1"/></svg></span>
+            <span class="wp-driver-text"><strong>Je suis conducteur·rice</strong><small>${state.isDriver ? 'Oui — je peux conduire la voiture de l\'équipe' : 'Non — touchez pour activer'}</small></span>
+            <span class="wp-switch" aria-hidden="true"></span>
+        </button>
+
+        <div class="wp-section">
+            <h3 class="wp-title">Mes compétences <span>${rated}/${THEMES.length}</span></h3>
+            <p class="wp-hint">1 = pas du tout à l'aise · 5 = totalement à l'aise. Soyez honnête : c'est pour vous mettre là où vous êtes le mieux.</p>
+            <div id="wp-skills">${THEMES.map(t => ratingRowHTML(t, state.skills[t.key])).join('')}</div>
+        </div>
+
+        <div class="wp-section">
+            <h3 class="wp-title">Avec qui j'aime travailler</h3>
+            <p class="wp-hint">Touchez un nom : <b>💚 j'aime</b> (${MAX_LIKES} max) → <b>🚫 éviter</b> (${MAX_AVOIDS} max) → neutre.
+                🔒 Visible uniquement par l'administrateur, jamais par vos collègues.</p>
+            <div id="wp-colleagues" class="wp-chips">
+                ${state.colleagues.length ? state.colleagues.map(c => {
+                    const mode = state.like.includes(c.id) ? 'like' : state.avoid.includes(c.id) ? 'avoid' : '';
+                    return `<button type="button" class="wp-chip${mode ? ` is-${mode}` : ''}" data-colleague="${c.id}">${mode === 'like' ? '💚 ' : mode === 'avoid' ? '🚫 ' : ''}${escapeHTML(c.name)}</button>`;
+                }).join('') : '<p class="wp-hint">Aucun collègue pour le moment.</p>'}
+            </div>
+        </div>
+    `;
+
+    container.querySelector('#wp-driver').onclick = async () => {
+        state.isDriver = !state.isDriver;
+        renderWorkProfile(container, state);
+        try {
+            await updateDoc(doc(db, "users", currentUser.uid), { isDriver: state.isDriver });
+            showToast(state.isDriver ? 'Noté : vous êtes conducteur·rice.' : 'Noté : vous n\'êtes pas conducteur·rice.', 'success');
+        } catch (e) {
+            console.error(e);
+            state.isDriver = !state.isDriver;
+            renderWorkProfile(container, state);
+            showInfoModal("Erreur", "L'enregistrement a échoué.");
+        }
+    };
+
+    container.querySelectorAll('#wp-skills .wp-rate').forEach(btn => btn.onclick = async () => {
+        const { theme, value } = btn.dataset;
+        const previous = state.skills[theme];
+        state.skills[theme] = Number(value);
+        renderWorkProfile(container, state);
+        try {
+            await updateDoc(doc(db, "users", currentUser.uid), { [`skillsSelf.${theme}`]: Number(value) });
+        } catch (e) {
+            console.error(e);
+            if (previous) state.skills[theme] = previous; else delete state.skills[theme];
+            renderWorkProfile(container, state);
+            showInfoModal("Erreur", "L'enregistrement a échoué.");
+        }
+    });
+
+    container.querySelectorAll('[data-colleague]').forEach(btn => btn.onclick = async () => {
+        const id = btn.dataset.colleague;
+        const before = { like: [...state.like], avoid: [...state.avoid] };
+        if (state.like.includes(id)) {
+            state.like = state.like.filter(x => x !== id);
+            if (state.avoid.length >= MAX_AVOIDS) {
+                showToast(`Une seule personne « à éviter » : retirez d'abord l'autre.`, 'warning');
+            } else state.avoid.push(id);
+        } else if (state.avoid.includes(id)) {
+            state.avoid = state.avoid.filter(x => x !== id);
+        } else if (state.like.length >= MAX_LIKES) {
+            showToast(`${MAX_LIKES} personnes maximum : retirez-en une d'abord.`, 'warning');
+            return;
+        } else state.like.push(id);
+        renderWorkProfile(container, state);
+        try {
+            await setDoc(doc(db, "affinites", currentUser.uid), { like: state.like, avoid: state.avoid, updatedAt: serverTimestamp() });
+        } catch (e) {
+            console.error(e);
+            Object.assign(state, before);
+            renderWorkProfile(container, state);
+            showInfoModal("Erreur", "L'enregistrement a échoué. Si le problème continue, prévenez l'administrateur (règles Firebase « affinites »).");
+        }
+    });
 }
 
 // =============================================

@@ -4,6 +4,7 @@ import { getGoogleMapsUrl } from "./utils.js";
 import { getActiveChantiers } from "./data-service.js";
 import { clearTripCaches, findDaysUsingAddress, rebuildDayTrips, geocodeDetails, crowDistanceKm, DEPOT_ADDRESS } from "./trips.js";
 import { isValidEmail, mailButtonHTML } from "./mail.js";
+import { THEMES, NEED_PRESETS, DEFAULT_TEAM_SIZE, needRowHTML } from "./work-profile.js";
 
 
 // Champs horaires d'un chantier (lus aussi par planning-optimizer.js — ne pas renommer) :
@@ -169,6 +170,25 @@ export async function render() {
                             </div>
                         </div>
                         <div id="formTimeSummary" class="constraint-box hidden"></div>
+                    </div>
+
+                    <div class="form-section">
+                        <div>
+                            <h4 class="form-section-title">Équipe & tâches <span>(pour la planification automatique)</span></h4>
+                            <p class="field-hint">L'algorithme envoie au moins une personne à l'aise sur chaque tâche importante.</p>
+                        </div>
+                        <div class="field">
+                            <label for="formTeamSize" class="field-label">Nombre de personnes</label>
+                            <div class="input-suffix">
+                                <input id="formTeamSize" type="number" min="1" max="6" step="1" class="input" placeholder="${DEFAULT_TEAM_SIZE}">
+                                <span>personnes</span>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <span class="field-label">Type de lieu (remplit les tâches)</span>
+                            <div class="wp-chips">${Object.keys(NEED_PRESETS).map(name => `<button type="button" class="wp-chip" data-preset="${name}">${name}</button>`).join('')}</div>
+                        </div>
+                        <div id="formNeeds"></div>
                     </div>
 
                     <div class="form-section">
@@ -369,7 +389,24 @@ function readFormValues() {
         isHideable: document.getElementById('formHideable').checked,
         keyboxCodes: Array.from(document.querySelectorAll('#formCodesList li span')).map(s => s.textContent),
         additionalInfo: document.getElementById('formInfo').value.trim(),
+        teamSize: Math.max(1, Math.min(6, parseInt(document.getElementById('formTeamSize').value, 10) || DEFAULT_TEAM_SIZE)),
+        skillNeeds: readNeeds(),
     };
+}
+
+function readNeeds() {
+    const needs = {};
+    document.querySelectorAll('#formNeeds .wp-need.is-active').forEach(btn => {
+        const v = Number(btn.dataset.value);
+        if (v > 0) needs[btn.dataset.need] = v;
+    });
+    return needs;
+}
+
+function renderNeeds(needs = {}) {
+    const box = document.getElementById('formNeeds');
+    box.innerHTML = THEMES.map(t => needRowHTML(t, needs[t.key] || 0)).join('');
+    box.querySelectorAll('.wp-need').forEach(btn => btn.onclick = () => renderNeeds({ ...readNeeds(), [btn.dataset.need]: Number(btn.dataset.value) }));
 }
 
 function addCodeToList(text) {
@@ -398,7 +435,9 @@ function openChantierForm(chantier = null) {
         document.getElementById('formHideable').checked = chantier.isHideable || false;
         document.getElementById('formInfo').value = chantier.additionalInfo || '';
         (chantier.keyboxCodes || []).forEach(addCodeToList);
+        document.getElementById('formTeamSize').value = chantier.teamSize || '';
     }
+    renderNeeds(chantier?.skillNeeds || {});
 
     updateGeoStatus();
     renderConstraintBox(document.getElementById('formTimeSummary'), readFormValues());
@@ -598,6 +637,7 @@ function setupEventListeners() {
     document.getElementById('checkAddressesBtn').onclick = checkAddresses;
     document.getElementById('closeAddressCheckBtn').onclick = () => document.getElementById('addressCheckModal').classList.add('hidden');
     document.getElementById('chantierForm').onsubmit = saveChantier;
+    document.querySelectorAll('[data-preset]').forEach(btn => btn.onclick = () => renderNeeds(NEED_PRESETS[btn.dataset.preset]));
     document.getElementById('cancelChantierFormBtn').onclick = closeChantierForm;
     document.getElementById('closeDetailsBtn').onclick = () => document.getElementById('detailsModal').classList.add('hidden');
 
