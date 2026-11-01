@@ -2,7 +2,7 @@ import { collection, query, where, getDocs, addDoc, deleteDoc, doc, orderBy, ser
 import { db, pageContent, currentUser, showConfirmationModal, showInfoModal } from "../app.js";
 import { getWeekDateRange } from "./utils.js";
 import { getActiveChantiers, getTeamMembers, getUsers } from "./data-service.js";
-import { planWeek, DEFAULT_WEIGHTS, WEIGHT_LABELS } from "./auto-planner.js";
+import { planWeek, learnDurations, DEFAULT_WEIGHTS, WEIGHT_LABELS } from "./auto-planner.js";
 import { escapeHTML } from "./work-profile.js";
 
 const state = {
@@ -353,7 +353,14 @@ const WEIGHTS_KEY = 'autoPlanWeights';
 function loadWeights() { try { return { ...DEFAULT_WEIGHTS, ...JSON.parse(localStorage.getItem(WEIGHTS_KEY) || '{}') }; } catch (e) { return { ...DEFAULT_WEIGHTS }; } }
 function saveWeights(w) { try { localStorage.setItem(WEIGHTS_KEY, JSON.stringify(w)); } catch (e) { /* stockage indisponible */ } }
 
-const autoPlan = { data: null, outcome: null, keepExisting: true, weights: loadWeights() };
+const WEIGHT_MAX = { hours: 90, fairness: 60, skills: 15, continuity: 25, affinity: 20, stability: 15, travel: 2, changes: 300 };
+const autoPlan = { data: null, outcome: null, keepExisting: true, useRealDurations: true, seed: 1, weights: loadWeights(), running: false };
+
+// Données réduites au strict nécessaire (transmissibles au Web Worker, sans objets Firebase)
+const pick = (o, keys) => Object.fromEntries(keys.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
+const LINE_KEYS = ['id', 'date', 'chantierId', 'chantierName', 'startTime', 'duration', 'teamNames', 'order'];
+const USER_KEYS = ['id', 'displayName', 'status', 'role', 'contractHistory', 'contractHours', 'isDriver', 'skillsSelf', 'skillsAdmin'];
+const CHANTIER_KEYS = ['id', 'name', 'teamSize', 'skillNeeds', 'totalHeuresPrevues', 'coordinates', 'fixedAppointment', 'timeWindowStart', 'timeWindowEnd'];
 
 async function openAutoPlanner() {
     const { startOfWeek, endOfWeek } = getWeekDateRange(state.currentWeekOffset);
@@ -361,32 +368,39 @@ async function openAutoPlanner() {
     const weekEnd = endOfWeek.toISOString().split('T')[0];
     const modal = ensureAutoPlanModal();
     modal.classList.remove('hidden');
-    modal.querySelector('.ap-body').innerHTML = '<p class="ap-muted">Chargement des données et calcul…</p>';
+    modal.querySelector('.ap-body').innerHTML = '<p class="ap-muted">Chargement des données…</p>';
 
     try {
         const from = new Date(startOfWeek); from.setUTCDate(from.getUTCDate() - 56);
         const monthStart = weekStart.slice(0, 8) + '01';
         const pastFrom = [from.toISOString().split('T')[0], monthStart].sort()[0];
-        const [weekSnap, pastSnap, users, chantiers, affSnap, leaveSnap] = await Promise.all([
+        const since = new Date(startOfWeek); since.setUTCDate(since.getUTCDate() - 120);
+        const [weekSnap, pastSnap, users, chantiers, affSnap, leaveSnap, pointSnap] = await Promise.all([
             getDocs(query(collection(db, "planning"), where("date", ">=", weekStart), where("date", "<=", weekEnd))),
             getDocs(query(collection(db, "planning"), where("date", ">=", pastFrom), where("date", "<", weekStart))),
             getUsers(true),
             getActiveChantiers(true),
             getDocs(collection(db, "affinites")).catch((e) => { console.warn("Affinités illisibles", e); return null; }),
             getDocs(query(collection(db, "leaveRequests"), where("status", "==", "approved"))),
+            getDocs(query(collection(db, "pointages"), where("timestamp", ">=", since.toISOString()))).catch((e) => { console.warn("Pointages illisibles", e); return null; }),
         ]);
-        const lines = weekSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.date.localeCompare(b.date) || (a.order ?? 0) - (b.order ?? 0));
+        const lines = weekSnap.docs.map(d => pick({ id: d.id, ...d.data() }, LINE_KEYS)).sort((a, b) => a.date.localeCompare(b.date) || (a.order ?? 0) - (b.order ?? 0));
         if (!lines.length) {
             modal.querySelector('.ap-body').innerHTML = '<p class="ap-muted">Aucun chantier dans le planning de cette semaine : ajoutez d\'abord les chantiers (ou attendez l\'envoi automatique des Petites Fées), puis relancez.</p>';
             return;
         }
+        const chantierList = chantiers.map(c => pick(c, CHANTIER_KEYS));
+        const pointages = (pointSnap?.docs || []).map(d => { const p = d.data(); return { chantier: p.chantier, timestamp: p.timestamp, endTime: p.endTime }; });
         autoPlan.data = {
-            weekStart, lines, users, chantiers,
-            affinities: new Map((affSnap?.docs || []).map(d => [d.id, d.data()])),
+            weekStart, lines, chantiers: chantierList,
+            users: users.map(u => pick(u, USER_KEYS)),
+            affinities: (affSnap?.docs || []).map(d => [d.id, pick(d.data(), ['like', 'avoid'])]),
             affinitiesMissing: !affSnap,
-            leaves: leaveSnap.docs.map(d => d.data()).filter(l => l.startDate <= weekEnd && (l.endDate || l.startDate) >= weekStart),
-            pastLines: pastSnap.docs.map(d => d.data()),
+            leaves: leaveSnap.docs.map(d => pick(d.data(), ['userId', 'startDate', 'endDate', 'status'])).filter(l => l.startDate <= weekEnd && (l.endDate || l.startDate) >= weekStart),
+            pastLines: pastSnap.docs.map(d => pick(d.data(), ['date', 'chantierId', 'teamNames', 'duration'])),
+            durations: [...learnDurations(pointages, chantierList).entries()],
         };
+        autoPlan.seed = 1;
         runAutoPlan();
     } catch (error) {
         console.error("Planification automatique :", error);
@@ -394,11 +408,48 @@ async function openAutoPlanner() {
     }
 }
 
-function runAutoPlan() {
+// Calcul dans un Web Worker (écran fluide) ; repli sur un calcul direct si le navigateur ne le permet pas
+function computePlan(input) {
+    return new Promise((resolve, reject) => {
+        let worker;
+        try { worker = new Worker(new URL('./auto-planner-worker.js', import.meta.url), { type: 'module' }); }
+        catch (e) { worker = null; }
+        const direct = () => {
+            try {
+                resolve(planWeek({ ...input, affinities: new Map(input.affinities), durations: new Map(input.durations) }));
+            } catch (err) { reject(err); }
+        };
+        if (!worker) return direct();
+        const timer = setTimeout(() => { worker.terminate(); direct(); }, 60000);
+        worker.onmessage = (e) => { clearTimeout(timer); worker.terminate(); e.data.ok ? resolve(e.data.outcome) : reject(new Error(e.data.error)); };
+        worker.onerror = (e) => { clearTimeout(timer); worker.terminate(); e.preventDefault?.(); direct(); };
+        worker.postMessage(input);
+    });
+}
+
+async function runAutoPlan() {
     const d = autoPlan.data;
-    if (!d) return;
-    autoPlan.outcome = planWeek({ ...d, keepExisting: autoPlan.keepExisting, weights: autoPlan.weights });
-    renderAutoPlan();
+    if (!d || autoPlan.running) return;
+    autoPlan.running = true;
+    const modal = document.getElementById('autoPlanModal');
+    const body = modal.querySelector('.ap-body');
+    const progress = document.createElement('p');
+    progress.className = 'ap-progress';
+    progress.textContent = 'Calcul en cours : 6 essais complets, chacun amélioré jusqu\'à ce que plus aucun échange ne fasse mieux…';
+    body.prepend(progress);
+    modal.querySelector('#apApply').disabled = true;
+    modal.querySelector('#apRerun').disabled = true;
+    try {
+        const { affinitiesMissing, ...input } = d;
+        autoPlan.outcome = await computePlan({ ...input, keepExisting: autoPlan.keepExisting, useRealDurations: autoPlan.useRealDurations, weights: autoPlan.weights, seed: autoPlan.seed });
+        renderAutoPlan();
+    } catch (error) {
+        console.error("Calcul du planning :", error);
+        body.innerHTML = `<p class="text-red-500">Le calcul a échoué : ${escapeHTML(error.message || error)}</p>`;
+    } finally {
+        autoPlan.running = false;
+        modal.querySelector('#apRerun').disabled = false;
+    }
 }
 
 function ensureAutoPlanModal() {
@@ -422,7 +473,7 @@ function ensureAutoPlanModal() {
         </div>`;
     document.body.appendChild(modal);
     modal.querySelectorAll('.ap-close').forEach(b => b.onclick = () => modal.classList.add('hidden'));
-    modal.querySelector('#apRerun').onclick = runAutoPlan;
+    modal.querySelector('#apRerun').onclick = () => { autoPlan.seed += 1; runAutoPlan(); };
     modal.querySelector('#apApply').onclick = applyAutoPlan;
     return modal;
 }
@@ -448,12 +499,15 @@ function renderAutoPlan() {
         ${autoPlan.data.affinitiesMissing ? '<p class="ap-warn">Les affinités ne sont pas lisibles : ajoutez la règle Firebase « affinites » (voir la note de mise à jour).</p>' : ''}
         ${o.warnings.length ? `<ul class="ap-warn">${o.warnings.map(w => `<li>${escapeHTML(w)}</li>`).join('')}</ul>` : ''}
 
+        ${qualityHTML(o)}
+
         <div class="ap-options">
-            <label class="ap-check"><input type="checkbox" id="apKeep" ${autoPlan.keepExisting ? 'checked' : ''}> Garder les personnes déjà placées à la main</label>
+            <label class="ap-check"><input type="checkbox" id="apKeep" ${autoPlan.keepExisting ? 'checked' : ''}> Garder les personnes déjà placées à la main <small>(une personne en congé est retirée et remplacée)</small></label>
+            <label class="ap-check"><input type="checkbox" id="apReal" ${autoPlan.useRealDurations ? 'checked' : ''}> Utiliser les durées réelles des pointages <small>(${autoPlan.data.durations.length} chantier(s) appris)</small></label>
             <details>
                 <summary>Réglages des priorités</summary>
                 <div class="ap-weights">${Object.keys(DEFAULT_WEIGHTS).map(k => `
-                    <label><span>${WEIGHT_LABELS[k]}</span><input type="range" min="0" max="${DEFAULT_WEIGHTS[k] * 3}" step="1" value="${autoPlan.weights[k]}" data-weight="${k}"></label>`).join('')}
+                    <label><span>${WEIGHT_LABELS[k]}</span><input type="range" min="0" max="${WEIGHT_MAX[k] ?? DEFAULT_WEIGHTS[k] * 3}" step="${(WEIGHT_MAX[k] ?? 3) <= 3 ? 0.1 : 1}" value="${autoPlan.weights[k]}" data-weight="${k}"></label>`).join('')}
                     <button type="button" class="btn btn-secondary" id="apResetWeights">Valeurs par défaut</button>
                 </div>
             </details>
@@ -482,12 +536,33 @@ function renderAutoPlan() {
     `;
 
     body.querySelector('#apKeep').onchange = (e) => { autoPlan.keepExisting = e.target.checked; runAutoPlan(); };
+    body.querySelector('#apReal').onchange = (e) => { autoPlan.useRealDurations = e.target.checked; runAutoPlan(); };
     body.querySelectorAll('[data-weight]').forEach(input => input.onchange = () => {
         autoPlan.weights[input.dataset.weight] = Number(input.value);
         saveWeights(autoPlan.weights);
         runAutoPlan();
     });
     body.querySelector('#apResetWeights').onclick = () => { autoPlan.weights = { ...DEFAULT_WEIGHTS }; saveWeights(autoPlan.weights); runAutoPlan(); };
+}
+
+function qualityHTML(o) {
+    const m = o.metrics || {};
+    const ok = o.validation?.ok;
+    const tile = (label, value, good) => `<div class="ap-kpi${good === false ? ' is-bad' : ''}"><span>${label}</span><b>${value}</b></div>`;
+    return `
+        <div class="ap-quality ${ok ? 'is-ok' : 'is-ko'}">
+            <p><b>${ok ? '✓ Contrôle indépendant : aucune règle enfreinte.' : `⚠ Contrôle indépendant : ${m.hardViolations} règle(s) impossible(s) à respecter avec ces données (voir les alertes).`}</b></p>
+            <div class="ap-kpis">
+                ${tile('Pire écart d\'heures', `${m.maxHoursGap} h`, m.maxHoursGap <= Math.max(1.5, (m.minPossibleGap || 0) + 1))}
+                ${m.minPossibleGap > 0 ? tile('Écart inévitable', `${m.minPossibleGap} h`) : ''}
+                ${m.driverCoverage !== null && m.driverCoverage !== undefined ? tile('Avec conducteur', `${m.driverCoverage} %`, m.driverCoverage === 100) : ''}
+                ${m.essentialSkillCoverage !== null && m.essentialSkillCoverage !== undefined ? tile('Tâches essentielles couvertes', `${m.essentialSkillCoverage} %`) : ''}
+                ${m.continuity !== null && m.continuity !== undefined ? tile('Quelqu\'un connaît le chantier', `${m.continuity} %`) : ''}
+                ${tile('Kilomètres estimés', `${m.km} km`)}
+                ${tile('Changements', `${m.changes}`)}
+            </div>
+            <p class="ap-muted">Calculé en ${(o.computeMs / 1000).toFixed(1)} s · ${o.restarts} essais · proposition n° ${o.seed}</p>
+        </div>`;
 }
 
 async function applyAutoPlan() {

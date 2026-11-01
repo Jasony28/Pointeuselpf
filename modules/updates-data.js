@@ -1,5 +1,17 @@
 export const updatesLog = [
     {
+        version: 'v4.1.0',
+        date: '1er novembre 2026',
+        changes: [
+            "**Admin - Planification** : l'algorithme « Proposer le planning » est beaucoup plus puissant. Il fait 6 essais complets, améliore chacun jusqu'à ce que plus aucun échange ne fasse mieux, et garde le meilleur. Le calcul se fait en arrière-plan : l'écran ne fige plus.",
+            "Il tient compte des **trajets** entre chantiers (pas deux chantiers éloignés trop rapprochés pour la même personne) et des **heures imposées** des chantiers, et il cherche à réduire les kilomètres.",
+            "Il utilise la **durée réelle** de chaque chantier, apprise des pointages des 4 derniers mois (option désactivable).",
+            "**Contrôle indépendant** : chaque proposition est revérifiée par un second programme. Vous voyez « aucune règle enfreinte », ou exactement quelle règle est impossible à respecter et pourquoi.",
+            "**Remplacement** : une personne placée à la main puis mise en congé est retirée automatiquement, et seules ses places sont recalculées.",
+            "Panneau de qualité : pire écart d'heures, écart inévitable (par exemple quand il manque des conducteurs), conducteurs, compétences, kilomètres, nombre de changements.",
+        ]
+    },
+    {
         version: 'v4.0.0',
         date: '31 octobre 2026',
         changes: [
