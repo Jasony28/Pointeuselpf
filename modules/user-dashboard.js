@@ -5,7 +5,7 @@ import { getActiveChantiers, getTeamMembers } from "./data-service.js";
 import { rebuildDayTrips, localDateKey, isDayOver, returnTripId, DEPOT_ADDRESS } from "./trips.js";
 import { enhanceChantierSelect } from './chantier-picker.js';
 import { mailButtonHTML } from './mail.js';
-import { missingProfileParts } from './work-profile.js';
+import { missingProfileParts, escapeHTML } from './work-profile.js';
 
 
 let timerInterval = null;
@@ -828,12 +828,15 @@ function initUnreadMessagesListener() {
         snapshot.forEach(doc => {
             const data = doc.data();
             if (data.hiddenFor && data.hiddenFor.includes(currentUser.uid)) return;
+            if (data.mutedBy && data.mutedBy.includes(currentUser.uid)) return; // discussion en sourdine
             const myUnreadCount = (data.unreadCounts && data.unreadCounts[currentUser.uid]) ? data.unreadCounts[currentUser.uid] : 0;
             if (myUnreadCount > 0) {
                 totalUnread += myUnreadCount;
-                const otherName = data.participantNames.find(n => n !== (currentUser.displayName || 'Moi')) || 'Collègue';
+                const otherId = (data.participants || []).find(id => id !== currentUser.uid);
+                const otherName = data.type === 'group' ? (data.name || 'Groupe')
+                    : (data.memberNames?.[otherId] || (data.participantNames || []).find(n => n !== (currentUser.displayName || 'Moi')) || 'Collègue');
                 senders.add(otherName);
-                lastMessagePreview = data.lastMessage;
+                lastMessagePreview = data.lastMessage || '';
             }
         });
 
@@ -849,8 +852,8 @@ function initUnreadMessagesListener() {
                             <span class="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-white" style="background-color: var(--color-danger); box-shadow: 0 0 0 2px var(--color-surface);">${totalUnread}</span>
                         </div>
                         <div>
-                            <h3 class="font-bold text-lg" style="color: var(--color-text-base);">${isMultiple ? 'Nouveaux messages' : `Message de ${senderNames}`}</h3>
-                            <p class="text-sm line-clamp-1" style="color: var(--color-text-muted);">${isMultiple ? `Vous avez des messages de : ${senderNames}` : `"${lastMessagePreview}"`}</p>
+                            <h3 class="font-bold text-lg" style="color: var(--color-text-base);">${isMultiple ? 'Nouveaux messages' : `Message de ${escapeHTML(senderNames)}`}</h3>
+                            <p class="text-sm line-clamp-1" style="color: var(--color-text-muted);">${isMultiple ? `Vous avez des messages de : ${escapeHTML(senderNames)}` : `"${escapeHTML(lastMessagePreview)}"`}</p>
                         </div>
                     </div>
                     <div class="group-hover:translate-x-1 transition-transform" style="color: var(--color-text-subtle);">

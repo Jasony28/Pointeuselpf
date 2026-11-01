@@ -38,13 +38,39 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // 3. MESSAGERIE : messages réservés aux participants de la conversation
+    // 3. MESSAGERIE : discussions à deux et groupes, réservées à leurs membres.
+    //    Seuls les admins d'un groupe changent ses membres ; chacun peut le quitter.
     match /chats/{chatId} {
-      allow read, update: if isAuthenticated() && (request.auth.uid in resource.data.participants);
-      allow create: if isAuthenticated() && (request.auth.uid in request.resource.data.participants);
+      function members() { return resource.data.participants; }
+      function sameMembers() {
+        return request.resource.data.participants == resource.data.participants
+            && request.resource.data.get('admins', []) == resource.data.get('admins', [])
+            && request.resource.data.get('name', null) == resource.data.get('name', null);
+      }
+      function groupAdmin() { return request.auth.uid in resource.data.get('admins', []); }
+      // Quitter : seul soi-même disparaît des membres (et des admins), personne n'est ajouté
+      function leaving() {
+        return resource.data.get('type', 'direct') == 'group'
+            && resource.data.participants.toSet().difference(request.resource.data.participants.toSet()) == [request.auth.uid].toSet()
+            && request.resource.data.participants.toSet().difference(resource.data.participants.toSet()).size() == 0
+            && request.resource.data.get('admins', []).toSet().difference(resource.data.get('admins', []).toSet()).size() == 0;
+      }
+      allow read: if isApproved() && request.auth.uid in members();
+      allow create: if isApproved() && request.auth.uid in request.resource.data.participants
+                    && (request.resource.data.get('type', 'direct') != 'group'
+                        || (request.resource.data.createdBy == request.auth.uid && request.resource.data.admins == [request.auth.uid]));
+      allow update: if isApproved() && request.auth.uid in members() && (sameMembers() || groupAdmin() || leaving());
+
       match /messages/{messageId} {
-        allow read, write: if isAuthenticated() &&
-          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        function chatMember() {
+          return request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        }
+        allow read: if isApproved() && chatMember();
+        allow create: if isApproved() && chatMember() && request.resource.data.senderId == request.auth.uid;
+        // Modifier ou supprimer : l'auteur seulement ; réagir (👍…) : tout membre
+        allow update: if isApproved() && chatMember() && (
+                         (resource.data.senderId == request.auth.uid && request.resource.data.senderId == request.auth.uid)
+                      || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']));
       }
     }
 
