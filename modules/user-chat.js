@@ -30,6 +30,11 @@ let conversationsListener = null;
 let activeChatListener = null;
 let readTimer = null;
 
+// Le service worker n'affiche pas de notification pour la discussion ouverte à l'écran
+function tellActiveChat(chatId) {
+    navigator.serviceWorker?.controller?.postMessage({ type: 'ACTIVE_CHAT', chatId: chatId || null });
+}
+
 // Appelé par app.js quand on quitte la page : coupe les écoutes temps réel de la messagerie
 export function cleanup() {
     if (activeChatListener) { activeChatListener(); activeChatListener = null; }
@@ -37,6 +42,7 @@ export function cleanup() {
     clearTimeout(readTimer);
     document.removeEventListener('click', closeMenus);
     state.activeId = null;
+    tellActiveChat(null);
 }
 
 /* ------------------------------------------------------------------ Outils */
@@ -109,7 +115,7 @@ function closeMenus(e) {
 
 /* ------------------------------------------------------------------ Page */
 
-export async function render() {
+export async function render(params = {}) {
     const container = document.getElementById('page-content');
     container.innerHTML = `
         <div class="chat-shell" id="chat-shell">
@@ -150,6 +156,8 @@ export async function render() {
     getUsers().then(users => { state.users = users.filter(u => u.status === 'approved'); }).catch(console.error);
     setupEventListeners();
     loadConversations();
+    // Ouverte depuis une notification : directement sur la discussion
+    if (params.chatId) openChat(params.chatId);
 }
 
 function setupEventListeners() {
@@ -243,6 +251,7 @@ function renderConversations() {
 
 function openChat(chatId) {
     state.activeId = chatId;
+    tellActiveChat(chatId);
     state.messages = []; state.older = []; state.hasOlder = false;
     clearComposerContext();
     document.getElementById('chat-shell').classList.add('has-active');
@@ -274,6 +283,7 @@ function openChat(chatId) {
 function closeChat() {
     if (activeChatListener) { activeChatListener(); activeChatListener = null; }
     state.activeId = null;
+    tellActiveChat(null);
     document.getElementById('chat-shell')?.classList.remove('has-active');
     ['chat-header', 'messages-area', 'message-form'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
     document.getElementById('no-chat-selected')?.classList.remove('hidden');

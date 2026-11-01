@@ -1,0 +1,11 @@
+{
+  "name": "pointeuse-lpf-functions",
+  "private": true,
+  "description": "Notifications de la Pointeuse LPF (Cloud Functions)",
+  "main": "index.js",
+  "engines": { "node": "22" },
+  "dependencies": {
+    "firebase-admin": "13.5.0",
+    "firebase-functions": "6.4.0"
+  }
+}
