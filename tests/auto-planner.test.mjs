@@ -189,3 +189,13 @@ test("affinités : on peut cocher autant de collègues qu'on veut ; les binômes
     assert.equal(withLikes.validation.ok, true);
     assert.ok(withLikes.metrics.mutualPairs >= 1, `${withLikes.metrics.mutualPairs} binôme(s) réciproque(s)`);
 });
+
+test("les lignes « Congé » du planning ne sont jamais traitées comme des chantiers", () => {
+    const s = scenario(180, { people: 5, linesPerDay: 3 });
+    const who = s.users[0].displayName;
+    s.lines.push({ id: 'leave1', date: '2026-11-03', chantierId: 'LEAVE_ID', chantierName: 'Congé (Vacances)', startTime: '', teamNames: [who], id_leaveRequest: 'lr1' });
+    s.pastLines.push({ date: '2026-11-01', chantierId: 'LEAVE_ID', teamNames: [who], duration: 8 });
+    const out = planWeek({ ...s, ...FAST, seed: 1 });
+    assert.ok(!out.result.some(r => r.line.id === 'leave1'));
+    assert.equal(validatePlan(s, teamsOf(out)).ok, out.validation.ok);
+});

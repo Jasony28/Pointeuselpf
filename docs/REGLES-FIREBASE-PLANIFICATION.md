@@ -1,3 +1,6 @@
+> **Version complète prête à coller : `docs/firestore.rules`** (remplace toutes les règles d'un coup).
+> Ce fichier-ci ne décrit que l'ajout minimal pour la planification.
+
 # Règles Firebase à ajouter pour la planification automatique
 
 À coller dans **Console Firebase → projet pointeuse-lpf → Firestore Database → Règles**,

@@ -1,5 +1,12 @@
 export const updatesLog = [
     {
+        version: 'v4.3.1',
+        date: '1er novembre 2026',
+        changes: [
+            "**Admin - Planification** : les lignes « Congé » du planning ne sont plus jamais prises pour des chantiers à pourvoir.",
+        ]
+    },
+    {
         version: 'v4.3.0',
         date: '1er novembre 2026',
         changes: [

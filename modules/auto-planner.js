@@ -80,6 +80,9 @@ const plannablePeople = (users, weekStart) => users
     .map(u => ({ ...u, contract: contractHoursAt(u, weekStart) }))
     .filter(u => u.contract > 0);
 
+/** Ligne « Congé » créée par la page Congés dans le planning (pas un chantier). */
+export const isLeaveLine = (l) => l?.chantierId === 'LEAVE_ID' || !!l?.id_leaveRequest;
+
 // ---------- Durées réelles ----------
 /**
  * Apprend la durée réelle (heures totales de l'équipe) de chaque chantier à partir des pointages :
@@ -160,6 +163,7 @@ export function prepare(input) {
     const pastHours = new Float64Array(P);
     let pastTotal = 0;
     for (const l of pastLines) {
+        if (isLeaveLine(l)) continue;
         const team = (l.teamNames || []).map(n => byName.get(n)).filter(i => i !== undefined);
         if (!team.length) continue;
         if (!known.has(l.chantierId)) known.set(l.chantierId, new Int32Array(P));
@@ -175,7 +179,7 @@ export function prepare(input) {
     const L = [];
     for (const src of lines) {
         const day = days.indexOf(src.date);
-        if (day < 0) continue;
+        if (day < 0 || isLeaveLine(src)) continue; // les lignes « Congé » du planning ne sont pas des chantiers
         const c = chantierById.get(src.chantierId) || {};
         const dur = lineDuration(src, c, durations, useRealDurations);
         const before = (src.teamNames || []);
@@ -587,7 +591,7 @@ export function validatePlan(input, teamsById) {
     const items = []; // { date, who, start, end, ph, coord, name }
     let totalWork = 0;
     for (const l of lines) {
-        if (!days.includes(l.date)) continue;
+        if (!days.includes(l.date) || isLeaveLine(l)) continue;
         const team = teamsById[l.id] ?? l.teamNames ?? [];
         const c = chantierById.get(l.chantierId) || {};
         const hrs = lineDuration(l, c, durations, useRealDurations).hours;

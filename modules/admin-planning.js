@@ -358,7 +358,7 @@ const autoPlan = { data: null, outcome: null, keepExisting: true, useRealDuratio
 
 // Données réduites au strict nécessaire (transmissibles au Web Worker, sans objets Firebase)
 const pick = (o, keys) => Object.fromEntries(keys.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
-const LINE_KEYS = ['id', 'date', 'chantierId', 'chantierName', 'startTime', 'duration', 'teamNames', 'order'];
+const LINE_KEYS = ['id', 'date', 'chantierId', 'chantierName', 'startTime', 'duration', 'teamNames', 'order', 'id_leaveRequest'];
 const USER_KEYS = ['id', 'displayName', 'status', 'role', 'contractHistory', 'contractHours', 'isDriver', 'skillsSelf', 'skillsAdmin'];
 const CHANTIER_KEYS = ['id', 'name', 'teamSize', 'skillNeeds', 'totalHeuresPrevues', 'coordinates', 'fixedAppointment', 'timeWindowStart', 'timeWindowEnd'];
 
@@ -397,7 +397,7 @@ async function openAutoPlanner() {
             affinities: (affSnap?.docs || []).map(d => [d.id, pick(d.data(), ['like'])]),
             affinitiesMissing: !affSnap,
             leaves: leaveSnap.docs.map(d => pick(d.data(), ['userId', 'startDate', 'endDate', 'status'])).filter(l => l.startDate <= weekEnd && (l.endDate || l.startDate) >= weekStart),
-            pastLines: pastSnap.docs.map(d => pick(d.data(), ['date', 'chantierId', 'teamNames', 'duration'])),
+            pastLines: pastSnap.docs.map(d => pick(d.data(), ['date', 'chantierId', 'teamNames', 'duration', 'id_leaveRequest'])),
             durations: [...learnDurations(pointages, chantierList).entries()],
         };
         autoPlan.seed = 1;
