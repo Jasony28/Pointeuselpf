@@ -1,5 +1,12 @@
 export const updatesLog = [
     {
+        version: 'v4.5.1',
+        date: '1er novembre 2026',
+        changes: [
+            "**Déconnexion** : l'application se recharge après « Se déconnecter ». Sur un téléphone partagé, le compte suivant ne voit plus rien du précédent et ne reste plus bloqué au chargement.",
+        ]
+    },
+    {
         version: 'v4.5.0',
         date: '1er novembre 2026',
         changes: [

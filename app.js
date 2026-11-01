@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 import { installNativeFileSaving } from './modules/native-files.js';
 
-const APP_VERSION = 'v4.5.0';
+const APP_VERSION = 'v4.5.1';
 
 // Appli Android / iPhone : PDF et CSV proposés dans le menu « Partager » du téléphone
 installNativeFileSaving();
@@ -428,7 +428,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('show-reset-link').onclick = (e) => { e.preventDefault(); showAuthForm('reset-form'); };
     document.getElementById('show-login-link-from-register').onclick = (e) => { e.preventDefault(); showAuthForm('login-form'); };
     document.getElementById('show-login-link-from-reset').onclick = (e) => { e.preventDefault(); showAuthForm('login-form'); };
-    document.getElementById('logoutPendingBtn').onclick = () => signOut(auth);
+    // Rechargement après la déconnexion : aucune donnée ni écoute du compte précédent ne reste en mémoire
+    document.getElementById('logoutPendingBtn').onclick = () => signOut(auth).then(() => window.location.reload());
 
     // Navigation mobile
     document.getElementById('sidebar-backdrop').onclick = () => setMobileNav(false);
