@@ -76,6 +76,12 @@ export function needRowHTML(theme, value = 0) {
     </div>`;
 }
 
+/**
+ * Super admin (users/{uid}.superAdmin = true) : tous les droits d'admin,
+ * et n'est JAMAIS planifié sur les chantiers (ni par l'algorithme, ni dans la liste Équipe du planning).
+ */
+export const isSuperAdmin = (user) => user?.superAdmin === true;
+
 /** Ce qui manque au profil de travail d'un employé (pour les rappels). */
 export function missingProfileParts(user) {
     const missing = [];

@@ -940,7 +940,9 @@ async function loadProfileReminder() {
     if (!box) return;
     try {
         const snap = await getDoc(doc(db, "users", currentUser.uid));
-        const missing = missingProfileParts(snap.exists() ? snap.data() : {});
+        const data = snap.exists() ? snap.data() : {};
+        if (data.superAdmin === true) return;
+        const missing = missingProfileParts(data);
         if (!missing.length || !box.isConnected) return;
         box.className = 'wp-reminder';
         box.innerHTML = `

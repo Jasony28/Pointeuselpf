@@ -1,6 +1,6 @@
 rules_version = '2';
 // Règles Firestore de la Pointeuse LPF = règles en production + ajouts pour la planification automatique
-// (règle 1 : « affinites » exclue de la lecture générale ; règle 2 : skillsAdmin protégé ; règle 9 : affinites).
+// (règle 1 : « affinites » exclue de la lecture générale ; règle 2 : skillsAdmin et superAdmin protégés ; règle 9 : affinites).
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -17,7 +17,7 @@ service cloud.firestore {
       allow read: if isAuthenticated() && collection != 'affinites';
     }
 
-    // 2. UTILISATEURS : impossible de changer soi-même son rôle, son statut ou les notes de l'admin
+    // 2. UTILISATEURS : impossible de changer soi-même son rôle, son statut, les notes de l'admin ou le statut super admin
     match /users/{userId} {
       allow create: if isOwner(userId)
                     && request.resource.data.role == 'user'
@@ -25,7 +25,8 @@ service cloud.firestore {
       allow update: if isAdmin() || (isOwner(userId)
                     && request.resource.data.get('role', null) == resource.data.get('role', null)
                     && request.resource.data.get('status', null) == resource.data.get('status', null)
-                    && request.resource.data.get('skillsAdmin', null) == resource.data.get('skillsAdmin', null));
+                    && request.resource.data.get('skillsAdmin', null) == resource.data.get('skillsAdmin', null)
+                    && request.resource.data.get('superAdmin', null) == resource.data.get('superAdmin', null));
       allow delete: if isAdmin();
     }
 
