@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 import { installNativeFileSaving } from './modules/native-files.js';
 
-const APP_VERSION = 'v4.7.1';
+const APP_VERSION = 'v4.8.0';
 
 // Appli Android / iPhone : PDF et CSV proposés dans le menu « Partager » du téléphone
 installNativeFileSaving();
@@ -13,27 +13,49 @@ import { getFirestore, doc, getDoc, getDocFromCache, setDoc, serverTimestamp, up
 // L'événement d'installation (beforeinstallprompt) est capturé dans index.html, avant le chargement de Firebase.
 
 // --- THÈMES ---
-// Surfaces neutres et blanches pour tous les thèmes clairs : seule la couleur d'accent change.
+// Chaque thème pilote une ambiance complète : couleurs, typographie, arrondis, ombres et décor (voir styles/app.css > 11).
+// - group 'color'    : thème de couleur, suit le mode clair / sombre choisi
+// - group 'ambiance' : univers complet avec son propre mode, ignore le réglage clair / sombre
+// - cat            : thème Chat (illustrations dans themes/chat), suit le mode clair / sombre avec ses couleurs de nuit
+// - skin             : posé sur <html data-skin="…"> pour les effets propres au thème (fonds animés, néons…)
+// - fonts            : polices Google chargées à la demande, uniquement quand le thème est choisi
 // Les clés sont conservées pour rester compatibles avec le choix déjà enregistré par chaque utilisateur.
 const lightBase = { '--color-background': '#f5f6f8', '--color-surface': '#ffffff', '--color-text-base': '#0f172a', '--color-text-muted': '#64748b', '--color-border': '#e4e7ec' };
 
+// Les url() posées dans des variables CSS se résolvent depuis styles/app.css : on passe donc des adresses absolues
+const asset = file => new URL(file, document.baseURI).href;
+
+// Personnalité d'un thème de couleur : police des titres + échelle d'arrondi
+const colorTheme = (name, tagline, primary, hover, display, radius, fonts = []) => ({
+    name, tagline, preview: primary, group: 'color', skin: 'color', fonts,
+    colors: {
+        ...lightBase,
+        '--color-primary': primary,
+        '--color-primary-hover': hover,
+        '--font-display': display,
+        '--radius-scale': radius,
+    }
+});
+
 export const themes = {
-    neutre:   { name: 'Indigo',   preview: '#4f46e5', colors: { ...lightBase, '--color-primary': '#4f46e5', '--color-primary-hover': '#4338ca' } },
-    ocean:    { name: 'Océan',    preview: '#0e7490', colors: { ...lightBase, '--color-primary': '#0e7490', '--color-primary-hover': '#155e75' } },
-    limonade: { name: 'Émeraude', preview: '#047857', colors: { ...lightBase, '--color-primary': '#047857', '--color-primary-hover': '#065f46' } },
-    violette: { name: 'Violet',   preview: '#7c3aed', colors: { ...lightBase, '--color-primary': '#7c3aed', '--color-primary-hover': '#6d28d9' } },
-    magenta:  { name: 'Prune',    preview: '#a21caf', colors: { ...lightBase, '--color-primary': '#a21caf', '--color-primary-hover': '#86198f' } },
-    rubis:    { name: 'Rubis',    preview: '#be123c', colors: { ...lightBase, '--color-primary': '#be123c', '--color-primary-hover': '#9f1239' } },
-    soleil:   { name: 'Ambre',    preview: '#c2410c', colors: { ...lightBase, '--color-primary': '#c2410c', '--color-primary-hover': '#9a3412' } },
+    neutre:   colorTheme('Indigo',   'Sobre et net',     '#4f46e5', '#4338ca', "'Inter', sans-serif", '1'),
+    ocean:    colorTheme('Océan',    'Doux et arrondi',  '#0e7490', '#155e75', "'Manrope', sans-serif", '1.4', ['Manrope:wght@600;700;800']),
+    limonade: colorTheme('Émeraude', 'Frais et naturel', '#047857', '#065f46', "'DM Sans', sans-serif", '1.1', ['DM+Sans:wght@500;600;700']),
+    violette: colorTheme('Violet',   'Moderne',          '#7c3aed', '#6d28d9', "'Sora', sans-serif", '1.2', ['Sora:wght@500;600;700']),
+    magenta:  colorTheme('Prune',    'Élégant',          '#a21caf', '#86198f', "'Fraunces', serif", '1.3', ['Fraunces:opsz,wght@9..144,600;9..144,700']),
+    rubis:    colorTheme('Rubis',    'Tranchant',        '#be123c', '#9f1239', "'Space Grotesk', sans-serif", '0.5', ['Space+Grotesk:wght@500;600;700']),
+    soleil:   colorTheme('Ambre',    'Chaleureux',       '#c2410c', '#9a3412', "'Outfit', sans-serif", '1', ['Outfit:wght@500;600;700']),
     carbone:  {
-        name: 'Sombre', preview: '#0f172a', dark: true,
+        name: 'Sombre', tagline: 'Toujours sombre', preview: '#0f172a', dark: true, group: 'color', skin: 'color',
         colors: { '--color-primary': '#6366f1', '--color-primary-hover': '#818cf8', '--color-background': '#0b1120', '--color-surface': '#111827', '--color-text-base': '#e5e7eb', '--color-text-muted': '#94a3b8', '--color-border': '#1f2937' }
     },
     // Thème « Chat » : illustrations dans themes/chat (scripts/theme-chat.py), suit le mode Clair / Sombre
     chat: {
         name: 'Chat',
+        tagline: 'Jour roux, nuit noire',
         preview: '#E9965A',
-        previewBackground: "#FBEBD8 url('./themes/chat/chat-coucou-jour.svg') center 22% / 230% no-repeat",
+        previewBackground: `#FBEBD8 url("${asset('./themes/chat/chat-coucou-jour.svg')}") center 22% / 230% no-repeat`,
+        group: 'ambiance',
         cat: true,
         colors: {
             '--color-primary': '#B45F25',
@@ -56,50 +78,108 @@ export const themes = {
             '--glass-blur': 'blur(10px)',
         }
     },
-    chat_clair: {
-        name: 'Maine Coon ☀️',
-        preview: '#f59e0b',
-        glass: true,
+    cyber: {
+        name: 'Cyber',
+        tagline: 'Minimal, néon vert',
+        preview: '#22e584',
+        group: 'ambiance',
+        skin: 'cyber',
+        dark: true,
+        fonts: ['Space+Grotesk:wght@400;500;600;700'],
+        previewBackground: 'linear-gradient(rgba(34, 229, 132, 0.08) 1px, transparent 1px) 0 0 / 10px 10px, linear-gradient(90deg, rgba(34, 229, 132, 0.08) 1px, transparent 1px) 0 0 / 10px 10px, #08090b',
         colors: {
-            '--color-primary': '#d97706',
-            '--color-primary-hover': '#b45309',
-            '--color-background': '#fdfbf7',
-            '--color-surface': 'rgba(255, 255, 255, 0.75)',
-            '--color-text-base': '#291e1a',
-            '--color-text-muted': '#785b4d',
-            '--color-border': 'rgba(120, 91, 77, 0.18)',
-            '--bg-image': 'linear-gradient(rgba(253, 251, 247, 0.5), rgba(253, 251, 247, 0.85)), url("./maincoon3.jpg")',
-            '--bg-size': 'cover',
-            '--bg-position': 'center',
-            '--bg-attachment': 'fixed',
-            '--bg-repeat': 'no-repeat',
-            '--glass-blur': 'blur(16px)',
+            '--color-primary': '#22e584',
+            '--color-primary-hover': '#5cffaa',
+            '--color-on-primary': '#04140b',
+            '--color-background': '#08090b',
+            '--color-surface': '#0f1114',
+            '--color-text-base': '#e6e8eb',
+            '--color-text-muted': '#7d858f',
+            '--color-border': '#1d2126',
+            '--sidebar-bg': '#050607',
+            '--sidebar-bg-2': '#14171b',
+            '--sidebar-active-bg': 'rgba(34, 229, 132, 0.08)',
+            '--font-sans': "'Space Grotesk', 'Inter', sans-serif",
+            '--font-display': "'JetBrains Mono', monospace",
+            '--radius-scale': '0.25',
         }
     },
-    chat_sombre: {
-        name: 'Maine Coon 🌙',
-        preview: '#291e1a',
+    nuit: {
+        name: 'Nuit Étoilée',
+        tagline: 'Ciel, étoiles, verre',
+        preview: '#6d7dff',
+        group: 'ambiance',
+        skin: 'nuit',
         dark: true,
         glass: true,
+        fonts: ['Sora:wght@400;500;600;700'],
+        previewBackground: 'radial-gradient(1.5px 1.5px at 20% 30%, #fff, transparent), radial-gradient(1px 1px at 70% 20%, #fff, transparent), radial-gradient(1px 1px at 45% 70%, #ffd479, transparent), radial-gradient(1.5px 1.5px at 85% 60%, #fff, transparent), radial-gradient(120% 80% at 80% 0%, #2a1f6b, transparent 60%), linear-gradient(180deg, #0a0f2c, #05071a)',
         colors: {
-            '--color-primary': '#f59e0b',
-            '--color-primary-hover': '#fbbf24',
-            '--color-background': '#1c1917',
-            '--color-surface': 'rgba(28, 25, 23, 0.75)',
-            '--color-text-base': '#fef3c7',
-            '--color-text-muted': '#d6d3d1',
-            '--color-border': 'rgba(245, 158, 11, 0.15)',
-            '--bg-image': 'linear-gradient(rgba(28, 25, 23, 0.75), rgba(28, 25, 23, 0.95)), url("./maincoon1.jpg")',
-            '--bg-size': 'cover',
-            '--bg-position': 'center',
-            '--bg-attachment': 'fixed',
-            '--bg-repeat': 'no-repeat',
-            '--glass-blur': 'blur(16px)',
+            '--color-primary': '#6d7dff',
+            '--color-primary-hover': '#8a97ff',
+            '--color-background': '#05071a',
+            '--color-surface': 'rgba(18, 24, 62, 0.62)',
+            '--color-text-base': '#eef0ff',
+            '--color-text-muted': '#9aa3cf',
+            '--color-border': 'rgba(150, 165, 255, 0.16)',
+            '--sidebar-bg': '#070a24',
+            '--sidebar-bg-2': '#151b4a',
+            '--sidebar-active-bg': 'rgba(109, 125, 255, 0.16)',
+            '--glass-blur': 'blur(14px)',
+            '--font-sans': "'Sora', 'Inter', sans-serif",
+            '--font-display': "'Sora', sans-serif",
+            '--radius-scale': '1.6',
+        }
+    },
+    arcade: {
+        name: 'Arcade 8-bit',
+        tagline: 'Rétro, pixels, néons',
+        preview: '#ff2e88',
+        group: 'ambiance',
+        skin: 'arcade',
+        dark: true,
+        fonts: ['Press+Start+2P', 'Pixelify+Sans:wght@500;600;700'],
+        previewBackground: 'repeating-linear-gradient(90deg, rgba(0, 240, 255, 0.35) 0 1px, transparent 1px 12px) 0 100% / 100% 40% no-repeat, linear-gradient(transparent 58%, rgba(255, 46, 136, 0.6) 58%, rgba(255, 46, 136, 0.6) 60%, transparent 60%), linear-gradient(180deg, #12022e, #2b0645)',
+        colors: {
+            '--color-primary': '#ff2e88',
+            '--color-primary-hover': '#ff5ca3',
+            '--color-background': '#0d0221',
+            '--color-surface': '#1a0838',
+            '--color-text-base': '#f6f0ff',
+            '--color-text-muted': '#b39ddb',
+            '--color-border': '#3b1a6e',
+            '--color-success': '#2ee87a',
+            '--color-warning': '#ffb020',
+            '--color-danger': '#ff3b5c',
+            '--sidebar-bg': '#08011a',
+            '--sidebar-bg-2': '#22094a',
+            '--sidebar-active-bg': 'rgba(0, 240, 255, 0.1)',
+            '--font-display': "'Pixelify Sans', monospace",
+            '--font-pixel': "'Press Start 2P', monospace",
+            '--radius-scale': '0',
         }
     }
 };
 
-const themeVariables = ['--bg-image', '--bg-size', '--bg-position', '--bg-attachment', '--bg-repeat', '--glass-blur'];
+// Toutes les variables qu'un thème peut poser : on les retire avant d'appliquer le suivant
+const themeVariables = [...new Set(Object.values(themes).flatMap(theme => [...Object.keys(theme.colors), ...Object.keys(theme.darkColors || {})]))];
+
+// Polices propres aux thèmes, chargées une seule fois et seulement si le thème est utilisé
+const loadedFonts = new Set();
+function loadThemeFonts(fonts = []) {
+    const missing = fonts.filter(font => !loadedFonts.has(font));
+    if (!missing.length) return;
+    missing.forEach(font => loadedFonts.add(font));
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = `https://fonts.googleapis.com/css2?${missing.map(font => `family=${font}`).join('&')}&display=swap`;
+    document.head.appendChild(link);
+}
+
+// Page Paramètres : charge d'un coup les polices de tous les thèmes pour les aperçus
+export function preloadThemeFonts() {
+    loadThemeFonts(Object.values(themes).flatMap(theme => theme.fonts || []));
+}
 
 // Mode clair / sombre, indépendant de la couleur choisie ('light' | 'dark' | 'auto' = réglage du téléphone)
 const darkBase = { '--color-background': '#0b1120', '--color-surface': '#111827', '--color-text-base': '#e5e7eb', '--color-text-muted': '#94a3b8', '--color-border': '#1f2937' };
@@ -118,18 +198,23 @@ systemDark.addEventListener('change', () => {
     if (getAppMode() === 'auto') applyTheme(localStorage.getItem('appTheme') || 'neutre');
 });
 
+// Thèmes retirés : ceux qui les avaient choisis passent sur le plus proche
+const removedThemes = { chat_clair: 'chat', chat_sombre: 'chat' };
+
 export function applyTheme(themeName) {
-    const theme = themes[themeName] || themes['neutre'];
+    if (!themes[themeName]) themeName = removedThemes[themeName] || 'neutre';
+    const theme = themes[themeName];
     const root = document.documentElement;
     const mode = getAppMode();
     const wantsDark = mode === 'dark' || (mode === 'auto' && systemDark.matches);
-    // Les thèmes Maine Coon gardent leur propre ambiance ; les autres couleurs suivent le mode choisi
-    // (le thème Chat a ses propres couleurs de nuit)
-    const dark = theme.glass ? !!theme.dark : (theme.dark || wantsDark);
+    // Les ambiances gardent leur propre mode ; les thèmes de couleur suivent le mode choisi
+    // (le thème Chat suit aussi le mode, avec ses propres couleurs de nuit)
+    const dark = (theme.group === 'ambiance' && !theme.cat) ? !!theme.dark : (theme.dark || wantsDark);
     const colors = theme.cat
         ? (dark ? theme.darkColors : theme.colors)
-        : (dark && !theme.dark && !theme.glass) ? { ...theme.colors, ...darkBase } : theme.colors;
+        : (dark && !theme.dark) ? { ...theme.colors, ...darkBase } : theme.colors;
 
+    loadThemeFonts(theme.fonts);
     themeVariables.forEach(key => root.style.removeProperty(key));
     for (const [key, value] of Object.entries(colors)) {
         root.style.setProperty(key, value);
@@ -137,6 +222,9 @@ export function applyTheme(themeName) {
     root.classList.toggle('dark', dark);
     root.classList.toggle('glass', !!theme.glass || !!theme.cat);
     root.classList.toggle('cat', !!theme.cat);
+    if (theme.skin) root.dataset.skin = theme.skin;
+    else delete root.dataset.skin;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', colors['--color-background'] || '#0f172a');
 
     applyChartDefaults();
     localStorage.setItem('appTheme', themeName);
@@ -146,7 +234,7 @@ export function applyTheme(themeName) {
 function applyChartDefaults() {
     if (!window.Chart) return;
     const styles = getComputedStyle(document.documentElement);
-    window.Chart.defaults.font.family = 'Inter, ui-sans-serif, system-ui, sans-serif';
+    window.Chart.defaults.font.family = styles.getPropertyValue('--font-sans').trim() || 'Inter, ui-sans-serif, system-ui, sans-serif';
     window.Chart.defaults.font.size = 12;
     window.Chart.defaults.color = styles.getPropertyValue('--color-text-muted').trim();
     window.Chart.defaults.borderColor = styles.getPropertyValue('--color-border').trim();

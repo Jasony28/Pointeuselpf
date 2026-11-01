@@ -6,7 +6,7 @@ module.exports = {
     theme: {
         extend: {
             fontFamily: {
-                sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+                sans: ['var(--font-sans)'],
                 mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
             },
             colors: {
@@ -20,7 +20,8 @@ module.exports = {
                 },
                 primary: 'var(--color-primary)',
             },
-            borderRadius: { DEFAULT: '6px', md: '7px', lg: '10px', xl: '14px', '2xl': '18px' },
+            // Arrondis pilotés par le thème (--radius-scale, voir styles/app.css)
+            borderRadius: { DEFAULT: 'calc(6px * var(--radius-scale))', md: 'calc(7px * var(--radius-scale))', lg: 'calc(10px * var(--radius-scale))', xl: 'calc(14px * var(--radius-scale))', '2xl': 'calc(18px * var(--radius-scale))' },
             zIndex: { 60: '60' },
         },
     },

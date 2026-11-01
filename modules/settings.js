@@ -1,4 +1,4 @@
-import { pageContent, currentUser, showInfoModal, showToast, db, themes, applyTheme, showUpdatesModal, getAppMode, setAppMode } from "../app.js";
+import { pageContent, currentUser, showInfoModal, showToast, db, themes, applyTheme, preloadThemeFonts, showUpdatesModal, getAppMode, setAppMode } from "../app.js";
 import { getAuth, signOut, sendPasswordResetEmail, updateEmail, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { doc, updateDoc, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { updatesLog } from "./updates-data.js";
@@ -97,13 +97,12 @@ export async function render() {
                     <button type="button" data-mode="dark" style="flex: 1;">Sombre</button>
                     <button type="button" data-mode="auto" style="flex: 1;">Automatique</button>
                 </div>
-                <div id="theme-selector" class="grid grid-cols-3 sm:grid-cols-5 gap-3 mt-2">
-                    ${Object.entries(themes).map(([key, theme]) => `
-                        <button class="theme-option flex flex-col items-center p-3 rounded-lg border-2 transition-all" data-theme-key="${key}" style="border-color: transparent;" aria-label="Thème ${theme.name}">
-                            <div class="w-10 h-10 rounded-full mb-2 border shadow-inner" style="background: ${theme.previewBackground || theme.preview}; border-color: var(--color-border);"></div>
-                            <span class="text-sm font-medium" style="color: var(--color-text-base);">${theme.name}</span>
-                        </button>
-                    `).join('')}
+                <p id="mode-hint" class="mode-hint" hidden>Cette ambiance a son propre mode d'affichage.</p>
+                <div id="theme-selector">
+                    <p class="theme-group-label">Couleurs</p>
+                    <div class="theme-grid">${renderThemeOptions('color')}</div>
+                    <p class="theme-group-label">Ambiances</p>
+                    <div class="theme-grid">${renderThemeOptions('ambiance')}</div>
                 </div>
             </div>
 
@@ -306,6 +305,7 @@ function setupEventListeners() {
     };
 
     // --- THÈMES ---
+    preloadThemeFonts();
     updateThemeSelectionUI(localStorage.getItem('appTheme') || 'neutre');
     document.querySelectorAll('.theme-option').forEach(option => {
         option.addEventListener('click', () => {
@@ -490,16 +490,46 @@ function waitForInstallPrompt(timeoutMs) {
     });
 }
 
+// Carte de choix d'un thème : une mini-appli (menu, barre, carte, bouton) dessinée dans ses couleurs
+function renderThemeOptions(group) {
+    return Object.entries(themes).filter(([, theme]) => theme.group === group).map(([key, theme]) => {
+        const c = theme.colors;
+        const vars = [
+            `--tm-bg: ${theme.previewBackground || c['--color-background']}`,
+            `--tm-surface: ${c['--color-surface']}`,
+            `--tm-text: ${c['--color-text-base']}`,
+            `--tm-border: ${c['--color-border']}`,
+            `--tm-primary: ${c['--color-primary']}`,
+            `--tm-r: ${c['--radius-scale'] || 1}`,
+            `--tm-font: ${c['--font-display'] || 'var(--font-sans)'}`,
+            c['--sidebar-bg'] ? `--tm-side: ${c['--sidebar-bg']}` : '',
+        ].filter(Boolean).join('; ');
+        return `
+            <button type="button" class="theme-option" data-theme-key="${key}" style="${vars.replace(/"/g, '&quot;')}" aria-label="Thème ${theme.name}" aria-pressed="false">
+                <span class="theme-mini" aria-hidden="true">
+                    <span class="tm-side"></span>
+                    <span class="tm-body"><span class="tm-bar"></span><span class="tm-card"><span class="tm-btn"></span></span></span>
+                </span>
+                <span class="theme-option-name">${theme.name}</span>
+                <span class="theme-option-tagline">${theme.tagline || ''}</span>
+                <span class="theme-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+            </button>
+        `;
+    }).join('');
+}
+
 function updateThemeSelectionUI(selectedKey) {
     document.querySelectorAll('.theme-option').forEach(option => {
-        if (option.dataset.themeKey === selectedKey) {
-            option.style.borderColor = 'var(--color-primary)';
-            option.style.boxShadow = '0 0 0 2px var(--color-primary)';
-        } else {
-            option.style.borderColor = 'transparent';
-            option.style.boxShadow = 'none';
-        }
+        const selected = option.dataset.themeKey === selectedKey;
+        option.classList.toggle('is-selected', selected);
+        option.setAttribute('aria-pressed', selected);
     });
+    // Les ambiances ont leur propre mode (sauf Chat) : le choix clair / sombre ne s'applique alors pas
+    const theme = themes[selectedKey];
+    const locked = theme?.group === 'ambiance' && !theme.cat;
+    document.getElementById('mode-selector')?.classList.toggle('is-locked', locked);
+    const hint = document.getElementById('mode-hint');
+    if (hint) hint.hidden = !locked;
 }
 
 /**
