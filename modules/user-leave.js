@@ -79,15 +79,15 @@ export async function render() {
                             </div>
                         </div>
 
-                        <div class="lv-dates">
-                            <div class="lv-field">
-                                <label for="leave-start-date" class="lv-label" id="lv-start-label">Du</label>
-                                <input type="date" id="leave-start-date" class="input" required>
+                        <div class="lv-field">
+                            <div class="lv-cal-top">
+                                <span class="lv-label">Dates</span>
+                                <button type="button" id="lv-cal-clear" class="lv-cal-clear" hidden>Effacer</button>
                             </div>
-                            <div class="lv-field" id="lv-end-field">
-                                <label for="leave-end-date" class="lv-label">Au</label>
-                                <input type="date" id="leave-end-date" class="input">
-                            </div>
+                            <input type="hidden" id="leave-start-date">
+                            <input type="hidden" id="leave-end-date">
+                            <div id="lv-calendar" class="lv-cal"></div>
+                            <p id="lv-cal-hint" class="lv-cal-hint"></p>
                         </div>
 
                         <label class="lv-check">
@@ -152,10 +152,122 @@ function setMinimumLeaveDate() {
     minDate.setDate(minDate.getDate() + MIN_NOTICE_DAYS);
     const minDateString = toKey(minDate);
 
-    // On bloque les calendriers HTML
+    // On bloque le calendrier
     document.getElementById('leave-start-date').min = minDateString;
     document.getElementById('leave-end-date').min = minDateString;
     document.getElementById('lv-min-date').textContent = minDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    calendar.min = minDateString;
+    calendar.month = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+    renderCalendar();
+}
+
+// =============================================
+// CALENDRIER DE SÉLECTION DES DATES
+// =============================================
+
+// Premier appui = début, second appui = fin (en mode « plusieurs jours »)
+const calendar = { min: '', month: null, start: '', end: '', pickingEnd: false };
+
+function isSingleDayMode() {
+    return document.getElementById('single-day-leave')?.checked;
+}
+
+function renderCalendar() {
+    const container = document.getElementById('lv-calendar');
+    if (!container || !calendar.month) return;
+    const year = calendar.month.getFullYear(), month = calendar.month.getMonth();
+    const minMonth = parseDay(calendar.min);
+    const canGoBack = year > minMonth.getFullYear() || (year === minMonth.getFullYear() && month > minMonth.getMonth());
+    const today = toKey(new Date());
+
+    // Jours où j'ai déjà un congé (approuvé ou en attente)
+    const myLeaveDays = new Set();
+    myRequests().filter(r => r.status !== 'refused').forEach(r => {
+        const end = parseDay(r.endDate || r.startDate);
+        for (const d = parseDay(r.startDate); d <= end; d.setDate(d.getDate() + 1)) myLeaveDays.add(toKey(d));
+    });
+
+    const offset = (new Date(year, month, 1).getDay() + 6) % 7;
+    const count = new Date(year, month + 1, 0).getDate();
+    const cells = Array.from({ length: offset }, () => '<span></span>');
+    for (let day = 1; day <= count; day++) {
+        const date = new Date(year, month, day);
+        const key = toKey(date);
+        const dow = date.getDay();
+        const disabled = key < calendar.min;
+        const inRange = calendar.start && calendar.end && key > calendar.start && key < calendar.end;
+        const classes = [
+            'lv-cal-day',
+            disabled && 'is-disabled',
+            (dow === 0 || dow === 6) && 'is-weekend',
+            key === today && 'is-today',
+            key === calendar.start && 'is-start',
+            key === calendar.end && 'is-end',
+            inRange && 'is-in-range',
+            myLeaveDays.has(key) && 'has-leave',
+        ].filter(Boolean).join(' ');
+        const label = date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+        cells.push(`<button type="button" class="${classes}" data-key="${key}" ${disabled ? 'disabled' : ''}
+            aria-pressed="${key === calendar.start || key === calendar.end || !!inRange}" aria-label="${label}${myLeaveDays.has(key) ? ' (déjà en congé)' : ''}"><span>${day}</span></button>`);
+    }
+
+    container.innerHTML = `
+        <div class="lv-cal-head">
+            <button type="button" class="lv-cal-nav" data-cal="prev" aria-label="Mois précédent" ${canGoBack ? '' : 'disabled'}>${ICONS.prev}</button>
+            <strong class="lv-cal-month">${capitalize(calendar.month.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }))}</strong>
+            <button type="button" class="lv-cal-nav" data-cal="next" aria-label="Mois suivant">${ICONS.next}</button>
+        </div>
+        <div class="lv-cal-grid" role="group" aria-label="Choix des dates">
+            ${['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(d => `<span class="lv-cal-wd">${d}</span>`).join('')}
+            ${cells.join('')}
+        </div>
+        ${myLeaveDays.size ? '<p class="lv-cal-legend"><i></i>Déjà en congé (approuvé ou en attente)</p>' : ''}
+    `;
+
+    const hint = document.getElementById('lv-cal-hint');
+    if (isSingleDayMode()) hint.textContent = calendar.start ? '' : 'Touchez le jour d\'absence.';
+    else if (!calendar.start) hint.textContent = 'Touchez le premier jour, puis le dernier.';
+    else if (calendar.pickingEnd) hint.textContent = 'Touchez maintenant le dernier jour (ou le même pour une seule journée).';
+    else hint.textContent = '';
+    hint.hidden = !hint.textContent;
+    document.getElementById('lv-cal-clear').hidden = !calendar.start;
+}
+
+function setCalendarDates(start, end) {
+    calendar.start = start;
+    calendar.end = end;
+    document.getElementById('leave-start-date').value = start;
+    document.getElementById('leave-end-date').value = end;
+    renderCalendar();
+    updatePreview();
+}
+
+function onCalendarClick(e) {
+    const nav = e.target.closest('[data-cal]');
+    if (nav) {
+        calendar.month = new Date(calendar.month.getFullYear(), calendar.month.getMonth() + (nav.dataset.cal === 'next' ? 1 : -1), 1);
+        renderCalendar();
+        return;
+    }
+    const dayBtn = e.target.closest('.lv-cal-day');
+    if (!dayBtn || dayBtn.disabled) return;
+    const key = dayBtn.dataset.key;
+
+    if (isSingleDayMode()) {
+        calendar.pickingEnd = false;
+        setCalendarDates(key, key);
+    } else if (!calendar.pickingEnd || key < calendar.start) {
+        calendar.pickingEnd = true;
+        setCalendarDates(key, key);
+    } else {
+        calendar.pickingEnd = false;
+        setCalendarDates(calendar.start, key);
+    }
+}
+
+function resetCalendar() {
+    calendar.pickingEnd = false;
+    setCalendarDates('', '');
 }
 
 async function updatePlanningOnLeaveChange(docId, leaveData, newStatus, existingBatch = null) {
@@ -209,28 +321,16 @@ function setupEventListeners() {
     });
     document.getElementById('leaveRequestForm').addEventListener('submit', submitLeaveRequest);
 
-    const startDateInput = document.getElementById('leave-start-date');
-    const endDateInput = document.getElementById('leave-end-date');
-    const singleDayRadio = document.getElementById('single-day-leave');
+    document.getElementById('lv-calendar').addEventListener('click', onCalendarClick);
+    document.getElementById('lv-cal-clear').addEventListener('click', resetCalendar);
 
+    // Passage en « un seul jour » : on garde le premier jour choisi
     const syncSpan = () => {
-        const single = singleDayRadio.checked;
-        document.getElementById('lv-end-field').classList.toggle('hidden', single);
-        document.getElementById('lv-start-label').textContent = single ? 'Le' : 'Du';
-        endDateInput.disabled = single;
-        if (single) endDateInput.value = startDateInput.value;
-        updatePreview();
+        calendar.pickingEnd = false;
+        if (isSingleDayMode() && calendar.start) setCalendarDates(calendar.start, calendar.start);
+        else { renderCalendar(); updatePreview(); }
     };
     document.querySelectorAll('input[name="leave-span"]').forEach(r => r.addEventListener('change', syncSpan));
-
-    startDateInput.addEventListener('change', () => {
-        if (singleDayRadio.checked || !endDateInput.value || endDateInput.value < startDateInput.value) {
-            endDateInput.value = startDateInput.value;
-        }
-        if (startDateInput.value) endDateInput.min = startDateInput.value;
-        updatePreview();
-    });
-    endDateInput.addEventListener('change', updatePreview);
 
     const partial = document.getElementById('leave-partial');
     partial.addEventListener('change', () => {
@@ -343,6 +443,7 @@ async function loadAllRequestsAndDisplayList() {
         const snapshot = await getDocs(q);
         leaveRequestsCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         if (!document.getElementById('leave-list-container')) return;
+        renderCalendar();
         renderSummary();
         renderMyRequests();
         displayLeaveList();
@@ -520,6 +621,11 @@ async function submitLeaveRequest(e) {
     const startTime = document.getElementById('leave-start-time').value;
     const endTime = document.getElementById('leave-end-time').value;
 
+    if (!startDate) {
+        showInfoModal("Attention", "Choisissez vos dates dans le calendrier.");
+        return;
+    }
+
     // --- SÉCURITÉ : VÉRIFICATION STRICTE DES 7 JOURS EN JAVASCRIPT ---
     const today = new Date();
     today.setHours(0,0,0,0);
@@ -588,6 +694,7 @@ async function submitLeaveRequest(e) {
         await addDoc(collection(db, "leaveRequests"), requestData);
         showInfoModal("Succès", "Votre demande a été envoyée au bureau. Vous serez averti(e) de son statut.");
         form.reset();
+        resetCalendar();
         document.getElementById('single-day-leave').dispatchEvent(new Event('change'));
         document.getElementById('leave-partial').dispatchEvent(new Event('change'));
         document.getElementById('custom-reason-container').classList.add('hidden');
@@ -636,6 +743,10 @@ function countWeekdays(startKey, endKey) {
 
 function formatDays(days) {
     return Number.isInteger(days) ? String(days) : days.toFixed(1).replace('.', ',');
+}
+
+function capitalize(str) {
+    return str ? str.charAt(0).toUpperCase() + str.slice(1) : '';
 }
 
 function initials(name = '') {
