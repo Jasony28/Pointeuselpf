@@ -1,5 +1,18 @@
 export const updatesLog = [
     {
+        version: 'v4.3.2',
+        date: '1er novembre 2026',
+        changes: [
+            "📣 **Important : complétez votre profil de travail (1 minute)**",
+            "Les plannings vont maintenant être préparés automatiquement. Pour qu'on vous mette sur les chantiers où vous êtes le plus à l'aise, et avec les collègues que vous appréciez, on a besoin de vous.",
+            "👉 Allez dans **Mes statistiques**, partie **Mon profil de travail**, et remplissez :",
+            "🚗 **Conducteur** : touchez « Je suis conducteur·rice » si vous pouvez conduire la voiture de l'équipe, sinon « Je ne conduis pas ».",
+            "⭐ **Mes compétences** : donnez-vous une note de 1 (pas à l'aise) à 5 (très à l'aise) pour chaque tâche : lits & linge, salles de bain, cuisine, sols, poussière, vitres, repassage, gros nettoyage. Soyez honnête, c'est pour vous faciliter la vie.",
+            "💚 **Avec qui j'aime travailler** : cochez tous les collègues avec qui vous aimez travailler. 🔒 Seul l'administrateur le voit, jamais vos collègues.",
+            "Tout s'enregistre tout seul. Quand c'est fini, vous voyez « ✓ Profil complet ». Merci !",
+        ]
+    },
+    {
         version: 'v4.3.1',
         date: '1er novembre 2026',
         changes: [
