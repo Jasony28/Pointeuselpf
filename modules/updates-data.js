@@ -1,5 +1,12 @@
 export const updatesLog = [
     {
+        version: 'v4.7.1',
+        date: '1er novembre 2026',
+        changes: [
+            "**Notifications - Téléphone partagé** : après « Déconnexion », le téléphone ne reçoit plus les notifications de ce compte. Le compte suivant se voit proposer de les activer pour lui.",
+        ]
+    },
+    {
         version: 'v4.7.0',
         date: '1er novembre 2026',
         changes: [

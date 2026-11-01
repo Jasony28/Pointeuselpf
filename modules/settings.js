@@ -2,7 +2,7 @@ import { pageContent, currentUser, showInfoModal, showToast, db, themes, applyTh
 import { getAuth, signOut, sendPasswordResetEmail, updateEmail, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { doc, updateDoc, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { updatesLog } from "./updates-data.js";
-import { getPushState, getPrefs, savePrefs, enablePush, disablePush, showTestNotification } from "./push.js";
+import { getPushState, getPrefs, savePrefs, enablePush, disablePush, forgetDeviceOnLogout, showTestNotification } from "./push.js";
 
 const auth = getAuth();
 
@@ -346,7 +346,10 @@ function setupEventListeners() {
     };
 
     // --- DÉCONNEXION ---
-    document.getElementById('logoutBtnSettings').onclick = () => signOut(auth).then(() => window.location.reload()); // rien du compte précédent ne reste en mémoire
+    document.getElementById('logoutBtnSettings').onclick = async () => {
+        await forgetDeviceOnLogout(); // les notifications de ce compte ne s'affichent plus sur ce téléphone
+        signOut(auth).then(() => window.location.reload()); // rien du compte précédent ne reste en mémoire
+    };
 }
 
 // Carte « Notifications » : bouton d'activation selon l'appareil, cases par type, notification de test

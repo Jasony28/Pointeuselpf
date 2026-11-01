@@ -1,13 +1,15 @@
 // Notifications sur le téléphone (Firebase Cloud Messaging).
 // Le jeton de l'appareil est rangé dans users/{uid}/pushTokens/{jeton} : seul le serveur s'en sert pour envoyer.
 import { getApp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js";
-import { doc, setDoc, deleteDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { doc, getDoc, setDoc, deleteDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, isNativeApp } from "../app.js";
 
 // Clé web publique (Paramètres du projet → Cloud Messaging → Certificats Web Push) : elle peut être dans le code
 const VAPID_KEY = 'BHhKeM_C4IrICje6WSMd5hTJtIO87pwnQwwcpNouY__n7iTpR_N4Ha3bWtIXzHrNbOuz7zKD5JXdVlb8d3zYrD0';
-const TOKEN_KEY = 'pushToken';
-const LAST_SEEN_KEY = 'pushTokenSeen';
+// Gardés par compte : sur un téléphone partagé, chaque compte a son propre abonnement
+const tokenKey = () => `pushToken:${currentUser?.uid}`;
+const seenKey = () => `pushTokenSeen:${currentUser?.uid}`;
+const LEGACY_TOKEN_KEY = 'pushToken'; // v4.7.0 : clé commune à tous les comptes
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 // rappels = « As-tu oublié de pointer ? » (pointage oublié ou qui dépasse la durée prévue de plus de 30 min)
@@ -34,7 +36,7 @@ export function getPushState() {
     if (!supported) return 'unsupported';
     if (Notification.permission === 'denied') return 'denied';
     if (Notification.permission === 'default') return 'default';
-    return localStorage.getItem(TOKEN_KEY) ? 'enabled' : 'granted';
+    return localStorage.getItem(tokenKey()) ? 'enabled' : 'granted';
 }
 
 export function getPrefs() {
@@ -57,7 +59,7 @@ async function getMessagingApi() {
 }
 
 async function saveToken(token) {
-    const previous = localStorage.getItem(TOKEN_KEY);
+    const previous = localStorage.getItem(tokenKey());
     const ref = doc(db, "users", currentUser.uid, "pushTokens", token);
     const data = { platform: getPlatform(), lastSeen: serverTimestamp() };
     if (previous !== token) data.createdAt = serverTimestamp();
@@ -65,8 +67,8 @@ async function saveToken(token) {
     if (previous && previous !== token) {
         await deleteDoc(doc(db, "users", currentUser.uid, "pushTokens", previous)).catch(() => {});
     }
-    localStorage.setItem(TOKEN_KEY, token);
-    localStorage.setItem(LAST_SEEN_KEY, String(Date.now()));
+    localStorage.setItem(tokenKey(), token);
+    localStorage.setItem(seenKey(), String(Date.now()));
 }
 
 /** Demande l'autorisation puis abonne cet appareil. Renvoie le nouvel état. */
@@ -83,15 +85,37 @@ export async function enablePush() {
 
 /** Désabonne cet appareil (les autres appareils de la personne restent abonnés). */
 export async function disablePush() {
-    const token = localStorage.getItem(TOKEN_KEY);
+    const token = localStorage.getItem(tokenKey());
     try {
         const { messaging, deleteToken } = await getMessagingApi();
         await deleteToken(messaging);
     } catch (error) { console.warn("Jeton non supprimé côté Firebase :", error); }
     if (token) await deleteDoc(doc(db, "users", currentUser.uid, "pushTokens", token)).catch(() => {});
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(LAST_SEEN_KEY);
+    localStorage.removeItem(tokenKey());
+    localStorage.removeItem(seenKey());
     return getPushState();
+}
+
+/**
+ * Déconnexion : ce téléphone ne reçoit plus les notifications de ce compte
+ * (l'autorisation du navigateur reste, le compte suivant pourra s'abonner en un appui).
+ */
+export async function forgetDeviceOnLogout() {
+    const token = localStorage.getItem(tokenKey());
+    if (token) await deleteDoc(doc(db, "users", currentUser.uid, "pushTokens", token)).catch(() => {});
+    localStorage.removeItem(tokenKey());
+    localStorage.removeItem(seenKey());
+}
+
+/** v4.7.0 gardait un seul jeton pour tous les comptes : on le rattache au compte seulement s'il lui appartient. */
+async function migrateLegacyToken() {
+    const legacy = localStorage.getItem(LEGACY_TOKEN_KEY);
+    if (!legacy) return;
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
+    localStorage.removeItem('pushTokenSeen');
+    try {
+        if ((await getDoc(doc(db, "users", currentUser.uid, "pushTokens", legacy))).exists()) localStorage.setItem(tokenKey(), legacy);
+    } catch (error) { /* hors ligne : l'utilisateur pourra réactiver dans Paramètres */ }
 }
 
 /**
@@ -99,12 +123,13 @@ export async function disablePush() {
  * que s'il a changé, ou une fois par semaine (le serveur oublie les appareils qui ne reviennent plus).
  */
 export async function refreshPushToken() {
+    await migrateLegacyToken();
     if (getPushState() !== 'enabled') return;
     try {
         const { messaging, getToken } = await getMessagingApi();
         const token = await getToken(messaging, { vapidKey: VAPID_KEY, serviceWorkerRegistration: await getRegistration() });
-        const lastSeen = Number(localStorage.getItem(LAST_SEEN_KEY) || 0);
-        if (token && (token !== localStorage.getItem(TOKEN_KEY) || Date.now() - lastSeen > WEEK_MS)) await saveToken(token);
+        const lastSeen = Number(localStorage.getItem(seenKey()) || 0);
+        if (token && (token !== localStorage.getItem(tokenKey()) || Date.now() - lastSeen > WEEK_MS)) await saveToken(token);
     } catch (error) {
         console.warn("Jeton de notification non rafraîchi :", error);
     }
@@ -120,7 +145,8 @@ const isModalOpen = () => [...document.querySelectorAll('.modal:not(.hidden), .f
  */
 export async function maybeAskForPush() {
     const state = getPushState();
-    if (state !== 'default' && state !== 'ios-install') return;
+    // 'granted' : autorisé sur ce téléphone, mais pas encore pour ce compte (téléphone partagé)
+    if (!['default', 'granted', 'ios-install'].includes(state)) return;
     if (Date.now() - Number(localStorage.getItem(ASKED_KEY) || 0) < ASK_AGAIN_MS) return;
     for (let i = 0; i < 80 && isModalOpen(); i++) await new Promise(r => setTimeout(r, 1500));
     if (isModalOpen() || document.getElementById('pushAskSheet')) return;
