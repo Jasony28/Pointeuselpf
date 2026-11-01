@@ -115,7 +115,8 @@ async function loadWorkProfile() {
             skills: { ...(user.skillsSelf || {}) },
             driverAnswered: typeof user.isDriver === 'boolean',
             like: (aff.like || []).filter(id => id !== currentUser.uid),
-            colleagues: members.filter(m => m.id !== currentUser.uid),
+            colleagues: members.filter(m => m.id !== currentUser.uid && !m.superAdmin),
+            superAdmin: user.superAdmin === true,
         };
         if (!container.isConnected) return;
         renderWorkProfile(container, state);
@@ -126,6 +127,10 @@ async function loadWorkProfile() {
 }
 
 function renderWorkProfile(container, state) {
+    if (state.superAdmin) {
+        container.innerHTML = '<div class="wp-progress is-done"><b>⭐ Super admin</b> — vous n\'êtes jamais placé·e sur les chantiers : pas de profil de travail à remplir.</div>';
+        return;
+    }
     const rated = THEMES.filter(t => state.skills[t.key]).length;
     const missing = missingProfileParts({ isDriver: state.driverAnswered ? state.isDriver : undefined, skillsSelf: state.skills });
     container.innerHTML = `

@@ -199,3 +199,12 @@ test("les lignes « Congé » du planning ne sont jamais traitées comme des cha
     assert.ok(!out.result.some(r => r.line.id === 'leave1'));
     assert.equal(validatePlan(s, teamsOf(out)).ok, out.validation.ok);
 });
+
+test("un super admin n'est jamais planifié", () => {
+    const s = scenario(190, { people: 6, linesPerDay: 4, driverShare: 1 });
+    s.users[0].superAdmin = true; s.users[0].role = 'admin';
+    const out = planWeek({ ...s, ...FAST, seed: 1 });
+    const name = s.users[0].displayName;
+    assert.ok(!out.people.some(p => p.id === s.users[0].id));
+    assert.ok(out.result.every(r => !r.teamNames.includes(name)));
+});

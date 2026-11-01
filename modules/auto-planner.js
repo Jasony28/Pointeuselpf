@@ -25,7 +25,7 @@
    équipe sans conducteur · dépassement de contrat alors qu'il reste de la place.
 */
 
-import { THEMES, DEFAULT_TEAM_SIZE, effectiveSkill, contractHoursAt } from "./work-profile.js";
+import { THEMES, DEFAULT_TEAM_SIZE, effectiveSkill, contractHoursAt, isSuperAdmin } from "./work-profile.js";
 
 export const MAX_DAY_HOURS = 9;
 export const BUFFER_MIN = 15;          // battement minimum entre deux chantiers, en plus du trajet
@@ -76,7 +76,7 @@ export function travelBetween(a, b) {
 const weekDays = (weekStart) => Array.from({ length: 7 }, (_, i) => { const d = new Date(weekStart + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + i); return d.toISOString().split('T')[0]; });
 const onLeaveDays = (userId, days, leaves) => new Set(days.filter(d => leaves.some(l => l.userId === userId && l.startDate <= d && (l.endDate || l.startDate) >= d)));
 const plannablePeople = (users, weekStart) => users
-    .filter(u => u.status === 'approved' && (u.role === 'user' || u.role === 'admin'))
+    .filter(u => u.status === 'approved' && (u.role === 'user' || u.role === 'admin') && !isSuperAdmin(u))
     .map(u => ({ ...u, contract: contractHoursAt(u, weekStart) }))
     .filter(u => u.contract > 0);
 

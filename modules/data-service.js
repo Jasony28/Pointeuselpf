@@ -20,7 +20,7 @@ export async function getTeamMembers(forceRefresh = false) {
         const users = await getUsers(forceRefresh);
         teamMembersCache = users
             .filter(user => user.status === 'approved' && (user.role === 'user' || user.role === 'admin'))
-            .map(user => ({ id: user.id, name: user.displayName }));
+            .map(user => ({ id: user.id, name: user.displayName, superAdmin: user.superAdmin === true }));
     }
     return teamMembersCache;
 }

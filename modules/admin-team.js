@@ -364,6 +364,7 @@ function createUserCard(user, highlight) {
     div.className = `team-card${highlight ? ' is-pending' : ''}`;
     const isApproved = user.status === 'approved';
     const isAdminRole = user.role === 'admin';
+    const isSuper = user.superAdmin === true;
     const status = user.status || 'pending';
 
     div.innerHTML = `
@@ -373,7 +374,8 @@ function createUserCard(user, highlight) {
                 <button type="button" class="user-name-clickable team-name">${escapeHTML(user.displayName || 'Sans nom')}</button>
                 <div class="cchips" style="padding-top: 0.25rem;">
                     <span class="cchip team-status-${escapeHTML(status)}">${STATUS_LABELS[status] || escapeHTML(status)}</span>
-                    <span class="cchip${isAdminRole ? ' team-admin' : ''}">${isAdminRole ? 'Administrateur' : 'Employé'}</span>
+                    <span class="cchip${isAdminRole ? ' team-admin' : ''}">${isSuper ? '⭐ Super admin' : (isAdminRole ? 'Administrateur' : 'Employé')}</span>
+                    ${isSuper ? '<span class="cchip">Jamais planifié</span>' : ''}
                 </div>
             </div>
         </div>
@@ -384,7 +386,8 @@ function createUserCard(user, highlight) {
         <div class="team-actions">
             <button data-action="status" class="btn ${isApproved ? 'btn-secondary' : 'btn-primary'}">${isApproved ? 'Suspendre' : 'Approuver'}</button>
             <button data-action="history" class="icon-btn" title="Voir l'historique" aria-label="Voir l'historique">${teamIcons.history}</button>
-            <button data-action="role" class="icon-btn" title="Passer ${isAdminRole ? 'Employé' : 'Admin'}" aria-label="Passer ${isAdminRole ? 'Employé' : 'Admin'}">${teamIcons.role}</button>
+            ${!isSuper ? `<button data-action="role" class="icon-btn" title="Passer ${isAdminRole ? 'Employé' : 'Admin'}" aria-label="Passer ${isAdminRole ? 'Employé' : 'Admin'}">${teamIcons.role}</button>` : ''}
+            ${isApproved ? `<button data-action="super" class="icon-btn" title="${isSuper ? 'Retirer super admin' : 'Passer super admin (jamais planifié)'}" aria-label="${isSuper ? 'Retirer super admin' : 'Passer super admin'}" aria-pressed="${isSuper}">⭐</button>` : ''}
             <button data-action="delete" class="icon-btn is-danger" title="Supprimer" aria-label="Supprimer">${teamIcons.trash}</button>
         </div>
     `;
@@ -402,13 +405,23 @@ function createUserCard(user, highlight) {
         }
     };
 
-    div.querySelector('[data-action="role"]').onclick = async () => {
+    div.querySelector('[data-action="super"]')?.addEventListener('click', async () => {
+        const msg = isSuper
+            ? `Retirer le statut super admin de "${user.displayName}" ? Il redeviendra administrateur et pourra de nouveau être placé sur les chantiers.`
+            : `Passer "${user.displayName}" en super admin ?\n\n• Tous les droits d'administrateur\n• N'est JAMAIS placé sur les chantiers (ni par la proposition automatique, ni dans la liste Équipe du planning)\n• Pas de profil de travail à remplir`;
+        if (await showConfirmationModal("Super admin", msg)) {
+            await updateDoc(doc(db, "users", user.id), isSuper ? { superAdmin: false } : { superAdmin: true, role: 'admin' });
+            await loadUsers();
+        }
+    });
+
+    div.querySelector('[data-action="role"]')?.addEventListener('click', async () => {
         const nextRole = isAdminRole ? 'user' : 'admin';
         if (await showConfirmationModal("Modifier le rôle", `Passer "${user.displayName}" en ${nextRole === 'admin' ? 'Administrateur' : 'Employé'} ?`)) {
             await updateDoc(doc(db, "users", user.id), { role: nextRole });
             await loadUsers();
         }
-    };
+    });
 
     div.querySelector('[data-action="delete"]').onclick = async () => {
         if (await showConfirmationModal("Suppression", `Vraiment supprimer définitivement l'utilisateur "${user.displayName}" ?`)) {

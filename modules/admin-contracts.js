@@ -63,7 +63,7 @@ function drawCards() {
     const approved = allTeam.filter(u => u.status === 'approved');
     const totalHours = approved.reduce((sum, u) => sum + (currentContract(u)?.hours || 0), 0);
     const incomplete = approved.filter(u => missingFields(u).length > 0).length;
-    const workIncomplete = approved.filter(u => u.role === 'user' && missingProfileParts(u).length > 0);
+    const workIncomplete = approved.filter(u => u.role === 'user' && u.superAdmin !== true && missingProfileParts(u).length > 0);
     if (summary) summary.innerHTML = `
         <div class="team-stat"><span>Membres</span><b>${approved.length}</b></div>
         <div class="team-stat"><span>Heures sous contrat</span><b>${totalHours} h/sem</b></div>

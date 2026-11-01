@@ -1,5 +1,12 @@
 export const updatesLog = [
     {
+        version: 'v4.4.0',
+        date: '1er novembre 2026',
+        changes: [
+            "**Admin - Équipe** : nouveau statut **⭐ Super admin**. Un super admin a tous les droits d'administrateur et n'est **jamais placé sur les chantiers** (ni par « Proposer le planning », ni dans la liste Équipe du planning). Il n'a pas de profil de travail à remplir. Pour l'activer : Équipe → bouton ⭐ sur la personne.",
+        ]
+    },
+    {
         version: 'v4.3.2',
         date: '1er novembre 2026',
         changes: [
