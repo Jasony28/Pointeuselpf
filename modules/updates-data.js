@@ -1,5 +1,45 @@
 export const updatesLog = [
     {
+        version: 'v4.3.1',
+        date: '1er novembre 2026',
+        changes: [
+            "**Admin - Planification** : les lignes « Congé » du planning ne sont plus jamais prises pour des chantiers à pourvoir.",
+        ]
+    },
+    {
+        version: 'v4.3.0',
+        date: '1er novembre 2026',
+        changes: [
+            "**Mon profil de travail** : « Avec qui j'aime travailler » montre tous vos collègues. Cochez tous ceux avec qui vous aimez travailler, autant que vous voulez. Les autres, ne les cochez pas, simplement. Visible uniquement par l'administrateur.",
+            "Bouton « Je ne conduis pas » et indicateur « Profil complet / à compléter » qui dit exactement ce qui manque.",
+            "**Accueil** : un rappel « Complétez votre profil de travail » s'affiche tant que le conducteur ou les 8 compétences ne sont pas renseignés.",
+            "**Admin - Fiches de l'équipe** : compteur « Profils de travail à compléter ».",
+            "**Admin - Planification** : la liste des employés au profil incomplet s'affiche dans la proposition.",
+        ]
+    },
+    {
+        version: 'v4.1.0',
+        date: '1er novembre 2026',
+        changes: [
+            "**Admin - Planification** : l'algorithme « Proposer le planning » est beaucoup plus puissant. Il fait 6 essais complets, améliore chacun jusqu'à ce que plus aucun échange ne fasse mieux, et garde le meilleur. Le calcul se fait en arrière-plan : l'écran ne fige plus.",
+            "Il tient compte des **trajets** entre chantiers (pas deux chantiers éloignés trop rapprochés pour la même personne) et des **heures imposées** des chantiers, et il cherche à réduire les kilomètres.",
+            "Il utilise la **durée réelle** de chaque chantier, apprise des pointages des 4 derniers mois (option désactivable).",
+            "**Contrôle indépendant** : chaque proposition est revérifiée par un second programme. Vous voyez « aucune règle enfreinte », ou exactement quelle règle est impossible à respecter et pourquoi.",
+            "**Remplacement** : une personne placée à la main puis mise en congé est retirée automatiquement, et seules ses places sont recalculées.",
+            "Panneau de qualité : pire écart d'heures, écart inévitable (par exemple quand il manque des conducteurs), conducteurs, compétences, kilomètres, nombre de changements.",
+        ]
+    },
+    {
+        version: 'v4.0.0',
+        date: '31 octobre 2026',
+        changes: [
+            "**Mes statistiques → Mon profil de travail** : « Je suis conducteur·rice » en un clic, vos compétences notées de 1 à 5 par tâche (lits, salles de bain, cuisine, sols, poussière, vitres, repassage, gros nettoyage) et les collègues avec qui vous aimez travailler (visible uniquement par l'administrateur).",
+            "**Admin - Planification** : nouveau bouton « Proposer le planning ». L'application compose les équipes de la semaine : contrats remplis au maximum (ou même pourcentage du contrat pour tout le monde quand il y a moins de travail), un conducteur par équipe, congés respectés, une personne à l'aise sur chaque tâche importante, quelqu'un qui connaît déjà le chantier, et les binômes qui s'entendent. Vous voyez pourquoi chaque équipe a été choisie, puis vous appliquez et ajustez à la main.",
+            "**Admin - Chantiers** : nouvelle partie « Équipe & tâches » (nombre de personnes et importance de chaque tâche, avec des réglages rapides Gîte, Maison, Bureau, Fin de chantier).",
+            "**Admin - Fiches de l'équipe** : profil de travail de chaque membre, avec la possibilité de corriger les notes et le statut conducteur.",
+        ]
+    },
+    {
         version: 'v3.9.9',
         date: '27 octobre 2026',
         changes: [
