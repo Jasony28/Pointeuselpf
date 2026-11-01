@@ -5,7 +5,7 @@
 import { collection, query, where, getDocs, orderBy, doc, getDoc, updateDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, pageContent, showInfoModal, showToast } from "../app.js";
 import { getTeamMembers } from "./data-service.js";
-import { THEMES, MAX_LIKES, MAX_AVOIDS, ratingRowHTML, escapeHTML, WEEK_KEYS, availabilityOf, availabilityRowHTML, missingProfileParts } from "./work-profile.js";
+import { THEMES, ratingRowHTML, escapeHTML, missingProfileParts } from "./work-profile.js";
 
 // Garde en mémoire le mois actuellement affiché (0 = mois en cours, -1 = mois dernier, etc.)
 let currentMonthOffset = 0;
@@ -113,10 +113,8 @@ async function loadWorkProfile() {
         const state = {
             isDriver: user.isDriver === true,
             skills: { ...(user.skillsSelf || {}) },
-            availability: user.availability ? { ...user.availability } : null,
             driverAnswered: typeof user.isDriver === 'boolean',
             like: (aff.like || []).filter(id => id !== currentUser.uid),
-            avoid: (aff.avoid || []).filter(id => id !== currentUser.uid),
             colleagues: members.filter(m => m.id !== currentUser.uid),
         };
         if (!container.isConnected) return;
@@ -129,7 +127,7 @@ async function loadWorkProfile() {
 
 function renderWorkProfile(container, state) {
     const rated = THEMES.filter(t => state.skills[t.key]).length;
-    const missing = missingProfileParts({ isDriver: state.driverAnswered ? state.isDriver : undefined, skillsSelf: state.skills, availability: state.availability });
+    const missing = missingProfileParts({ isDriver: state.driverAnswered ? state.isDriver : undefined, skillsSelf: state.skills });
     container.innerHTML = `
         <div class="wp-progress ${missing.length ? '' : 'is-done'}">
             ${missing.length ? `<b>Profil à compléter</b> — il manque : ${missing.join(', ')}.` : '<b>✓ Profil complet</b> — merci ! Il aide à composer des équipes où vous êtes à l\'aise.'}
@@ -148,46 +146,16 @@ function renderWorkProfile(container, state) {
         </div>
 
         <div class="wp-section">
-            <h3 class="wp-title">Mes disponibilités habituelles</h3>
-            <p class="wp-hint">Les jours ou demi-journées où vous ne pouvez pas travailler (enfants, autre emploi…). Pour une absence ponctuelle, faites plutôt une demande de congé.</p>
-            <div id="wp-availability">${WEEK_KEYS.map((_, d) => availabilityRowHTML(d, availabilityOf({ availability: state.availability }, d))).join('')}</div>
-            ${state.availability ? '' : '<button type="button" id="wp-avail-all" class="btn btn-secondary btn-block mt-2">Je suis disponible tous les jours</button>'}
-        </div>
-
-        <div class="wp-section">
             <h3 class="wp-title">Avec qui j'aime travailler</h3>
-            <p class="wp-hint">Touchez un nom : <b>💚 j'aime</b> (${MAX_LIKES} max) → <b>🚫 éviter</b> (${MAX_AVOIDS} max) → neutre.
-                🔒 Visible uniquement par l'administrateur, jamais par vos collègues.</p>
+            <p class="wp-hint">Cochez tous les collègues avec qui vous aimez travailler (autant que vous voulez). Les autres, ne les cochez pas, simplement. 🔒 Visible uniquement par l'administrateur, jamais par vos collègues.</p>
             <div id="wp-colleagues" class="wp-chips">
                 ${state.colleagues.length ? state.colleagues.map(c => {
-                    const mode = state.like.includes(c.id) ? 'like' : state.avoid.includes(c.id) ? 'avoid' : '';
-                    return `<button type="button" class="wp-chip${mode ? ` is-${mode}` : ''}" data-colleague="${c.id}">${mode === 'like' ? '💚 ' : mode === 'avoid' ? '🚫 ' : ''}${escapeHTML(c.name)}</button>`;
+                    const on = state.like.includes(c.id);
+                    return `<button type="button" class="wp-chip${on ? ' is-like' : ''}" data-colleague="${c.id}" aria-pressed="${on}">${on ? '💚 ' : ''}${escapeHTML(c.name)}</button>`;
                 }).join('') : '<p class="wp-hint">Aucun collègue pour le moment.</p>'}
             </div>
         </div>
     `;
-
-    const saveAvailability = async (next) => {
-        const previous = state.availability;
-        state.availability = next;
-        renderWorkProfile(container, state);
-        try {
-            await updateDoc(doc(db, "users", currentUser.uid), { availability: next });
-        } catch (e) {
-            console.error(e);
-            state.availability = previous;
-            renderWorkProfile(container, state);
-            showInfoModal("Erreur", "L'enregistrement a échoué.");
-        }
-    };
-    container.querySelectorAll('#wp-availability [data-avail]').forEach(btn => btn.onclick = () => {
-        const base = state.availability || Object.fromEntries(WEEK_KEYS.map(k => [k, 'all']));
-        saveAvailability({ ...base, [btn.dataset.day]: btn.dataset.avail });
-    });
-    container.querySelector('#wp-avail-all')?.addEventListener('click', () => {
-        saveAvailability(Object.fromEntries(WEEK_KEYS.map(k => [k, 'all'])));
-        showToast('Noté : disponible tous les jours.', 'success');
-    });
 
     container.querySelector('#wp-no-driver')?.addEventListener('click', async () => {
         state.isDriver = false; state.driverAnswered = true;
@@ -228,21 +196,11 @@ function renderWorkProfile(container, state) {
 
     container.querySelectorAll('[data-colleague]').forEach(btn => btn.onclick = async () => {
         const id = btn.dataset.colleague;
-        const before = { like: [...state.like], avoid: [...state.avoid] };
-        if (state.like.includes(id)) {
-            state.like = state.like.filter(x => x !== id);
-            if (state.avoid.length >= MAX_AVOIDS) {
-                showToast(`Une seule personne « à éviter » : retirez d'abord l'autre.`, 'warning');
-            } else state.avoid.push(id);
-        } else if (state.avoid.includes(id)) {
-            state.avoid = state.avoid.filter(x => x !== id);
-        } else if (state.like.length >= MAX_LIKES) {
-            showToast(`${MAX_LIKES} personnes maximum : retirez-en une d'abord.`, 'warning');
-            return;
-        } else state.like.push(id);
+        const before = { like: [...state.like] };
+        state.like = state.like.includes(id) ? state.like.filter(x => x !== id) : [...state.like, id];
         renderWorkProfile(container, state);
         try {
-            await setDoc(doc(db, "affinites", currentUser.uid), { like: state.like, avoid: state.avoid, updatedAt: serverTimestamp() });
+            await setDoc(doc(db, "affinites", currentUser.uid), { like: state.like, updatedAt: serverTimestamp() });
         } catch (e) {
             console.error(e);
             Object.assign(state, before);

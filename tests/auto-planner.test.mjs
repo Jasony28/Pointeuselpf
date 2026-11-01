@@ -26,7 +26,7 @@ test("scénarios normaux : 0 règle enfreinte selon le contrôle indépendant, �
 
 test("le contrôle indépendant confirme le résultat (aucune violation cachée)", () => {
     for (let seed = 20; seed < 30; seed++) {
-        const s = scenario(seed, { people: 6, linesPerDay: 5, driverShare: 0.34, avoids: 2, timedShare: 0.6 });
+        const s = scenario(seed, { people: 6, linesPerDay: 5, driverShare: 0.34, timedShare: 0.6 });
         const out = planWeek({ ...s, ...FAST, seed });
         const again = validatePlan(s, teamsOf(out));
         assert.deepEqual(again.violations.map(v => v.text), out.validation.violations.map(v => v.text));
@@ -74,14 +74,6 @@ test("un conducteur dans chaque équipe quand c'est possible", () => {
         const s = scenario(seed, { people: 10, linesPerDay: 4, driverShare: 0.5 });
         const out = planWeek({ ...s, ...FAST, seed });
         assert.equal(out.metrics.driverCoverage, 100, `graine ${seed}`);
-    }
-});
-
-test("duo « à éviter » jamais ensemble", () => {
-    for (let seed = 70; seed < 76; seed++) {
-        const s = scenario(seed, { people: 8, avoids: 3 });
-        const out = planWeek({ ...s, ...FAST, seed });
-        assert.equal(out.validation.violations.filter(v => v.type === 'eviter').length, 0, `graine ${seed}`);
     }
 });
 
@@ -175,7 +167,7 @@ test("performance : 20 personnes × 40 chantiers en moins de 8 s (Node)", () => 
 
 test("robustesse : cas extrêmes sans plantage, résultats toujours cohérents", () => {
     const cases = [];
-    for (let seed = 100; seed < 140; seed++) cases.push(scenario(seed, { people: 1 + (seed % 9), linesPerDay: seed % 7, driverShare: (seed % 4) / 3, leaves: seed % 6, avoids: seed % 3, timedShare: (seed % 5) / 4 }));
+    for (let seed = 100; seed < 140; seed++) cases.push(scenario(seed, { people: 1 + (seed % 9), linesPerDay: seed % 7, driverShare: (seed % 4) / 3, leaves: seed % 6, timedShare: (seed % 5) / 4 }));
     const s0 = scenario(1); cases.push({ ...s0, lines: [] });                                            // semaine vide
     const s1 = scenario(2); cases.push({ ...s1, leaves: s1.users.map(u => ({ userId: u.id, startDate: '2026-11-02', endDate: '2026-11-08', status: 'approved' })) }); // tout le monde en congé
     const s2 = scenario(3); s2.lines[0].chantierId = 'supprime'; s2.lines[1].teamNames = ['Ancien employé']; s2.lines[2].date = '2027-01-01'; cases.push(s2);
@@ -189,34 +181,11 @@ test("robustesse : cas extrêmes sans plantage, résultats toujours cohérents",
     }
 });
 
-test("disponibilités : « pas dispo », « matin », « après-midi » toujours respectées", () => {
-    for (let seed = 150; seed < 158; seed++) {
-        const s = scenario(seed, { people: 9, linesPerDay: 4, timedShare: 0.6 });
-        s.users[0].availability = { wed: 'off', fri: 'off' };
-        s.users[1].availability = { mon: 'am', tue: 'am', wed: 'am', thu: 'am', fri: 'am' };
-        s.users[2].availability = { mon: 'pm', thu: 'pm' };
-        const out = planWeek({ ...s, ...FAST, seed });
-        assert.equal(out.validation.violations.filter(v => v.type === 'dispo').length, 0, `graine ${seed} : ${out.validation.violations.map(v => v.text).join(' | ')}`);
-        const name0 = s.users[0].displayName;
-        out.result.filter(r => ['2026-11-04', '2026-11-06'].includes(r.line.date)).forEach(r => assert.ok(!r.teamNames.includes(name0)));
-    }
-});
 
-test("disponibilités : la cible d'heures tient compte des demi-journées", () => {
-    const s = scenario(160, { people: 6, linesPerDay: 6, leaves: 0 });
-    s.users[0].availability = { mon: 'am', tue: 'am', wed: 'am', thu: 'am', fri: 'am', sat: 'off', sun: 'off' }; // 38 h de contrat, 22,5 h possibles
-    const out = planWeek({ ...s, ...FAST, seed: 1 });
-    const p0 = out.people.find(p => p.id === 'u0');
-    assert.ok(p0.avail <= 22.5 + 1e-9, `disponible ${p0.avail}`);
-    assert.ok(p0.hours <= 22.5 + 1e-9, `${p0.hours} h`);
-});
-
-test("le contrôle indépendant détecte une disponibilité non respectée", () => {
-    const s = scenario(161, { people: 5 });
-    const out = planWeek({ ...s, ...FAST, seed: 1 });
-    const r = out.result.find(x => x.teamNames.length);
-    const u = s.users.find(x => x.displayName === r.teamNames[0]);
-    const k = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'][new Date(r.line.date + 'T12:00:00Z').getUTCDay() === 0 ? 6 : new Date(r.line.date + 'T12:00:00Z').getUTCDay() - 1];
-    u.availability = { [k]: 'off' };
-    assert.ok(validatePlan(s, teamsOf(out)).violations.some(v => v.type === 'dispo'));
+test("affinités : on peut cocher autant de collègues qu'on veut ; les binômes réciproques sont favorisés", () => {
+    const s = scenario(170, { people: 8, linesPerDay: 4, likes: 0, driverShare: 1 });
+    s.affinities = new Map([['u0', { like: ['u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7'] }], ['u1', { like: ['u0'] }]]);
+    const withLikes = planWeek({ ...s, ...FAST, seed: 1 });
+    assert.equal(withLikes.validation.ok, true);
+    assert.ok(withLikes.metrics.mutualPairs >= 1, `${withLikes.metrics.mutualPairs} binôme(s) réciproque(s)`);
 });

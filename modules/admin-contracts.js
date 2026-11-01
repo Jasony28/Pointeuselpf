@@ -1,7 +1,7 @@
 import { doc, updateDoc, collection, getDocs, deleteField } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, showInfoModal, showToast } from "../app.js";
 import { getUsers } from "./data-service.js";
-import { THEMES, effectiveSkill, ratingRowHTML, WEEK_KEYS, availabilityOf, availabilityRowHTML, availabilitySummary, missingProfileParts } from "./work-profile.js";
+import { THEMES, effectiveSkill, ratingRowHTML, missingProfileParts } from "./work-profile.js";
 
 export async function render() {
     pageContent.innerHTML = `
@@ -32,7 +32,7 @@ export async function render() {
 }
 
 let allTeam = [];
-let affinities = new Map(); // uid → { like: [], avoid: [] } (privé : admin uniquement)
+let affinities = new Map(); // uid → { like: [] } (privé : admin uniquement)
 
 async function displayUserCards() {
     const container = document.getElementById('user-cards-container');
@@ -224,10 +224,8 @@ function workProfileHTML(user) {
                     <li><span>${s.label}${s.corrected ? ' <small title="Note corrigée par l\'admin">✎</small>' : ''}</span>
                         <span class="wp-bar"><i style="width:${(s.value || 0) * 20}%"></i></span><b>${s.value || '–'}</b></li>`).join('')}</ul>`
                     : '<p class="wp-hint">Compétences pas encore renseignées par l\'employé.</p>'}
-                <p class="wp-hint">📅 Disponibilités : ${user.availability ? (esc(availabilitySummary(user)) || 'tous les jours') : 'pas encore renseignées'}</p>
                 ${missingProfileParts(user).length ? `<p class="emp-missing">Profil de travail à compléter : ${esc(missingProfileParts(user).join(', '))}</p>` : ''}
                 <p class="wp-hint">💚 Aime travailler avec : ${(aff.like || []).length ? aff.like.map(nameOf).map(esc).join(', ') : '—'}</p>
-                <p class="wp-hint">🚫 Préfère éviter : ${(aff.avoid || []).length ? aff.avoid.map(nameOf).map(esc).join(', ') : '—'}</p>
                 <p class="wp-hint">Choisi·e par : ${likedBy.length ? likedBy.map(esc).join(', ') : '—'}</p>
                 <button type="button" class="btn btn-secondary btn-block wp-edit-btn">Ajuster le profil de travail</button>
             </div>
@@ -238,7 +236,6 @@ function workProfileHTML(user) {
 function renderWorkEdit(cardElement, user) {
     const admin = { ...(user.skillsAdmin || {}) };
     let isDriver = user.isDriver === true;
-    let availability = user.availability ? { ...user.availability } : null;
     const draw = () => {
         cardElement.innerHTML = `
             <header class="emp-top">
@@ -251,17 +248,11 @@ function renderWorkEdit(cardElement, user) {
             </button>
             <p class="wp-hint mt-3">Votre note remplace celle de l'employé (indiquée entre parenthèses). Touchez à nouveau la note choisie pour revenir à l'auto-évaluation.</p>
             <div>${THEMES.map(t => ratingRowHTML(t, admin[t.key], { hint: `(auto : ${user.skillsSelf?.[t.key] || '–'})` })).join('')}</div>
-            <h4 class="wp-title mt-3">Disponibilités habituelles</h4>
-            <div>${WEEK_KEYS.map((_, d) => availabilityRowHTML(d, availabilityOf({ availability }, d))).join('')}</div>
             <div class="mt-6 flex gap-3">
                 <button class="cancel-btn btn btn-secondary btn-block">Annuler</button>
                 <button class="save-btn btn btn-primary btn-block">Enregistrer</button>
             </div>`;
         cardElement.querySelector('[data-driver]').onclick = () => { isDriver = !isDriver; draw(); };
-        cardElement.querySelectorAll('[data-avail]').forEach(btn => btn.onclick = () => {
-            availability = { ...(availability || Object.fromEntries(WEEK_KEYS.map(k => [k, 'all']))), [btn.dataset.day]: btn.dataset.avail };
-            draw();
-        });
         cardElement.querySelectorAll('.wp-rate').forEach(btn => btn.onclick = () => {
             const v = Number(btn.dataset.value);
             if (admin[btn.dataset.theme] === v) delete admin[btn.dataset.theme]; else admin[btn.dataset.theme] = v;
@@ -271,11 +262,8 @@ function renderWorkEdit(cardElement, user) {
         cardElement.querySelector('.save-btn').onclick = async () => {
             try {
                 const skillsAdmin = Object.keys(admin).length ? admin : deleteField();
-                const changes = { isDriver, skillsAdmin };
-                if (availability) changes.availability = availability;
-                await updateDoc(doc(db, "users", user.id), changes);
+                await updateDoc(doc(db, "users", user.id), { isDriver, skillsAdmin });
                 user.isDriver = isDriver;
-                if (availability) user.availability = availability;
                 user.skillsAdmin = Object.keys(admin).length ? { ...admin } : undefined;
                 showToast('Profil de travail enregistré.', 'success');
                 renderCardView(cardElement, user);

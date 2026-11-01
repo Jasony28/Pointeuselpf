@@ -10,17 +10,17 @@ match /affinites/{uid} {
   allow read: if request.auth != null && (request.auth.uid == uid
     || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
   allow write: if request.auth != null && request.auth.uid == uid
-    && request.resource.data.keys().hasOnly(['like', 'avoid', 'updatedAt'])
-    && request.resource.data.like.size() <= 3 && request.resource.data.avoid.size() <= 1;
+    && request.resource.data.keys().hasOnly(['like', 'updatedAt'])
+    && request.resource.data.like is list;
 }
 ```
 
 ## À vérifier dans le bloc `match /users/{uid}` existant
 
 L'employé doit pouvoir modifier **sur sa propre fiche** les champs :
-`isDriver`, `skillsSelf`, `availability`.
+`isDriver`, `skillsSelf`.
 Si tes règles listent les champs autorisés (par exemple avec `hasOnly([...])` ou `affectedKeys()`),
-ajoute ces trois noms. Les champs `skillsAdmin`, `role`, `contractHistory` doivent rester réservés à l'admin.
+ajoute ces deux noms. Les champs `skillsAdmin`, `role`, `contractHistory` doivent rester réservés à l'admin.
 
 ## Lecture des pointages par l'admin
 

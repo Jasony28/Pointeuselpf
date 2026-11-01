@@ -14,7 +14,7 @@ const TYPES = [
 
 /**
  * @param {number} seed
- * @param {object} o people, linesPerDay, driverShare, leaves, avoids, likes, timedShare
+ * @param {object} o people, linesPerDay, driverShare, leaves, likes, timedShare
  */
 export function scenario(seed, o = {}) {
     const rng = makeRng(seed);
@@ -55,16 +55,8 @@ export function scenario(seed, o = {}) {
     for (let k = 0; k < (o.likes ?? 3); k++) {
         const a = (rng() * nPeople) | 0, b = (rng() * nPeople) | 0;
         if (a === b) continue;
-        const cur = affinities.get('u' + a) || { like: [], avoid: [] };
-        if (!cur.like.includes('u' + b) && cur.like.length < 3) cur.like.push('u' + b);
-        affinities.set('u' + a, cur);
-    }
-    for (let k = 0; k < (o.avoids ?? 1); k++) {
-        const a = (rng() * nPeople) | 0, b = (rng() * nPeople) | 0;
-        if (a === b) continue;
-        const cur = affinities.get('u' + a) || { like: [], avoid: [] };
-        cur.like = cur.like.filter(x => x !== 'u' + b);
-        cur.avoid = ['u' + b];
+        const cur = affinities.get('u' + a) || { like: [] };
+        if (!cur.like.includes('u' + b)) cur.like.push('u' + b);
         affinities.set('u' + a, cur);
     }
     return { lines, users, chantiers, leaves, affinities, pastLines: [], weekStart: WEEK };

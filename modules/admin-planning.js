@@ -359,7 +359,7 @@ const autoPlan = { data: null, outcome: null, keepExisting: true, useRealDuratio
 // Données réduites au strict nécessaire (transmissibles au Web Worker, sans objets Firebase)
 const pick = (o, keys) => Object.fromEntries(keys.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
 const LINE_KEYS = ['id', 'date', 'chantierId', 'chantierName', 'startTime', 'duration', 'teamNames', 'order'];
-const USER_KEYS = ['id', 'displayName', 'status', 'role', 'contractHistory', 'contractHours', 'isDriver', 'skillsSelf', 'skillsAdmin', 'availability'];
+const USER_KEYS = ['id', 'displayName', 'status', 'role', 'contractHistory', 'contractHours', 'isDriver', 'skillsSelf', 'skillsAdmin'];
 const CHANTIER_KEYS = ['id', 'name', 'teamSize', 'skillNeeds', 'totalHeuresPrevues', 'coordinates', 'fixedAppointment', 'timeWindowStart', 'timeWindowEnd'];
 
 async function openAutoPlanner() {
@@ -394,7 +394,7 @@ async function openAutoPlanner() {
         autoPlan.data = {
             weekStart, lines, chantiers: chantierList,
             users: users.map(u => pick(u, USER_KEYS)),
-            affinities: (affSnap?.docs || []).map(d => [d.id, pick(d.data(), ['like', 'avoid'])]),
+            affinities: (affSnap?.docs || []).map(d => [d.id, pick(d.data(), ['like'])]),
             affinitiesMissing: !affSnap,
             leaves: leaveSnap.docs.map(d => pick(d.data(), ['userId', 'startDate', 'endDate', 'status'])).filter(l => l.startDate <= weekEnd && (l.endDate || l.startDate) >= weekStart),
             pastLines: pastSnap.docs.map(d => pick(d.data(), ['date', 'chantierId', 'teamNames', 'duration'])),
@@ -550,7 +550,7 @@ function incompleteProfilesHTML(o) {
     const planned = new Set(o.people.map(p => p.id));
     const list = autoPlan.data.users.filter(u => planned.has(u.id) && u.role === 'user' && missingProfileParts(u).length);
     if (!list.length) return '';
-    return `<p class="ap-warn">${list.length} employé(s) n'ont pas complété leur profil de travail (${list.map(u => escapeHTML(u.displayName)).join(', ')}). L'algorithme les considère comme « corrects » (3/5) partout, non conducteurs s'ils n'ont pas répondu, et disponibles tous les jours. Un rappel s'affiche sur leur accueil.</p>`;
+    return `<p class="ap-warn">${list.length} employé(s) n'ont pas complété leur profil de travail (${list.map(u => escapeHTML(u.displayName)).join(', ')}). L'algorithme les considère comme « corrects » (3/5) partout, et non conducteurs s'ils n'ont pas répondu. Un rappel s'affiche sur leur accueil.</p>`;
 }
 
 function qualityHTML(o) {

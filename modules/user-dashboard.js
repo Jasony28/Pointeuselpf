@@ -934,7 +934,7 @@ function openAddTaskModal(dateStr) {
 }
 
 
-// Rappel tant que le profil de travail (conducteur, compétences, disponibilités) n'est pas complet
+// Rappel tant que le profil de travail (conducteur, compétences) n'est pas complet
 async function loadProfileReminder() {
     const box = document.getElementById('profile-reminder');
     if (!box) return;

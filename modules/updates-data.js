@@ -1,13 +1,13 @@
 export const updatesLog = [
     {
-        version: 'v4.2.0',
+        version: 'v4.3.0',
         date: '1er novembre 2026',
         changes: [
-            "**Mon profil de travail** : nouvelle partie « Mes disponibilités habituelles ». Pour chaque jour : journée, matin seulement, après-midi seulement ou pas disponible. Le planning automatique en tient compte.",
+            "**Mon profil de travail** : « Avec qui j'aime travailler » montre tous vos collègues. Cochez tous ceux avec qui vous aimez travailler, autant que vous voulez. Les autres, ne les cochez pas, simplement. Visible uniquement par l'administrateur.",
             "Bouton « Je ne conduis pas » et indicateur « Profil complet / à compléter » qui dit exactement ce qui manque.",
-            "**Accueil** : un rappel « Complétez votre profil de travail » s'affiche tant que le conducteur, les 8 compétences ou les disponibilités ne sont pas renseignés.",
-            "**Admin - Fiches de l'équipe** : compteur « Profils de travail à compléter », disponibilités affichées et modifiables sur chaque fiche.",
-            "**Admin - Planification** : les disponibilités sont respectées (et revérifiées par le contrôle indépendant). La liste des employés au profil incomplet s'affiche dans la proposition.",
+            "**Accueil** : un rappel « Complétez votre profil de travail » s'affiche tant que le conducteur ou les 8 compétences ne sont pas renseignés.",
+            "**Admin - Fiches de l'équipe** : compteur « Profils de travail à compléter ».",
+            "**Admin - Planification** : la liste des employés au profil incomplet s'affiche dans la proposition.",
         ]
     },
     {
