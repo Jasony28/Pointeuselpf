@@ -1,5 +1,15 @@
 export const updatesLog = [
     {
+        version: 'v4.5.0',
+        date: '1er novembre 2026',
+        changes: [
+            "**Admin - Fiches de l'équipe** : nouveau bouton **🚗 Permis & notes** sur chaque fiche. L'administrateur peut indiquer lui-même si la personne conduit et lui mettre ses notes de compétences, sans attendre qu'elle le fasse.",
+            "**Admin - Fiches de l'équipe** : les comptes suspendus ne sont plus affichés (ils restent dans Admin → Équipe).",
+            "**Admin - Planification** : un super admin placé à la main sur un chantier est maintenant retiré par « Proposer le planning » et remplacé.",
+            "**Admin - Chantiers** : les lieux des Petites Fées arrivent avec une fiche complète (adresse, e-mail du propriétaire, durée, heure habituelle, accès, nombre de chambres…) et la pastille 🧚 Petites Fées. Les chantiers sans GPS sont localisés automatiquement.",
+        ]
+    },
+    {
         version: 'v4.4.1',
         date: '1er novembre 2026',
         changes: [

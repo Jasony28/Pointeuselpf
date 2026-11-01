@@ -82,11 +82,11 @@ export function needRowHTML(theme, value = 0) {
  */
 export const isSuperAdmin = (user) => user?.superAdmin === true;
 
-/** Ce qui manque au profil de travail d'un employé (pour les rappels). */
+/** Ce qui manque au profil de travail d'un employé (pour les rappels). Une note mise par l'admin compte aussi. */
 export function missingProfileParts(user) {
     const missing = [];
     if (typeof user?.isDriver !== 'boolean') missing.push('conducteur');
-    const rated = THEMES.filter(t => user?.skillsSelf?.[t.key] >= 1).length;
+    const rated = THEMES.filter(t => effectiveSkill(user, t.key) >= 1).length;
     if (rated < THEMES.length) missing.push(`compétences (${rated}/${THEMES.length})`);
     return missing;
 }

@@ -146,6 +146,8 @@ export function prepare(input) {
     const P = people.length;
     const idx = new Map(people.map((u, i) => [u.id, i]));
     const byName = new Map(people.map((u, i) => [u.displayName, i]));
+    const superNames = new Set(users.filter(isSuperAdmin).map(u => (u.displayName || '').trim()).filter(Boolean));
+    const isSuperName = (n) => superNames.has(String(n || '').trim());
     const onLeave = people.map(u => onLeaveDays(u.id, days, leaves));
     const avail = people.map((u, i) => u.contract * days.slice(0, 5).filter(d => !onLeave[i].has(d)).length / 5);
     const skill = people.map(u => Object.fromEntries(THEMES.map(t => [t.key, effectiveSkill(u, t.key) ?? 3])));
@@ -193,7 +195,9 @@ export function prepare(input) {
         const dur = lineDuration(src, c, durations, useRealDurations);
         const before = (src.teamNames || []);
         const internal = before.map(n => byName.get(n)).filter(i => i !== undefined);
-        const foreign = before.filter(n => !byName.has(n));
+        // Super admin placé à la main auparavant : retiré (jamais planifié), sa place est recalculée
+        before.filter(isSuperName).forEach(n => dataWarnings.push(`${src.date} — ${n} retiré·e de ${src.chantierName} (super admin, jamais planifié) : remplacement proposé.`));
+        const foreign = before.filter(n => !byName.has(n) && !isSuperName(n));
         const wanted = Math.max(1, Number(c.teamSize) || DEFAULT_TEAM_SIZE);
         // Personne placée à la main mais en congé ce jour-là : retirée (sa place est recalculée)
         const absent = internal.filter(i => onLeave[i].has(src.date));

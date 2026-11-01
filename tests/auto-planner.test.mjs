@@ -209,6 +209,17 @@ test("un super admin n'est jamais planifié", () => {
     assert.ok(out.result.every(r => !r.teamNames.includes(name)));
 });
 
+test("un super admin déjà placé à la main est retiré et remplacé", () => {
+    const s = scenario(191, { people: 6, linesPerDay: 4, driverShare: 1 });
+    s.users[0].superAdmin = true; s.users[0].role = 'admin';
+    const name = s.users[0].displayName;
+    s.lines.forEach(l => { l.teamNames = [name + ' ']; }); // espace en trop dans le nom : doit quand même être reconnu
+    const out = planWeek({ ...s, ...FAST, seed: 1 });
+    assert.ok(out.result.every(r => !r.teamNames.includes(name)));
+    assert.ok(out.result.every(r => r.teamNames.length >= 1));
+    assert.ok(out.warnings.some(w => w.includes('super admin')));
+});
+
 test("« connaît le chantier » utilise l'historique des pointages", () => {
     const s = scenario(200, { people: 6, linesPerDay: 3, driverShare: 1, likes: 0 });
     const c = s.chantiers[0];

@@ -246,9 +246,33 @@ async function loadChantiers() {
         const snapshot = await getDocs(q);
         chantiersCache = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
         displayChantiers();
+        locateMissingGps();
     } catch (error) {
         console.error("Erreur chargement:", error);
         grid.innerHTML = `<p class="hours-empty">Erreur de chargement des chantiers.</p>`;
+    }
+}
+
+// GPS automatique : les chantiers actifs avec une adresse mais sans point GPS (souvent créés par
+// Les Petites Fées) sont localisés en arrière-plan. Seul un résultat dont la commune / le code postal
+// est reconnu est enregistré ; une adresse introuvable n'est pas réessayée tant qu'elle ne change pas.
+async function locateMissingGps() {
+    const todo = chantiersCache.filter(c => c.status === 'active' && c.address && !c.coordinates?.lat && c.gpsFailedFor !== c.address).slice(0, 40);
+    let found = 0;
+    for (const c of todo) {
+        try {
+            const geo = await geocodeDetails(c.address);
+            const update = geo?.matched ? { coordinates: { lat: geo.center[1], lng: geo.center[0] } } : { gpsFailedFor: c.address };
+            await updateDoc(doc(db, "chantiers", c.id), update);
+            Object.assign(c, update);
+            if (update.coordinates) found++;
+        } catch (e) {
+            console.warn("GPS automatique impossible pour", c.name, e);
+        }
+    }
+    if (found) {
+        displayChantiers();
+        showToast(`${found} chantier${found > 1 ? 's' : ''} localisé${found > 1 ? 's' : ''} automatiquement (GPS).`, 'success');
     }
 }
 
@@ -282,6 +306,7 @@ function chipsHTML(chantier) {
     else if (chantier.timeWindowStart) chips.push(`<span class="cchip is-window">Dès ${escapeHTML(chantier.timeWindowStart)}</span>`);
     else if (chantier.timeWindowEnd) chips.push(`<span class="cchip is-window">Fini avant ${escapeHTML(chantier.timeWindowEnd)}</span>`);
     if (chantier.isHideable) chips.push(`<span class="cchip is-hidden">Hors forfait</span>`);
+    if (chantier.source === 'lpf' || chantier.lpfGiteId) chips.push(`<span class="cchip" title="Fiche remplie automatiquement depuis Les Petites Fées">🧚 Petites Fées</span>`);
     if (chantier.address && !chantier.coordinates?.lat) chips.push(`<span class="cchip is-warning" title="L'adresse n'a pas été localisée : itinéraire et kilomètres impossibles">GPS manquant</span>`);
     if (!chantier.address) chips.push(`<span class="cchip is-warning">Sans adresse</span>`);
     return chips.join('');
