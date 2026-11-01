@@ -36,7 +36,7 @@ async function send(notifications) {
     for (const n of notifications) {
         const tokensSnap = await db.collection(`users/${n.uid}/pushTokens`).get();
         const tokens = tokensSnap.docs.map(d => d.id);
-        if (!tokens.length) continue;
+        if (!tokens.length) { logger.info('Aucun appareil abonné', { uid: n.uid, tag: n.tag }); continue; }
         const data = Object.fromEntries(Object.entries({ title: n.title, body: n.body, tag: n.tag, page: n.page, chat: n.chat })
             .filter(([, v]) => v).map(([k, v]) => [k, String(v)]));
         if (DRY_RUN) { logger.info('[test] notification', { uid: n.uid, tokens: tokens.length, ...data }); continue; }
@@ -49,7 +49,8 @@ async function send(notifications) {
             .map((r, i) => (!r.success && DEAD_TOKEN_ERRORS.includes(r.error?.code) ? tokensSnap.docs[i].ref : null))
             .filter(Boolean);
         await Promise.all(dead.map(ref => ref.delete()));
-        if (res.failureCount) logger.warn('Envois échoués', { uid: n.uid, failures: res.failureCount, removed: dead.length });
+        logger.info('Notification envoyée', { uid: n.uid, tag: n.tag, appareils: tokens.length, reçus: res.successCount });
+        if (res.failureCount) logger.warn('Envois échoués', { uid: n.uid, failures: res.failureCount, removed: dead.length, codes: res.responses.filter(r => !r.success).map(r => r.error?.code) });
     }
 }
 
@@ -61,7 +62,9 @@ exports.notifyNewMessage = onDocumentCreated('chats/{chatId}/messages/{messageId
     if (!chatSnap.exists) return;
     const chat = chatSnap.data();
     const users = await getUsers([...(chat.participants || []), message.senderId]);
-    await send(rules.forMessage({ chatId: event.params.chatId, chat, message, users }));
+    const notifications = rules.forMessage({ chatId: event.params.chatId, chat, message, users });
+    logger.info('Nouveau message', { chat: event.params.chatId, auteur: message.senderId, membres: (chat.participants || []).length, destinataires: notifications.map(n => n.uid) });
+    await send(notifications);
 });
 
 // 2. Planning modifié : déclenché par users/{uid}.pendingChanges (aucune lecture en plus)
