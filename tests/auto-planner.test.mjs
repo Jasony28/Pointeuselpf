@@ -1,7 +1,7 @@
 // Tests de la planification automatique — lancer avec : npm test
 import test from "node:test";
 import assert from "node:assert/strict";
-import { planWeek, validatePlan, learnDurations } from "../modules/auto-planner.js";
+import { planWeek, validatePlan, learnDurations, summarizePointageHistory } from "../modules/auto-planner.js";
 import { scenario, teamsOf, WEEK } from "./fixtures.mjs";
 
 const FAST = { restarts: 3, iterations: 15000 };
@@ -207,4 +207,16 @@ test("un super admin n'est jamais planifié", () => {
     const name = s.users[0].displayName;
     assert.ok(!out.people.some(p => p.id === s.users[0].id));
     assert.ok(out.result.every(r => !r.teamNames.includes(name)));
+});
+
+test("« connaît le chantier » utilise l'historique des pointages", () => {
+    const s = scenario(200, { people: 6, linesPerDay: 3, driverShare: 1, likes: 0 });
+    const c = s.chantiers[0];
+    const pointages = [1, 2, 3, 4].map(k => ({ uid: 'u5', chantier: c.name.toUpperCase(), timestamp: `2026-10-0${k}T08:00:00Z` }));
+    const hist = summarizePointageHistory(pointages, s.chantiers);
+    assert.deepEqual(hist, [{ uid: 'u5', chantierId: c.id, days: 4 }]);
+    const out = planWeek({ ...s, ...FAST, seed: 1, pointageHistory: hist, weights: { continuity: 25 } });
+    const onC = out.result.filter(r => r.line.chantierId === c.id);
+    if (onC.length) assert.ok(onC.some(r => r.teamNames.includes(s.users[5].displayName)), "la personne qui connaît le chantier y est placée");
+    assert.ok(out.result.some(r => r.reasons.some(x => x.startsWith('Connaît le chantier'))));
 });

@@ -92,6 +92,7 @@ export const isLeaveLine = (l) => l?.chantierId === 'LEAVE_ID' || !!l?.id_leaveR
  */
 export function learnDurations(pointages, chantiers, { maxSamples = 15, minSamples = 3 } = {}) {
     const idByName = new Map(chantiers.map(c => [normName(c.name), c.id]));
+    for (const c of chantiers) for (const a of c.lpfAliases || []) if (!idByName.has(normName(a))) idByName.set(normName(a), c.id);
     const perDay = new Map(); // id → Map(date → minutes)
     for (const p of pointages) {
         if (!p || !p.timestamp || !p.endTime) continue;
@@ -173,6 +174,14 @@ export function prepare(input) {
             const h = lineDuration(l, chantierById.get(l.chantierId), durations, false).hours / n;
             team.forEach(i => { pastHours[i] += h; pastTotal += h; });
         }
+    }
+
+    // Historique des pointages : qui a déjà travaillé sur quel chantier (bien plus complet que l'ancien planning)
+    for (const h of input.pointageHistory || []) {
+        const i = idx.get(h.uid);
+        if (i === undefined || !h.chantierId) continue;
+        if (!known.has(h.chantierId)) known.set(h.chantierId, new Int32Array(P));
+        known.get(h.chantierId)[i] += h.days || 1;
     }
 
     // Lignes à pourvoir
@@ -454,6 +463,27 @@ function solveOnce(M, seed, iterations) {
         if (!improved) break;
     }
     }
+}
+
+/**
+ * Résume les pointages en « qui a travaillé où » : [{ uid, chantierId, days }] (jours distincts).
+ * Les pointages désignent le chantier par son nom (et ses autres noms côté Petites Fées).
+ */
+export function summarizePointageHistory(pointages, chantiers) {
+    const idByName = new Map();
+    for (const c of chantiers) {
+        idByName.set(normName(c.name), c.id);
+        for (const a of c.lpfAliases || []) if (!idByName.has(normName(a))) idByName.set(normName(a), c.id);
+    }
+    const days = new Map(); // "uid|chantierId" → Set(dates)
+    for (const p of pointages) {
+        const id = idByName.get(normName(p?.chantier));
+        if (!id || !p.uid || !p.timestamp) continue;
+        const k = p.uid + '|' + id;
+        if (!days.has(k)) days.set(k, new Set());
+        days.get(k).add(String(p.timestamp).slice(0, 10));
+    }
+    return [...days.entries()].map(([k, set]) => { const [uid, chantierId] = k.split('|'); return { uid, chantierId, days: set.size }; });
 }
 
 /**

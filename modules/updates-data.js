@@ -1,5 +1,12 @@
 export const updatesLog = [
     {
+        version: 'v4.4.1',
+        date: '1er novembre 2026',
+        changes: [
+            "**Admin - Planification** : « Connaît déjà le chantier » s'appuie maintenant sur l'historique réel des pointages. Sur une vraie semaine, l'algorithme envoie quelqu'un qui connaît le chantier sur 100 % des chantiers, contre presque aucun avant.",
+        ]
+    },
+    {
         version: 'v4.4.0',
         date: '1er novembre 2026',
         changes: [

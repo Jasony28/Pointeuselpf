@@ -2,7 +2,7 @@ import { collection, query, where, getDocs, addDoc, deleteDoc, doc, orderBy, ser
 import { db, pageContent, currentUser, showConfirmationModal, showInfoModal } from "../app.js";
 import { getWeekDateRange } from "./utils.js";
 import { getActiveChantiers, getTeamMembers, getUsers } from "./data-service.js";
-import { planWeek, learnDurations, DEFAULT_WEIGHTS, WEIGHT_LABELS } from "./auto-planner.js";
+import { planWeek, learnDurations, summarizePointageHistory, DEFAULT_WEIGHTS, WEIGHT_LABELS } from "./auto-planner.js";
 import { escapeHTML, missingProfileParts } from "./work-profile.js";
 
 const state = {
@@ -360,7 +360,7 @@ const autoPlan = { data: null, outcome: null, keepExisting: true, useRealDuratio
 const pick = (o, keys) => Object.fromEntries(keys.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
 const LINE_KEYS = ['id', 'date', 'chantierId', 'chantierName', 'startTime', 'duration', 'teamNames', 'order', 'id_leaveRequest'];
 const USER_KEYS = ['id', 'displayName', 'status', 'role', 'contractHistory', 'contractHours', 'isDriver', 'skillsSelf', 'skillsAdmin', 'superAdmin'];
-const CHANTIER_KEYS = ['id', 'name', 'teamSize', 'skillNeeds', 'totalHeuresPrevues', 'coordinates', 'fixedAppointment', 'timeWindowStart', 'timeWindowEnd'];
+const CHANTIER_KEYS = ['id', 'name', 'teamSize', 'skillNeeds', 'totalHeuresPrevues', 'coordinates', 'fixedAppointment', 'timeWindowStart', 'timeWindowEnd', 'lpfAliases'];
 
 async function openAutoPlanner() {
     const { startOfWeek, endOfWeek } = getWeekDateRange(state.currentWeekOffset);
@@ -390,7 +390,7 @@ async function openAutoPlanner() {
             return;
         }
         const chantierList = chantiers.map(c => pick(c, CHANTIER_KEYS));
-        const pointages = (pointSnap?.docs || []).map(d => { const p = d.data(); return { chantier: p.chantier, timestamp: p.timestamp, endTime: p.endTime }; });
+        const pointages = (pointSnap?.docs || []).map(d => { const p = d.data(); return { uid: p.uid, chantier: p.chantier, timestamp: p.timestamp, endTime: p.endTime }; });
         autoPlan.data = {
             weekStart, lines, chantiers: chantierList,
             users: users.map(u => pick(u, USER_KEYS)),
@@ -399,6 +399,7 @@ async function openAutoPlanner() {
             leaves: leaveSnap.docs.map(d => pick(d.data(), ['userId', 'startDate', 'endDate', 'status'])).filter(l => l.startDate <= weekEnd && (l.endDate || l.startDate) >= weekStart),
             pastLines: pastSnap.docs.map(d => pick(d.data(), ['date', 'chantierId', 'teamNames', 'duration', 'id_leaveRequest'])),
             durations: [...learnDurations(pointages, chantierList).entries()],
+            pointageHistory: summarizePointageHistory(pointages, chantierList),
         };
         autoPlan.seed = 1;
         runAutoPlan();
