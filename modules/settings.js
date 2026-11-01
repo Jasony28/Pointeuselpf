@@ -2,6 +2,7 @@ import { pageContent, currentUser, showInfoModal, showToast, db, themes, applyTh
 import { getAuth, signOut, sendPasswordResetEmail, updateEmail, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { doc, updateDoc, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { updatesLog } from "./updates-data.js";
+import { getPushState, getPrefs, savePrefs, enablePush, disablePush, showTestNotification } from "./push.js";
 
 const auth = getAuth();
 
@@ -26,6 +27,12 @@ export async function render() {
                         <button id="saveProfileBtn" class="btn btn-primary">Enregistrer le profil</button>
                     </div>
                 </div>
+            </div>
+
+            <!-- Notifications -->
+            <div class="settings-card p-6 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <h3 class="settings-section-title">Notifications</h3>
+                <div id="pushPanel"></div>
             </div>
 
             <!-- Sécurité -->
@@ -169,6 +176,9 @@ function setupEventListeners() {
             }
         }
     };
+
+    // --- NOTIFICATIONS ---
+    renderPushPanel();
 
     // --- INSTALLATION PWA ---
     const installBtn = document.getElementById('installAppBtn');
@@ -339,9 +349,99 @@ function setupEventListeners() {
     document.getElementById('logoutBtnSettings').onclick = () => signOut(auth).then(() => window.location.reload()); // rien du compte précédent ne reste en mémoire
 }
 
+// Carte « Notifications » : bouton d'activation selon l'appareil, cases par type, notification de test
+function renderPushPanel() {
+    const panel = document.getElementById('pushPanel');
+    if (!panel) return;
+    const state = getPushState();
+    const prefs = getPrefs();
+    const isAdminUser = currentUser.role === 'admin';
+    const types = [
+        { key: 'messages', label: 'Nouveaux messages', hint: 'Sauf discussions en sourdine, ou si on vous @mentionne' },
+        { key: 'planning', label: 'Planning', hint: 'Planning publié, chantier ajouté, retiré ou déplacé' },
+        { key: 'conges', label: 'Congés', hint: isAdminUser ? 'Nouvelle demande d\'un employé, réponse à vos demandes' : 'Demande acceptée ou refusée' },
+        { key: 'rappels', label: 'Rappels de pointage', hint: '« As-tu oublié de pointer ? » si un pointage dépasse de 30 min le temps prévu' },
+    ];
+
+    const messages = {
+        native: "Les notifications ne sont pas encore disponibles dans l'appli Android. Pour les recevoir, utilisez le site installé depuis Chrome.",
+        'ios-install': "Sur iPhone, les notifications marchent seulement si l'appli est sur l'écran d'accueil (iOS 16.4 ou plus récent).",
+        unsupported: "Ce navigateur ne permet pas les notifications. Essayez avec Chrome, ou installez l'application.",
+        denied: "Les notifications sont bloquées pour ce site. Autorisez-les dans les réglages du navigateur (icône 🔒 à côté de l'adresse), puis revenez ici.",
+        default: "Recevez une alerte sur ce téléphone, même quand l'appli est fermée.",
+        granted: "Recevez une alerte sur ce téléphone, même quand l'appli est fermée.",
+        enabled: "Activées sur cet appareil.",
+    };
+
+    const canEnable = state === 'default' || state === 'granted';
+    panel.innerHTML = `
+        <p class="text-sm mb-4 ${state === 'enabled' ? 'push-status-on' : ''}" style="${state === 'enabled' ? '' : 'color: var(--color-text-muted);'}">${messages[state]}</p>
+        ${state === 'ios-install' ? `<button id="pushIosHelpBtn" class="btn btn-primary btn-block">Ajouter à l'écran d'accueil</button>` : ''}
+        ${canEnable ? `<button id="pushEnableBtn" class="btn btn-primary btn-lg btn-block">Activer les notifications</button>` : ''}
+        ${state === 'enabled' ? `
+            <div class="push-prefs">
+                ${types.map(t => `
+                    <label class="push-pref">
+                        <input type="checkbox" data-pref="${t.key}" ${prefs[t.key] ? 'checked' : ''}>
+                        <span><strong>${t.label}</strong><br>${t.hint}</span>
+                    </label>
+                `).join('')}
+            </div>
+            <div class="flex flex-col sm:flex-row gap-2 mt-4">
+                <button id="pushTestBtn" class="btn btn-secondary flex-1">Envoyer une notification de test</button>
+                <button id="pushDisableBtn" class="btn btn-secondary flex-1">Désactiver sur cet appareil</button>
+            </div>
+        ` : ''}
+    `;
+
+    document.getElementById('pushIosHelpBtn')?.addEventListener('click', showIOSInstallSheet);
+
+    document.getElementById('pushEnableBtn')?.addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        btn.textContent = 'Activation…';
+        try {
+            const newState = await enablePush();
+            if (newState === 'enabled') showToast("Notifications activées sur cet appareil.", 'success');
+            else if (newState === 'denied') showToast("Notifications refusées. Vous pourrez les autoriser dans les réglages du navigateur.", 'info');
+        } catch (error) {
+            console.error("Activation des notifications :", error);
+            showInfoModal("Erreur", "Impossible d'activer les notifications sur cet appareil. Vérifiez votre connexion et réessayez.");
+        }
+        renderPushPanel();
+    });
+
+    document.getElementById('pushDisableBtn')?.addEventListener('click', async (e) => {
+        e.currentTarget.disabled = true;
+        await disablePush();
+        showToast("Notifications désactivées sur cet appareil.", 'info');
+        renderPushPanel();
+    });
+
+    document.getElementById('pushTestBtn')?.addEventListener('click', async () => {
+        try {
+            await showTestNotification();
+        } catch (error) {
+            console.error("Notification de test :", error);
+            showInfoModal("Erreur", "La notification de test n'a pas pu s'afficher.");
+        }
+    });
+
+    panel.querySelectorAll('[data-pref]').forEach(box => box.addEventListener('change', async () => {
+        const next = { ...getPrefs(), [box.dataset.pref]: box.checked };
+        try {
+            await savePrefs(next);
+        } catch (error) {
+            console.error("Préférences de notification :", error);
+            box.checked = !box.checked;
+            showToast("Préférence non enregistrée.", 'error');
+        }
+    }));
+}
+
 // iPhone / iPad : Apple ne permet pas aux sites de lancer l'installation.
 // On affiche une feuille visuelle qui montre exactement où appuyer dans Safari.
-function showIOSInstallSheet() {
+export function showIOSInstallSheet() {
     document.getElementById('iosInstallSheet')?.remove();
     const shareIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>`;
     const addIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></svg>`;

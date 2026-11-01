@@ -1,5 +1,15 @@
 export const updatesLog = [
     {
+        version: 'v4.7.0',
+        date: '1er novembre 2026',
+        changes: [
+            "**Notifications** : recevez une alerte sur votre téléphone, même quand l'appli est fermée. L'appli vous propose de les activer ; sinon, Paramètres → Notifications.",
+            "**Ce que vous recevez** : nouveaux messages (sauf discussions en sourdine, ou si on vous @mentionne), planning publié ou modifié, réponse à vos congés, et « As-tu oublié de pointer ? » quand un pointage dépasse de 30 min le temps prévu. Chaque type peut être coupé dans Paramètres.",
+            "**Toucher la notification** ouvre directement la bonne discussion ou le bon écran.",
+            "**iPhone** : les notifications marchent quand l'appli est sur l'écran d'accueil (iOS 16.4 ou plus récent). Le bouton « Ajouter à l'écran d'accueil » montre comment faire.",
+        ]
+    },
+    {
         version: 'v4.6.0',
         date: '1er novembre 2026',
         changes: [

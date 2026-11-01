@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 import { installNativeFileSaving } from './modules/native-files.js';
 
-const APP_VERSION = 'v4.6.0';
+const APP_VERSION = 'v4.7.0';
 
 // Appli Android / iPhone : PDF et CSV proposés dans le menu « Partager » du téléphone
 installNativeFileSaving();
@@ -328,6 +328,26 @@ function prefetchPages() {
 
 let currentPageModule = null;
 
+// Notification touchée : ?page=…&chat=… (appli fermée) ou message du service worker (appli ouverte).
+// Seuls ces écrans peuvent être ouverts ainsi.
+const NOTIFICATION_PAGES = ['user-chat', 'user-dashboard', 'user-leave', 'admin-leave'];
+const startLink = Object.fromEntries(new URLSearchParams(location.search));
+if (startLink.page) history.replaceState(null, '', location.pathname);
+
+function openFromNotification({ page, chat } = {}) {
+    if (!NOTIFICATION_PAGES.includes(page)) return false;
+    if (page.startsWith('admin-')) {
+        if (!isAdmin) return false;
+        if (isMasqueradingAsUser) { isMasqueradingAsUser = false; setupNavigation(); }
+    }
+    navigateTo(page, chat ? { chatId: chat } : {});
+    return true;
+}
+
+navigator.serviceWorker?.addEventListener('message', (event) => {
+    if (event.data?.type === 'OPEN_PAGE' && currentUser?.status === 'approved') openFromNotification(event.data);
+});
+
 function getPageName(pageId) {
     const tab = [...userTabs, ...adminTabs].find(t => t.id === pageId);
     return tab ? tab.name : (extraPageNames[pageId] || '');
@@ -544,11 +564,14 @@ document.addEventListener('DOMContentLoaded', () => {
                             document.getElementById('app-version-display').textContent = APP_VERSION;
                             setupNavigation();
 
-                            navigateTo('user-dashboard');
+                            if (!openFromNotification(startLink)) navigateTo('user-dashboard');
+                            delete startLink.page;
                             prefetchPages();
                             appContainer.style.display = 'block';
                             hideLoader();
 
+                            // Notifications : le jeton de cet appareil est relu (réécrit seulement s'il a changé), puis proposition de les activer
+                            import('./modules/push.js').then(m => { m.refreshPushToken(); setTimeout(() => m.maybeAskForPush(), 2500); }).catch(() => {});
                             if (fromCache) refreshProfile(userRef, userData);
                             else {
                                 checkPersonalNotifications(userRef, userData).catch(console.error);

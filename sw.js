@@ -4,7 +4,7 @@ const { precaching, routing, strategies, core } = workbox;
 core.setCacheNameDetails({ prefix: 'pointeuse-lpf-cache' });
 
 // Version synchronisée avec app.js
-const APP_VERSION = 'v4.6.0'; // <--- CHANGEMENT ICI
+const APP_VERSION = 'v4.7.0'; // <--- CHANGEMENT ICI
 
 precaching.precacheAndRoute([
     { url: './', revision: APP_VERSION },
@@ -21,6 +21,7 @@ precaching.precacheAndRoute([
     { url: 'modules/updates-data.js', revision: APP_VERSION },
     { url: 'modules/native-files.js', revision: APP_VERSION },
     { url: 'modules/settings.js', revision: APP_VERSION },
+    { url: 'modules/push.js', revision: APP_VERSION },
     { url: 'modules/chantiers.js', revision: APP_VERSION },
     { url: 'modules/work-profile.js', revision: APP_VERSION },
 
@@ -97,9 +98,61 @@ routing.registerRoute(
     new strategies.StaleWhileRevalidate({ cacheName: 'app-files' })
 );
 
+// Discussion ouverte à l'écran (envoyée par la messagerie) : pas de notification pour elle
+let activeChatId = null;
+
 // La nouvelle version attend que l'utilisateur appuie sur « Mettre à jour » (pop-up dans app.js)
 self.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
+    if (event.data && event.data.type === 'ACTIVE_CHAT') activeChatId = event.data.chatId || null;
+});
+
+// --- NOTIFICATIONS (Firebase Cloud Messaging) ---
+// Le serveur envoie des messages « data » : { title, body, tag, page, chat }. C'est ce fichier qui les affiche.
+self.addEventListener('push', (event) => {
+    let payload = {};
+    try { payload = event.data ? event.data.json() : {}; } catch (error) { payload = {}; }
+    const data = { ...(payload.notification || {}), ...(payload.data || {}) };
+    if (!data.title) return;
+
+    event.waitUntil((async () => {
+        // iPhone et Mac : Safari coupe l'abonnement si une notification reçue n'est pas affichée, on l'affiche donc toujours
+        const ua = self.navigator?.userAgent || '';
+        const isSafari = /Safari/.test(ua) && !/Chrome|Chromium|CriOS|Edg|Android/.test(ua);
+        if (data.chat && data.chat === activeChatId && !isSafari) {
+            const windows = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+            if (windows.some(w => w.visibilityState === 'visible')) return; // déjà en train de lire cette discussion
+        }
+        await self.registration.showNotification(data.title, {
+            body: data.body || '',
+            icon: 'icons/lpf-192.png',
+            badge: 'icons/lpf-192.png',
+            tag: data.tag || undefined,       // même discussion = la notification est remplacée, pas empilée
+            renotify: !!data.tag,
+            data: { page: data.page || '', chat: data.chat || '' },
+        });
+    })());
+});
+
+// Toucher la notification : ouvre le bon écran (appli déjà ouverte → elle y va, sinon elle démarre dessus)
+self.addEventListener('notificationclick', (event) => {
+    event.notification.close();
+    const { page = '', chat = '' } = event.notification.data || {};
+    const params = new URLSearchParams();
+    if (page) params.set('page', page);
+    if (chat) params.set('chat', chat);
+    const url = new URL(`./${params.toString() ? `?${params}` : ''}`, self.registration.scope).href;
+
+    event.waitUntil((async () => {
+        const windows = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+        const open = windows.find(w => new URL(w.url).origin === self.location.origin);
+        if (open) {
+            await open.focus();
+            if (page) open.postMessage({ type: 'OPEN_PAGE', page, chat });
+            return;
+        }
+        await clients.openWindow(url);
+    })());
 });
 
 self.addEventListener('activate', (event) => {
