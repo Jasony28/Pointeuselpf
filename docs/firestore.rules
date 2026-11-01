@@ -1,123 +1,103 @@
 rules_version = '2';
-
-// Règles de sécurité Firestore — Pointeuse LPF (projet pointeuse-lpf)
-// À coller en entier dans : Console Firebase → Firestore Database → Règles → Publier.
-// Les scripts automatiques (envoi du planning des Petites Fées) utilisent une clé de service
-// et ne sont pas concernés par ces règles.
-
+// Règles Firestore de la Pointeuse LPF = règles en production + ajouts pour la planification automatique
+// (règle 1 : « affinites » exclue de la lecture générale ; règle 2 : skillsAdmin protégé ; règle 9 : affinites).
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ---------- Outils ----------
-    function signedIn() { return request.auth != null; }
-    function me() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
-    function hasProfile() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
-    function isAdmin() { return hasProfile() && me().role == 'admin'; }
-    // Membre validé par l'admin (les comptes « en attente » ou bannis n'ont accès à rien d'autre que leur fiche)
-    function isMember() { return hasProfile() && me().status == 'approved'; }
-    // Champs qu'un employé n'a pas le droit de modifier lui-même sur sa fiche
-    function adminOnlyUserFields() {
-      return ['role', 'status', 'contractHistory', 'contractHours', 'skillsAdmin', 'visibility'];
+    function isAuthenticated() { return request.auth != null; }
+    function isAdmin() {
+      return isAuthenticated() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    function isOwner(userId) { return isAuthenticated() && request.auth.uid == userId; }
+
+    // 1. LECTURE (inchangée, sauf « affinites » qui est privée : voir 9)
+    match /{collection}/{document=**} {
+      allow read: if isAuthenticated() && collection != 'affinites';
     }
 
-    // ---------- Utilisateurs ----------
-    match /users/{uid} {
-      // Sa propre fiche (même en attente), et toutes les fiches pour les membres (équipe, chat, planning)
-      allow read: if signedIn() && (request.auth.uid == uid || isMember());
-      // Inscription : uniquement sa propre fiche, en attente de validation, rôle employé
-      allow create: if signedIn() && request.auth.uid == uid
-        && request.resource.data.role == 'user'
-        && request.resource.data.status == 'pending';
-      // Modification : l'admin tout ; l'employé sa fiche, sauf rôle, statut, contrats, notes de l'admin
-      allow update: if isAdmin()
-        || (signedIn() && request.auth.uid == uid
-            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(adminOnlyUserFields()));
+    // 2. UTILISATEURS : impossible de changer soi-même son rôle, son statut ou les notes de l'admin
+    match /users/{userId} {
+      allow create: if isOwner(userId)
+                    && request.resource.data.role == 'user'
+                    && request.resource.data.status == 'pending';
+      allow update: if isAdmin() || (isOwner(userId)
+                    && request.resource.data.get('role', null) == resource.data.get('role', null)
+                    && request.resource.data.get('status', null) == resource.data.get('status', null)
+                    && request.resource.data.get('skillsAdmin', null) == resource.data.get('skillsAdmin', null));
       allow delete: if isAdmin();
     }
 
-    // ---------- Collègues appréciés (planification automatique) : privé ----------
-    match /affinites/{uid} {
-      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow write: if signedIn() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['like', 'updatedAt'])
-        && request.resource.data.like is list;
-    }
-
-    // ---------- Pointages et trajets ----------
-    // Les membres créent des pointages (les leurs, ou une duplication pour un collègue)
-    // et lisent ceux de l'équipe (suggestions « vous étiez avec… »).
-    match /pointages/{id} {
-      allow read: if isMember();
-      allow create: if isMember();
-      allow update, delete: if isAdmin() || (isMember() && resource.data.uid == request.auth.uid);
-      // Journal des modifications d'un pointage
-      match /auditLog/{logId} {
-        allow read: if isMember();
-        allow create: if isMember();
-        allow update, delete: if isAdmin();
-      }
-    }
-    // Kilomètres : recalculés par l'appli à chaque pointage (y compris pour un collègue après duplication)
-    match /trajets/{id} {
-      allow read, write: if isMember();
-    }
-
-    // ---------- Planning ----------
-    match /planning/{id} {
-      allow read: if isMember();
-      allow write: if isAdmin();
-      // Un employé qui annule son congé retire aussi les lignes « Congé » correspondantes du planning
-      allow delete: if isMember() && resource.data.chantierId == 'LEAVE_ID'
-        && get(/databases/$(database)/documents/leaveRequests/$(resource.data.id_leaveRequest)).data.userId == request.auth.uid;
-    }
-    match /publishedSchedules/{weekId} {
-      allow read: if isMember();
-      allow write: if isAdmin();
-    }
-
-    // ---------- Chantiers et informations ----------
-    match /chantiers/{id} {
-      allow read: if isMember();
-      allow write: if isAdmin();
-    }
-    match /chantierUpdates/{id} {
-      allow read: if isMember();
-      allow write: if isAdmin();
-    }
-    match /colleagues/{id} {
-      allow read: if isMember();
-      allow write: if isAdmin();
-    }
-
-    // ---------- Congés ----------
-    // Les membres voient les congés de l'équipe ; chacun crée et annule les siens ; l'admin valide.
-    match /leaveRequests/{id} {
-      allow read: if isMember();
-      allow create: if isMember() && request.resource.data.userId == request.auth.uid;
-      allow delete: if isAdmin() || (isMember() && resource.data.userId == request.auth.uid);
-      allow update: if isAdmin();
-    }
-
-    // ---------- Messagerie privée ----------
-    // L'identifiant d'une conversation est « uidA_uidB » : seuls ces deux membres y ont accès.
+    // 3. MESSAGERIE : messages réservés aux participants de la conversation
     match /chats/{chatId} {
-      allow get, write: if isMember() && request.auth.uid in chatId.split('_');
-      // Liste de ses conversations (recherche « participants contient moi »)
-      allow list: if isMember() && request.auth.uid in resource.data.participants;
+      allow read, update: if isAuthenticated() && (request.auth.uid in resource.data.participants);
+      allow create: if isAuthenticated() && (request.auth.uid in request.resource.data.participants);
       match /messages/{messageId} {
-        allow read, write: if isMember() && request.auth.uid in chatId.split('_');
+        allow read, write: if isAuthenticated() &&
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
       }
     }
 
-    // ---------- Erreurs de l'appli (page Admin → Erreurs) ----------
-    match /errorLogs/{id} {
-      allow create: if signedIn();
-      allow read, delete: if isAdmin();
+    // 4. POINTAGES : chacun crée et modifie uniquement les siens
+    match /pointages/{docId} {
+      allow create: if isAdmin() || (isAuthenticated() && request.resource.data.uid == request.auth.uid);
+      allow update: if isAdmin() || (isAuthenticated()
+                    && resource.data.uid == request.auth.uid
+                    && request.resource.data.uid == request.auth.uid);
+      allow delete: if isAdmin();
+      match /auditLog/{logId} { allow write: if isAdmin(); }
     }
 
-    // Tout le reste est interdit
-    match /{document=**} {
-      allow read, write: if false;
+    // 4b. TRAJETS : chacun crée, recalcule et supprime uniquement les siens
+    match /trajets/{docId} {
+      allow create: if isAdmin() || (isAuthenticated() && request.resource.data.id_utilisateur == request.auth.uid);
+      allow update: if isAdmin() || (isAuthenticated()
+                    && resource.data.id_utilisateur == request.auth.uid
+                    && request.resource.data.id_utilisateur == request.auth.uid);
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.id_utilisateur == request.auth.uid);
+    }
+
+    // 5. CONGÉS : l'employé peut annuler sa propre demande
+    match /leaveRequests/{requestId} {
+      allow create: if isAdmin() || (isAuthenticated() && request.resource.data.userId == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+    }
+
+    // 6. PLANNING : l'admin gère tout ; l'employé ajoute/retire ses propres chantiers
+    //    et retire les jours de congé liés à sa demande quand il l'annule
+    match /planning/{docId} {
+      allow write: if isAdmin();
+      allow create: if isAuthenticated()
+                    && request.resource.data.addedByEmployee == true
+                    && request.resource.data.addedByUid == request.auth.uid;
+      allow delete: if isAuthenticated() && (
+                       resource.data.get('addedByUid', '') == request.auth.uid
+                    || (resource.data.get('id_leaveRequest', '') != ''
+                        && get(/databases/$(database)/documents/leaveRequests/$(resource.data.id_leaveRequest)).data.userId == request.auth.uid));
+    }
+
+    // 7. SUIVI DES ERREURS
+    match /errorLogs/{logId} {
+      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+
+    // 8. ADMINISTRATION (inchangé)
+    match /chantiers/{docId} { allow write: if isAdmin(); }
+    match /publishedSchedules/{docId} { allow write: if isAdmin(); }
+    match /colleagues/{docId} { allow write: if isAdmin(); }
+    match /notifications/{docId} { allow write: if isAdmin(); }
+    match /counters/{docId} { allow write: if isAdmin(); }
+
+    // 9. COLLÈGUES APPRÉCIÉS (planification automatique) : privé
+    //    L'employé lit et modifie sa liste ; l'admin les lit toutes.
+    match /affinites/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId)
+                   && request.resource.data.keys().hasOnly(['like', 'updatedAt'])
+                   && request.resource.data.like is list;
     }
   }
 }
