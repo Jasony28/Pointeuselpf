@@ -336,7 +336,7 @@ function setupEventListeners() {
     };
 
     // --- DÉCONNEXION ---
-    document.getElementById('logoutBtnSettings').onclick = () => signOut(auth);
+    document.getElementById('logoutBtnSettings').onclick = () => signOut(auth).then(() => window.location.reload()); // rien du compte précédent ne reste en mémoire
 }
 
 // iPhone / iPad : Apple ne permet pas aux sites de lancer l'installation.

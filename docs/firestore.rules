@@ -1,6 +1,6 @@
 rules_version = '2';
 // Règles Firestore de la Pointeuse LPF = règles en production + ajouts pour la planification automatique
-// (règle 1 : « affinites » exclue de la lecture générale ; règle 2 : skillsAdmin et superAdmin protégés ; règle 9 : affinites).
+// (règle 1 : lecture réservée aux comptes validés, « affinites » et « chats » exclus de la lecture générale ; règle 2 : skillsAdmin et superAdmin protégés ; règle 9 : affinites).
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -11,14 +11,22 @@ service cloud.firestore {
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
     function isOwner(userId) { return isAuthenticated() && request.auth.uid == userId; }
+    // Compte validé par l'admin (un compte créé librement reste « pending » ; « banned » = plus aucun accès)
+    function isApproved() {
+      return isAuthenticated() &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'approved';
+    }
 
-    // 1. LECTURE (inchangée, sauf « affinites » qui est privée : voir 9)
+    // 1. LECTURE : comptes validés seulement. « affinites » (9) et la messagerie (3) ont leurs propres règles :
+    //    sinon cette règle générale (les règles s'additionnent) laisserait lire les messages des autres.
     match /{collection}/{document=**} {
-      allow read: if isAuthenticated() && collection != 'affinites';
+      allow read: if isApproved() && !(collection in ['affinites', 'chats']);
     }
 
     // 2. UTILISATEURS : impossible de changer soi-même son rôle, son statut, les notes de l'admin ou le statut super admin
     match /users/{userId} {
+      // Sa propre fiche reste lisible en attente de validation (écran « compte en attente »)
+      allow read: if isOwner(userId);
       allow create: if isOwner(userId)
                     && request.resource.data.role == 'user'
                     && request.resource.data.status == 'pending';
