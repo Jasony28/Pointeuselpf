@@ -5,7 +5,7 @@
 import { collection, query, where, getDocs, orderBy, doc, getDoc, updateDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, pageContent, showInfoModal, showToast } from "../app.js";
 import { getTeamMembers } from "./data-service.js";
-import { THEMES, MAX_LIKES, MAX_AVOIDS, ratingRowHTML, escapeHTML } from "./work-profile.js";
+import { THEMES, MAX_LIKES, MAX_AVOIDS, ratingRowHTML, escapeHTML, WEEK_KEYS, availabilityOf, availabilityRowHTML, missingProfileParts } from "./work-profile.js";
 
 // Garde en mémoire le mois actuellement affiché (0 = mois en cours, -1 = mois dernier, etc.)
 let currentMonthOffset = 0;
@@ -113,6 +113,8 @@ async function loadWorkProfile() {
         const state = {
             isDriver: user.isDriver === true,
             skills: { ...(user.skillsSelf || {}) },
+            availability: user.availability ? { ...user.availability } : null,
+            driverAnswered: typeof user.isDriver === 'boolean',
             like: (aff.like || []).filter(id => id !== currentUser.uid),
             avoid: (aff.avoid || []).filter(id => id !== currentUser.uid),
             colleagues: members.filter(m => m.id !== currentUser.uid),
@@ -127,17 +129,29 @@ async function loadWorkProfile() {
 
 function renderWorkProfile(container, state) {
     const rated = THEMES.filter(t => state.skills[t.key]).length;
+    const missing = missingProfileParts({ isDriver: state.driverAnswered ? state.isDriver : undefined, skillsSelf: state.skills, availability: state.availability });
     container.innerHTML = `
+        <div class="wp-progress ${missing.length ? '' : 'is-done'}">
+            ${missing.length ? `<b>Profil à compléter</b> — il manque : ${missing.join(', ')}.` : '<b>✓ Profil complet</b> — merci ! Il aide à composer des équipes où vous êtes à l\'aise.'}
+        </div>
         <button type="button" id="wp-driver" class="wp-driver${state.isDriver ? ' is-on' : ''}" aria-pressed="${state.isDriver}">
             <span class="wp-driver-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M6 17v2M18 17v2M3 13l2-6a2 2 0 0 1 2-1.4h10A2 2 0 0 1 19 7l2 6v4H3z"/><circle cx="7.5" cy="13.5" r="1"/><circle cx="16.5" cy="13.5" r="1"/></svg></span>
-            <span class="wp-driver-text"><strong>Je suis conducteur·rice</strong><small>${state.isDriver ? 'Oui — je peux conduire la voiture de l\'équipe' : 'Non — touchez pour activer'}</small></span>
+            <span class="wp-driver-text"><strong>Je suis conducteur·rice</strong><small>${state.isDriver ? 'Oui — je peux conduire la voiture de l\'équipe' : (state.driverAnswered ? 'Non — touchez pour activer' : 'Pas encore répondu — touchez si vous conduisez')}</small></span>
             <span class="wp-switch" aria-hidden="true"></span>
         </button>
+        ${state.driverAnswered ? '' : '<button type="button" id="wp-no-driver" class="btn btn-secondary btn-block">Je ne conduis pas</button>'}
 
         <div class="wp-section">
             <h3 class="wp-title">Mes compétences <span>${rated}/${THEMES.length}</span></h3>
             <p class="wp-hint">1 = pas du tout à l'aise · 5 = totalement à l'aise. Soyez honnête : c'est pour vous mettre là où vous êtes le mieux.</p>
             <div id="wp-skills">${THEMES.map(t => ratingRowHTML(t, state.skills[t.key])).join('')}</div>
+        </div>
+
+        <div class="wp-section">
+            <h3 class="wp-title">Mes disponibilités habituelles</h3>
+            <p class="wp-hint">Les jours ou demi-journées où vous ne pouvez pas travailler (enfants, autre emploi…). Pour une absence ponctuelle, faites plutôt une demande de congé.</p>
+            <div id="wp-availability">${WEEK_KEYS.map((_, d) => availabilityRowHTML(d, availabilityOf({ availability: state.availability }, d))).join('')}</div>
+            ${state.availability ? '' : '<button type="button" id="wp-avail-all" class="btn btn-secondary btn-block mt-2">Je suis disponible tous les jours</button>'}
         </div>
 
         <div class="wp-section">
@@ -153,8 +167,38 @@ function renderWorkProfile(container, state) {
         </div>
     `;
 
+    const saveAvailability = async (next) => {
+        const previous = state.availability;
+        state.availability = next;
+        renderWorkProfile(container, state);
+        try {
+            await updateDoc(doc(db, "users", currentUser.uid), { availability: next });
+        } catch (e) {
+            console.error(e);
+            state.availability = previous;
+            renderWorkProfile(container, state);
+            showInfoModal("Erreur", "L'enregistrement a échoué.");
+        }
+    };
+    container.querySelectorAll('#wp-availability [data-avail]').forEach(btn => btn.onclick = () => {
+        const base = state.availability || Object.fromEntries(WEEK_KEYS.map(k => [k, 'all']));
+        saveAvailability({ ...base, [btn.dataset.day]: btn.dataset.avail });
+    });
+    container.querySelector('#wp-avail-all')?.addEventListener('click', () => {
+        saveAvailability(Object.fromEntries(WEEK_KEYS.map(k => [k, 'all'])));
+        showToast('Noté : disponible tous les jours.', 'success');
+    });
+
+    container.querySelector('#wp-no-driver')?.addEventListener('click', async () => {
+        state.isDriver = false; state.driverAnswered = true;
+        renderWorkProfile(container, state);
+        try { await updateDoc(doc(db, "users", currentUser.uid), { isDriver: false }); showToast('Noté : vous ne conduisez pas.', 'success'); }
+        catch (e) { console.error(e); state.driverAnswered = false; renderWorkProfile(container, state); showInfoModal("Erreur", "L'enregistrement a échoué."); }
+    });
+
     container.querySelector('#wp-driver').onclick = async () => {
         state.isDriver = !state.isDriver;
+        state.driverAnswered = true;
         renderWorkProfile(container, state);
         try {
             await updateDoc(doc(db, "users", currentUser.uid), { isDriver: state.isDriver });

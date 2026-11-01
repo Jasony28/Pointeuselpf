@@ -5,6 +5,7 @@ import { getActiveChantiers, getTeamMembers } from "./data-service.js";
 import { rebuildDayTrips, localDateKey, isDayOver, returnTripId, DEPOT_ADDRESS } from "./trips.js";
 import { enhanceChantierSelect } from './chantier-picker.js';
 import { mailButtonHTML } from './mail.js';
+import { missingProfileParts } from './work-profile.js';
 
 
 let timerInterval = null;
@@ -28,6 +29,7 @@ export async function render() {
 
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto space-y-8">
+            <div id="profile-reminder" class="hidden"></div>
             <div id="live-tracker-container" class="p-6 rounded-lg shadow-lg" style="background-color: var(--color-surface); border: 1px solid var(--color-border);"></div>
             <div id="missed-pointage-suggestions" class="space-y-4"></div>
             <div id="unread-messages-container" class="hidden transform transition-all duration-300 hover:scale-[1.01] cursor-pointer"></div>
@@ -100,6 +102,7 @@ export async function render() {
         try {
             await cacheDataForModals();
             await checkForOpenPointage();
+            loadProfileReminder();
             initUnreadMessagesListener();
             if (!localStorage.getItem('activePointage')) checkForMissedPointages();
             
@@ -928,4 +931,23 @@ function openAddTaskModal(dateStr) {
         showToast(`${chantier.name} ajouté au ${dateLabel}.`, 'success');
         displayWeekView();
     };
+}
+
+
+// Rappel tant que le profil de travail (conducteur, compétences, disponibilités) n'est pas complet
+async function loadProfileReminder() {
+    const box = document.getElementById('profile-reminder');
+    if (!box) return;
+    try {
+        const snap = await getDoc(doc(db, "users", currentUser.uid));
+        const missing = missingProfileParts(snap.exists() ? snap.data() : {});
+        if (!missing.length || !box.isConnected) return;
+        box.className = 'wp-reminder';
+        box.innerHTML = `
+            <div><b>Complétez votre profil de travail</b><br><span>Il manque : ${missing.join(', ')}. Ça prend 1 minute et ça aide à vous mettre là où vous êtes le plus à l'aise.</span></div>
+            <button type="button" class="btn btn-primary">Compléter</button>`;
+        box.querySelector('button').onclick = () => navigateTo('user-stats');
+    } catch (e) {
+        console.warn("Rappel profil :", e);
+    }
 }

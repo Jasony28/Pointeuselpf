@@ -188,3 +188,35 @@ test("robustesse : cas extrêmes sans plantage, résultats toujours cohérents",
         assert.ok(Number.isFinite(out.cost));
     }
 });
+
+test("disponibilités : « pas dispo », « matin », « après-midi » toujours respectées", () => {
+    for (let seed = 150; seed < 158; seed++) {
+        const s = scenario(seed, { people: 9, linesPerDay: 4, timedShare: 0.6 });
+        s.users[0].availability = { wed: 'off', fri: 'off' };
+        s.users[1].availability = { mon: 'am', tue: 'am', wed: 'am', thu: 'am', fri: 'am' };
+        s.users[2].availability = { mon: 'pm', thu: 'pm' };
+        const out = planWeek({ ...s, ...FAST, seed });
+        assert.equal(out.validation.violations.filter(v => v.type === 'dispo').length, 0, `graine ${seed} : ${out.validation.violations.map(v => v.text).join(' | ')}`);
+        const name0 = s.users[0].displayName;
+        out.result.filter(r => ['2026-11-04', '2026-11-06'].includes(r.line.date)).forEach(r => assert.ok(!r.teamNames.includes(name0)));
+    }
+});
+
+test("disponibilités : la cible d'heures tient compte des demi-journées", () => {
+    const s = scenario(160, { people: 6, linesPerDay: 6, leaves: 0 });
+    s.users[0].availability = { mon: 'am', tue: 'am', wed: 'am', thu: 'am', fri: 'am', sat: 'off', sun: 'off' }; // 38 h de contrat, 22,5 h possibles
+    const out = planWeek({ ...s, ...FAST, seed: 1 });
+    const p0 = out.people.find(p => p.id === 'u0');
+    assert.ok(p0.avail <= 22.5 + 1e-9, `disponible ${p0.avail}`);
+    assert.ok(p0.hours <= 22.5 + 1e-9, `${p0.hours} h`);
+});
+
+test("le contrôle indépendant détecte une disponibilité non respectée", () => {
+    const s = scenario(161, { people: 5 });
+    const out = planWeek({ ...s, ...FAST, seed: 1 });
+    const r = out.result.find(x => x.teamNames.length);
+    const u = s.users.find(x => x.displayName === r.teamNames[0]);
+    const k = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'][new Date(r.line.date + 'T12:00:00Z').getUTCDay() === 0 ? 6 : new Date(r.line.date + 'T12:00:00Z').getUTCDay() - 1];
+    u.availability = { [k]: 'off' };
+    assert.ok(validatePlan(s, teamsOf(out)).violations.some(v => v.type === 'dispo'));
+});

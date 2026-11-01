@@ -2448,3 +2448,11 @@ html.cat .toast > svg { display: none; }
 .ap-kpi b { font-size: 1rem; }
 .ap-kpi.is-bad { border-color: var(--color-warning); }
 .ap-check small { color: var(--color-text-muted); }
+
+/* Profil de travail : progression, rappel sur l'accueil */
+.wp-progress { font-size: 0.875rem; padding: 0.625rem 0.875rem; border-radius: 0.625rem; background: color-mix(in srgb, var(--color-warning) 12%, var(--color-surface)); border: 1px solid color-mix(in srgb, var(--color-warning) 40%, transparent); }
+.wp-progress.is-done { background: color-mix(in srgb, var(--color-success) 10%, var(--color-surface)); border-color: color-mix(in srgb, var(--color-success) 40%, transparent); }
+.wp-reminder { display: flex; align-items: center; justify-content: space-between; gap: 0.875rem; padding: 0.875rem 1rem; border-radius: 0.75rem; background: var(--color-primary-soft); border: 1px solid var(--color-primary); font-size: 0.875rem; }
+.wp-reminder span { color: var(--color-text-muted); }
+.wp-reminder .btn { flex-shrink: 0; }
+@media (max-width: 480px) { .wp-reminder { flex-direction: column; align-items: stretch; } }

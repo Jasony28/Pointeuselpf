@@ -21,11 +21,11 @@
  Ordre des priorités (lexicographique grâce aux ordres de grandeur des poids) :
    règles strictes ≫ heures (somme des carrés + pire écart) ≫ compétences, continuité, affinités,
    stabilité de la journée, kilomètres, changements par rapport au planning existant.
- Règles strictes : congé · chevauchement (trajet + 15 min compris) · plus de MAX_DAY_HOURS par jour ·
+ Règles strictes : congé · disponibilités habituelles (pas dispo / matin / après-midi) · chevauchement (trajet + 15 min compris) · plus de MAX_DAY_HOURS par jour ·
    duo « à éviter » · équipe sans conducteur · dépassement de contrat alors qu'il reste de la place.
 */
 
-import { THEMES, DEFAULT_TEAM_SIZE, effectiveSkill, contractHoursAt } from "./work-profile.js";
+import { THEMES, DEFAULT_TEAM_SIZE, effectiveSkill, contractHoursAt, availabilityOf, AVAILABILITY_HOURS, AM_END_MIN, PM_START_MIN } from "./work-profile.js";
 
 export const MAX_DAY_HOURS = 9;
 export const BUFFER_MIN = 15;          // battement minimum entre deux chantiers, en plus du trajet
@@ -143,7 +143,12 @@ export function prepare(input) {
     const idx = new Map(people.map((u, i) => [u.id, i]));
     const byName = new Map(people.map((u, i) => [u.displayName, i]));
     const onLeave = people.map(u => onLeaveDays(u.id, days, leaves));
-    const avail = people.map((u, i) => u.contract * days.slice(0, 5).filter(d => !onLeave[i].has(d)).length / 5);
+    // Disponibilités habituelles (jour de la semaine) ; un jour de congé compte comme « pas dispo »
+    const dispo = people.map((u, i) => days.map((date, d) => onLeave[i].has(date) ? 'off' : availabilityOf(u, d)));
+    // Disponibilité en heures : contrat au prorata des jours ouvrables sans congé, plafonné par les heures réellement possibles
+    const avail = people.map((u, i) => Math.min(
+        u.contract * days.slice(0, 5).filter(d => !onLeave[i].has(d)).length / 5,
+        dispo[i].reduce((s, v) => s + AVAILABILITY_HOURS[v], 0)));
     const skill = people.map(u => Object.fromEntries(THEMES.map(t => [t.key, effectiveSkill(u, t.key) ?? 3])));
     const driver = people.map(u => u.isDriver === true);
     const needDriver = driver.some(Boolean);
@@ -226,7 +231,7 @@ export function prepare(input) {
     if (totalWork > totalAvail + 0.01) warnings.push(`Il y a ${round1(totalWork - totalAvail)} h de travail de plus que les contrats disponibles : certaines personnes dépasseront leur contrat (heures supplémentaires à valider).`);
 
     return {
-        W, days, people, P, idx, byName, onLeave, avail, skill, driver, needDriver, pair, known, target, ratio,
+        W, days, people, P, idx, byName, onLeave, dispo, avail, skill, driver, needDriver, pair, known, target, ratio,
         totalWork, totalAvail, L, linesByDay: days.map((_, d) => L.filter(l => l.day === d)),
         warnings, dataWarnings, keepExisting, driverGapLB,
     };
@@ -234,7 +239,7 @@ export function prepare(input) {
 
 // ---------- 2. Coût ----------
 function makeCost(M) {
-    const { W, P, L, linesByDay, onLeave, driver, needDriver, pair, skill, known, target, avail, ratio } = M;
+    const { W, P, L, linesByDay, onLeave, dispo, driver, needDriver, pair, skill, known, target, avail, ratio } = M;
     const hours = new Float64Array(P);
     const recomputeHours = () => { hours.fill(0); for (const l of L) for (const i of l.team) hours[i] += l.ph; };
 
@@ -284,8 +289,13 @@ function makeCost(M) {
                 for (const j of l.team) if (j !== i) pp.mates.add(j);
             }
         }
-        for (const pp of per.values()) {
+        for (const [i, pp] of per) {
             if (pp.h > MAX_DAY_HOURS + 1e-9) c += HARD * (pp.h - MAX_DAY_HOURS);
+            const av = dispo[i][d];
+            if (av !== 'all') {
+                if (pp.h > AVAILABILITY_HOURS[av] + 1e-9) c += HARD * (1 + pp.h - AVAILABILITY_HOURS[av]);
+                for (const l of pp.items) if (l.start !== null && ((av === 'am' && l.end > AM_END_MIN + 1e-9) || (av === 'pm' && l.start < PM_START_MIN))) c += HARD;
+            }
             c += W.stability * Math.max(0, pp.mates.size - 2);
             // Ordre de la journée : chantiers à heure fixe d'abord (par heure), puis les autres
             const seq = pp.items.slice().sort((a, b) => (a.start ?? 1e9) - (b.start ?? 1e9));
@@ -510,7 +520,10 @@ function buildResult(M, input) {
         const knowers = k ? t.filter(i => k[i] > 0) : [];
         if (knowers.length) reasons.push(`Connaît le chantier : ${knowers.map(name).join(', ')}`);
         if (l.durInfo.source === 'réel' && Math.abs(l.durInfo.hours - (l.durInfo.planned || 0)) >= 0.25) reasons.push(`Durée réelle habituelle ${l.durInfo.hours} h${l.durInfo.planned ? ` (prévu ${l.durInfo.planned} h)` : ''}`);
-        t.forEach(i => { if (onLeave[i].has(days[l.day])) issues.push(`${name(i)} est en congé`); });
+        t.forEach(i => {
+            if (onLeave[i].has(days[l.day])) issues.push(`${name(i)} est en congé`);
+            else if (M.dispo[i][l.day] === 'off') issues.push(`${name(i)} n'est pas disponible ce jour-là`);
+        });
         if (t.length < l.slots) issues.push(`Équipe incomplète (${t.length}/${l.slots})`);
         const teamNames = [...l.foreign, ...t.map(name)];
         const before = l.src.teamNames || [];
@@ -586,6 +599,7 @@ export function validatePlan(input, teamsById) {
     const violations = [];
     const add = (type, text) => violations.push({ type, text });
 
+    const dispoOf = (u, date) => availabilityOf(u, days.indexOf(date));
     const items = []; // { date, who, start, end, ph, coord, name }
     let totalWork = 0;
     for (const l of lines) {
@@ -605,6 +619,11 @@ export function validatePlan(input, teamsById) {
         }
         for (const u of internal) {
             if (leaves.some(x => x.userId === u.id && x.startDate <= l.date && (x.endDate || x.startDate) >= l.date)) add('conge', `${l.date} — ${u.displayName} est en congé mais placé sur ${l.chantierName}.`);
+            const av = dispoOf(u, l.date);
+            const end = start === null ? null : start + ph * 60;
+            if (av === 'off') add('dispo', `${l.date} — ${u.displayName} n'est pas disponible ce jour-là mais placé sur ${l.chantierName}.`);
+            else if (start !== null && av === 'am' && end > AM_END_MIN + 1e-6) add('dispo', `${l.date} — ${u.displayName} n'est disponible que le matin, ${l.chantierName} finit trop tard.`);
+            else if (start !== null && av === 'pm' && start < PM_START_MIN) add('dispo', `${l.date} — ${u.displayName} n'est disponible que l'après-midi, ${l.chantierName} commence trop tôt.`);
             items.push({ date: l.date, who: u.displayName, start, end: start === null ? null : start + ph * 60, ph, coord: c.coordinates || null, name: l.chantierName });
         }
     }
@@ -615,6 +634,8 @@ export function validatePlan(input, teamsById) {
         const [date, who] = k.split('|');
         const h = list.reduce((s, it) => s + it.ph, 0);
         if (h > MAX_DAY_HOURS + 1e-6) add('journee', `${date} — ${who} : ${round1(h)} h dans la journée (max ${MAX_DAY_HOURS} h).`);
+        const u = byName.get(who), av = dispoOf(u, date);
+        if ((av === 'am' || av === 'pm') && h > AVAILABILITY_HOURS[av] + 1e-6) add('dispo', `${date} — ${who} : ${round1(h)} h alors qu'il·elle n'est disponible qu'une demi-journée.`);
         const timed = list.filter(it => it.start !== null).sort((a, b) => a.start - b.start);
         for (let s = 1; s < timed.length; s++) {
             const tr = travelBetween(timed[s - 1].coord, timed[s].coord);
@@ -622,7 +643,9 @@ export function validatePlan(input, teamsById) {
         }
     }
     // Contrats : personne au-delà de son contrat disponible tant qu'il reste de la place chez les autres
-    const availOf = (u) => u.contract * days.slice(0, 5).filter(d => !leaves.some(x => x.userId === u.id && x.startDate <= d && (x.endDate || x.startDate) >= d)).length / 5;
+    const isLeave = (u, d) => leaves.some(x => x.userId === u.id && x.startDate <= d && (x.endDate || x.startDate) >= d);
+    const availOf = (u) => Math.min(u.contract * days.slice(0, 5).filter(d => !isLeave(u, d)).length / 5,
+        days.reduce((s, d, k) => s + (isLeave(u, d) ? 0 : AVAILABILITY_HOURS[availabilityOf(u, k)]), 0));
     const totalAvail = people.reduce((s, u) => s + availOf(u), 0);
     if (totalWork <= totalAvail + 0.01) {
         for (const u of people) {

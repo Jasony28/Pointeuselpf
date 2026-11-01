@@ -77,3 +77,49 @@ export function needRowHTML(theme, value = 0) {
         <div class="wp-needs" role="group" aria-label="${theme.label}">${buttons}</div>
     </div>`;
 }
+
+// ---------- Disponibilités habituelles ----------
+// users/{uid}.availability : { mon..sun: 'all' | 'am' | 'pm' | 'off' } (absent = toute la journée)
+export const WEEK_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+export const WEEK_LABELS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+export const AVAILABILITY_OPTIONS = [
+    { value: 'all', label: 'Toute la journée', short: 'Journée' },
+    { value: 'am', label: 'Matin seulement', short: 'Matin' },
+    { value: 'pm', label: 'Après-midi seulement', short: 'Après-midi' },
+    { value: 'off', label: 'Pas disponible', short: 'Pas dispo' },
+];
+export const AVAILABILITY_HOURS = { all: 9, am: 4.5, pm: 4.5, off: 0 };
+export const AM_END_MIN = 13 * 60 + 30;   // « matin » : terminé à 13:30 au plus tard
+export const PM_START_MIN = 12 * 60;      // « après-midi » : pas avant 12:00
+
+/** Disponibilité d'une personne pour un jour (0 = lundi … 6 = dimanche). */
+export function availabilityOf(user, dayIndex) {
+    const v = user?.availability?.[WEEK_KEYS[dayIndex]];
+    return AVAILABILITY_HOURS[v] !== undefined ? v : 'all';
+}
+
+/** Résumé lisible : « Mer pas dispo · Ven matin » (vide si disponible tout le temps). */
+export function availabilitySummary(user) {
+    return WEEK_KEYS.map((_, d) => [d, availabilityOf(user, d)]).filter(([, v]) => v !== 'all')
+        .map(([d, v]) => `${WEEK_LABELS[d].slice(0, 3)} ${AVAILABILITY_OPTIONS.find(o => o.value === v).short.toLowerCase()}`).join(' · ');
+}
+
+/** Ce qui manque au profil de travail d'un employé (pour les rappels). */
+export function missingProfileParts(user) {
+    const missing = [];
+    if (typeof user?.isDriver !== 'boolean') missing.push('conducteur');
+    const rated = THEMES.filter(t => user?.skillsSelf?.[t.key] >= 1).length;
+    if (rated < THEMES.length) missing.push(`compétences (${rated}/${THEMES.length})`);
+    if (!user?.availability) missing.push('disponibilités');
+    return missing;
+}
+
+/** Ligne « jour : Journée / Matin / Après-midi / Pas dispo ». */
+export function availabilityRowHTML(dayIndex, value = 'all') {
+    const buttons = AVAILABILITY_OPTIONS.map(o => `
+        <button type="button" class="wp-need${value === o.value ? ' is-active' : ''}" data-day="${WEEK_KEYS[dayIndex]}" data-avail="${o.value}" aria-pressed="${value === o.value}" title="${o.label}">${o.short}</button>`).join('');
+    return `<div class="wp-theme-row">
+        <span class="wp-theme-label">${WEEK_LABELS[dayIndex]}</span>
+        <div class="wp-needs" role="group" aria-label="${WEEK_LABELS[dayIndex]}">${buttons}</div>
+    </div>`;
+}

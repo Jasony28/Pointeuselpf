@@ -3,7 +3,7 @@ import { db, pageContent, currentUser, showConfirmationModal, showInfoModal } fr
 import { getWeekDateRange } from "./utils.js";
 import { getActiveChantiers, getTeamMembers, getUsers } from "./data-service.js";
 import { planWeek, learnDurations, DEFAULT_WEIGHTS, WEIGHT_LABELS } from "./auto-planner.js";
-import { escapeHTML } from "./work-profile.js";
+import { escapeHTML, missingProfileParts } from "./work-profile.js";
 
 const state = {
     currentWeekOffset: 0,
@@ -359,7 +359,7 @@ const autoPlan = { data: null, outcome: null, keepExisting: true, useRealDuratio
 // Données réduites au strict nécessaire (transmissibles au Web Worker, sans objets Firebase)
 const pick = (o, keys) => Object.fromEntries(keys.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
 const LINE_KEYS = ['id', 'date', 'chantierId', 'chantierName', 'startTime', 'duration', 'teamNames', 'order'];
-const USER_KEYS = ['id', 'displayName', 'status', 'role', 'contractHistory', 'contractHours', 'isDriver', 'skillsSelf', 'skillsAdmin'];
+const USER_KEYS = ['id', 'displayName', 'status', 'role', 'contractHistory', 'contractHours', 'isDriver', 'skillsSelf', 'skillsAdmin', 'availability'];
 const CHANTIER_KEYS = ['id', 'name', 'teamSize', 'skillNeeds', 'totalHeuresPrevues', 'coordinates', 'fixedAppointment', 'timeWindowStart', 'timeWindowEnd'];
 
 async function openAutoPlanner() {
@@ -496,6 +496,7 @@ function renderAutoPlan() {
     body.innerHTML = `
         <p class="ap-summary">Travail : <b>${o.totalWork} h</b> · Contrats disponibles (congés déduits) : <b>${o.totalAvail} h</b> →
             ${pct >= 100 ? '<b>tout le monde est rempli à son contrat</b>.' : `chacun reçoit environ <b>${pct} % de son contrat</b>.`}</p>
+        ${incompleteProfilesHTML(o)}
         ${autoPlan.data.affinitiesMissing ? '<p class="ap-warn">Les affinités ne sont pas lisibles : ajoutez la règle Firebase « affinites » (voir la note de mise à jour).</p>' : ''}
         ${o.warnings.length ? `<ul class="ap-warn">${o.warnings.map(w => `<li>${escapeHTML(w)}</li>`).join('')}</ul>` : ''}
 
@@ -543,6 +544,13 @@ function renderAutoPlan() {
         runAutoPlan();
     });
     body.querySelector('#apResetWeights').onclick = () => { autoPlan.weights = { ...DEFAULT_WEIGHTS }; saveWeights(autoPlan.weights); runAutoPlan(); };
+}
+
+function incompleteProfilesHTML(o) {
+    const planned = new Set(o.people.map(p => p.id));
+    const list = autoPlan.data.users.filter(u => planned.has(u.id) && u.role === 'user' && missingProfileParts(u).length);
+    if (!list.length) return '';
+    return `<p class="ap-warn">${list.length} employé(s) n'ont pas complété leur profil de travail (${list.map(u => escapeHTML(u.displayName)).join(', ')}). L'algorithme les considère comme « corrects » (3/5) partout, non conducteurs s'ils n'ont pas répondu, et disponibles tous les jours. Un rappel s'affiche sur leur accueil.</p>`;
 }
 
 function qualityHTML(o) {
