@@ -1,94 +1,141 @@
 import { collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, doc, deleteDoc, updateDoc, writeBatch, getDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, pageContent, showInfoModal, showConfirmationModal } from "../app.js";
 import { getWeekDateRange } from "./utils.js";
+import { escapeHTML } from "./work-profile.js";
 
 let currentWeekOffset = 0;
 let leaveRequestsCache = [];
+let showPastRequests = false;
 const CUSTOM_REASON_MAX_LENGTH = 100;
+const MIN_NOTICE_DAYS = 7;
+
+const svg = (paths) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+const ICONS = {
+    prev: svg('<path d="m15 18-6-6 6-6"/>'),
+    next: svg('<path d="m9 18 6-6-6-6"/>'),
+    info: svg('<circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>'),
+    sun: svg('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),
+    medical: svg('<path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7z"/>'),
+    family: svg('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>'),
+    other: svg('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>'),
+    clock: svg('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
+    hourglass: svg('<path d="M5 22h14M5 2h14M17 22v-4.2a2 2 0 0 0-.6-1.4L12 12l-4.4 4.4a2 2 0 0 0-.6 1.4V22M7 2v4.2a2 2 0 0 0 .6 1.4L12 12l4.4-4.4a2 2 0 0 0 .6-1.4V2"/>'),
+    plane: svg('<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>'),
+    x: svg('<path d="M18 6 6 18M6 6l12 12"/>'),
+    calendar: svg('<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>'),
+};
+
+const REASONS = [
+    { value: 'Vacances', label: 'Vacances', sub: 'Congé payé', icon: ICONS.sun },
+    { value: 'Médical', label: 'Médical', sub: 'Raison médicale', icon: ICONS.medical },
+    { value: 'Familial', label: 'Familial', sub: 'Événement familial', icon: ICONS.family },
+    { value: 'Autre', label: 'Autre', sub: 'À préciser', icon: ICONS.other },
+];
 
 export async function render() {
+    showPastRequests = false;
     pageContent.innerHTML = `
-        <div class="max-w-5xl mx-auto space-y-8">
-            <div class="mb-6">
-                <h2 class="text-3xl font-black tracking-tight">Mes Congés</h2>
-                <p class="text-lg mt-1" style="color: var(--color-text-muted);">Demandez un congé et consultez le planning de l'équipe.</p>
-            </div>
-            
-            <!-- FORMULAIRE DE DEMANDE -->
-            <div class="p-6 md:p-8 rounded-xl shadow-sm border" style="background-color: var(--color-surface); border-color: var(--color-border);">
-                <h3 class="text-xl font-bold mb-5">Nouvelle demande</h3>
+        <div class="lv-page">
+            <header class="lv-header">
+                <h2 class="lv-title">Mes congés</h2>
+                <p class="lv-subtitle">Demandez un congé, suivez vos demandes et voyez qui est absent dans l'équipe.</p>
+            </header>
 
-                <form id="leaveRequestForm" class="space-y-6 relative z-10">
-                    
-                    <div class="leave-info">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>
-                        <p>Les demandes de congés doivent être soumises <strong>au moins 7 jours à l'avance</strong>. Une fois approuvée, la demande s'affichera automatiquement dans le planning officiel.</p>
-                    </div>
+            <div id="lv-summary" class="lv-summary">${'<div class="lv-skel"></div>'.repeat(3)}</div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="space-y-4">
-                            <div>
-                                <label for="leave-start-date" class="text-sm font-bold uppercase tracking-wider mb-1 block" style="color: var(--color-text-muted);">Date de début</label>
-                                <input type="date" id="leave-start-date" class="w-full border-2 p-3 rounded-lg font-semibold" style="background-color: var(--color-background); border-color: var(--color-border);" required>
+            <div class="lv-grid">
+                <!-- FORMULAIRE DE DEMANDE -->
+                <section class="lv-card">
+                    <h3 class="lv-card-title">Nouvelle demande</h3>
+                    <form id="leaveRequestForm" class="lv-form">
+                        <div class="lv-notice">
+                            ${ICONS.info}
+                            <p>À envoyer <strong>au moins ${MIN_NOTICE_DAYS} jours à l'avance</strong> : au plus tôt le <strong id="lv-min-date"></strong>. Une fois approuvée, la demande s'affiche automatiquement dans le planning.</p>
+                        </div>
+
+                        <fieldset class="lv-field">
+                            <legend class="lv-label">Motif</legend>
+                            <div class="lv-reasons">
+                                ${REASONS.map(r => `
+                                    <label class="lv-reason">
+                                        <input type="radio" name="leave-reason" value="${r.value}" required>
+                                        <span class="lv-reason-icon">${r.icon}</span>
+                                        <span class="lv-reason-text"><strong>${r.label}</strong><small>${r.sub}</small></span>
+                                    </label>`).join('')}
                             </div>
-                            <div>
-                                <label for="leave-end-date" class="text-sm font-bold uppercase tracking-wider mb-1 block" style="color: var(--color-text-muted);">Date de fin</label>
-                                <input type="date" id="leave-end-date" class="w-full border-2 p-3 rounded-lg font-semibold" style="background-color: var(--color-background); border-color: var(--color-border);">
-                            </div>
-                            <div class="flex items-center gap-3 p-3 rounded-lg border" style="background-color: var(--color-background); border-color: var(--color-border);">
-                                <input type="checkbox" id="single-day-leave" class="h-5 w-5 rounded text-primary border-gray-300">
-                                <label for="single-day-leave" class="text-sm font-bold cursor-pointer select-none">Absence d'une seule journée</label>
+                        </fieldset>
+
+                        <div id="custom-reason-container" class="lv-field hidden">
+                            <label for="leave-reason-custom" class="lv-label">Précisez la raison</label>
+                            <textarea id="leave-reason-custom" class="input" rows="2" placeholder="Ex. : déménagement, formation…"></textarea>
+                            <div class="lv-counter"><span id="char-counter">0</span> / ${CUSTOM_REASON_MAX_LENGTH}</div>
+                        </div>
+
+                        <div class="lv-field">
+                            <span class="lv-label">Durée</span>
+                            <div class="segmented lv-span" role="radiogroup" aria-label="Durée">
+                                <label><input type="radio" name="leave-span" value="multi" checked><span>Plusieurs jours</span></label>
+                                <label><input type="radio" name="leave-span" value="single" id="single-day-leave"><span>Un seul jour</span></label>
                             </div>
                         </div>
 
-                        <div class="space-y-4">
-                            <div>
-                                <label for="leave-reason" class="text-sm font-bold uppercase tracking-wider mb-1 block" style="color: var(--color-text-muted);">Motif de l'absence</label>
-                                <select id="leave-reason" class="w-full border-2 p-3 rounded-lg font-semibold cursor-pointer" style="background-color: var(--color-background); border-color: var(--color-border);" required>
-                                    <option value="" disabled selected>-- Sélectionnez un motif --</option>
-                                    <option value="Vacances">Vacances / Congé payé</option>
-                                    <option value="Médical">Raison médicale</option>
-                                    <option value="Familial">Événement familial</option>
-                                    <option value="Autre">Autre (préciser)</option>
-                                </select>
+                        <div class="lv-dates">
+                            <div class="lv-field">
+                                <label for="leave-start-date" class="lv-label" id="lv-start-label">Du</label>
+                                <input type="date" id="leave-start-date" class="input" required>
                             </div>
-                            <div id="custom-reason-container" class="hidden">
-                                <label for="leave-reason-custom" class="text-sm font-bold uppercase tracking-wider mb-1 block" style="color: var(--color-text-muted);">Précisez la raison</label>
-                                <textarea id="leave-reason-custom" class="w-full border-2 p-3 rounded-lg" style="background-color: var(--color-background); border-color: var(--color-border);" rows="2"></textarea>
-                                <div class="text-right text-xs font-bold mt-1" style="color: var(--color-text-muted);">
-                                   <span id="char-counter">0</span> / ${CUSTOM_REASON_MAX_LENGTH} max
-                                </div>
-                            </div>
-
-                            <div id="leave-times-container" class="grid grid-cols-2 gap-4 p-3 rounded-lg border bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-                                <div>
-                                    <label for="leave-start-time" class="text-xs font-bold uppercase mb-1 block">Heure début (opt.)</label>
-                                    <input type="time" id="leave-start-time" class="w-full border p-2 rounded" style="background-color: var(--color-surface); border-color: var(--color-border);">
-                                </div>
-                                <div>
-                                    <label for="leave-end-time" class="text-xs font-bold uppercase mb-1 block">Heure fin (opt.)</label>
-                                    <input type="time" id="leave-end-time" class="w-full border p-2 rounded" style="background-color: var(--color-surface); border-color: var(--color-border);">
-                                </div>
+                            <div class="lv-field" id="lv-end-field">
+                                <label for="leave-end-date" class="lv-label">Au</label>
+                                <input type="date" id="leave-end-date" class="input">
                             </div>
                         </div>
-                    </div>
 
-                    <div class="text-right pt-6 border-t" style="border-color: var(--color-border);">
-                        <button type="submit" class="btn btn-primary btn-lg w-full md:w-auto">Envoyer la demande</button>
+                        <label class="lv-check">
+                            <input type="checkbox" id="leave-partial">
+                            <span>Absence partielle <small>(préciser des heures)</small></span>
+                        </label>
+                        <div id="leave-times-container" class="lv-dates hidden">
+                            <div class="lv-field">
+                                <label for="leave-start-time" class="lv-label">De</label>
+                                <input type="time" id="leave-start-time" class="input">
+                            </div>
+                            <div class="lv-field">
+                                <label for="leave-end-time" class="lv-label">À</label>
+                                <input type="time" id="leave-end-time" class="input">
+                            </div>
+                        </div>
+
+                        <div id="lv-preview" class="lv-preview" hidden></div>
+
+                        <button type="submit" class="btn btn-primary btn-lg btn-block">Envoyer la demande</button>
+                    </form>
+                </section>
+
+                <!-- MES DEMANDES -->
+                <section class="lv-card">
+                    <div class="lv-card-head">
+                        <h3 class="lv-card-title">Mes demandes</h3>
                     </div>
-                </form>
+                    <div id="lv-mine" class="lv-mine"><div class="lv-skel" style="height: 220px;"></div></div>
+                </section>
             </div>
 
             <!-- PLANNING DES CONGÉS DE L'ÉQUIPE -->
-            <div class="p-6 rounded-xl shadow-sm border" style="background-color: var(--color-surface); border-color: var(--color-border);">
-                <h3 class="text-xl font-bold mb-3">Congés de l'équipe</h3>
-                <div class="flex justify-between items-center gap-2 mb-5">
-                    <button id="prevWeekBtn" class="nav-arrow" aria-label="Semaine précédente"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;"><path d="m15 18-6-6 6-6"/></svg></button>
-                    <p id="list-title" class="font-semibold text-center"></p>
-                    <button id="nextWeekBtn" class="nav-arrow" aria-label="Semaine suivante"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;"><path d="m9 18 6-6-6-6"/></svg></button>
+            <section class="lv-card">
+                <div class="lv-card-head lv-team-head">
+                    <div>
+                        <h3 class="lv-card-title">Congés de l'équipe</h3>
+                        <p id="lv-week-count" class="lv-card-sub"></p>
+                    </div>
+                    <div class="lv-week-nav">
+                        <button id="lv-today-btn" type="button" class="btn btn-secondary lv-today" hidden>Cette semaine</button>
+                        <button id="prevWeekBtn" class="nav-arrow" aria-label="Semaine précédente">${ICONS.prev}</button>
+                        <p id="list-title" class="lv-week-title"></p>
+                        <button id="nextWeekBtn" class="nav-arrow" aria-label="Semaine suivante">${ICONS.next}</button>
+                    </div>
                 </div>
-                <div id="leave-list-container" class="space-y-6"></div>
-            </div>
+                <div id="leave-list-container" class="lv-week"></div>
+            </section>
         </div>
     `;
     setTimeout(() => {
@@ -100,14 +147,15 @@ export async function render() {
 
 // --- LE MOTEUR DES 7 JOURS POUR TOUT LE MONDE (ADMIN INCLUS) ---
 function setMinimumLeaveDate() {
-    const today = new Date();
+    const minDate = new Date();
     // On ajoute 7 jours pleins
-    today.setDate(today.getDate() + 7); 
-    const minDateString = today.toISOString().split('T')[0];
-    
+    minDate.setDate(minDate.getDate() + MIN_NOTICE_DAYS);
+    const minDateString = toKey(minDate);
+
     // On bloque les calendriers HTML
     document.getElementById('leave-start-date').min = minDateString;
     document.getElementById('leave-end-date').min = minDateString;
+    document.getElementById('lv-min-date').textContent = minDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
 async function updatePlanningOnLeaveChange(docId, leaveData, newStatus, existingBatch = null) {
@@ -130,7 +178,7 @@ async function updatePlanningOnLeaveChange(docId, leaveData, newStatus, existing
                 chantierId: "LEAVE_ID",
                 chantierName: chantierName,
                 teamNames: [leaveData.userName],
-                date: dateString, 
+                date: dateString,
                 startTime: leaveData.startTime || "",
                 notes: `Congé approuvé: ${leaveData.reason}`,
                 order: 0,
@@ -147,61 +195,85 @@ async function updatePlanningOnLeaveChange(docId, leaveData, newStatus, existing
 }
 
 function setupEventListeners() {
-    document.getElementById('prevWeekBtn').addEventListener('click', () => { 
-        currentWeekOffset--; 
-        displayLeaveList(); 
+    document.getElementById('prevWeekBtn').addEventListener('click', () => {
+        currentWeekOffset--;
+        displayLeaveList();
     });
-    document.getElementById('nextWeekBtn').addEventListener('click', () => { 
-        currentWeekOffset++; 
-        displayLeaveList(); 
+    document.getElementById('nextWeekBtn').addEventListener('click', () => {
+        currentWeekOffset++;
+        displayLeaveList();
+    });
+    document.getElementById('lv-today-btn').addEventListener('click', () => {
+        currentWeekOffset = 0;
+        displayLeaveList();
     });
     document.getElementById('leaveRequestForm').addEventListener('submit', submitLeaveRequest);
 
     const startDateInput = document.getElementById('leave-start-date');
     const endDateInput = document.getElementById('leave-end-date');
-    const singleDayCheckbox = document.getElementById('single-day-leave');
+    const singleDayRadio = document.getElementById('single-day-leave');
 
-    singleDayCheckbox.addEventListener('change', () => {
-        if (singleDayCheckbox.checked) {
-            endDateInput.value = startDateInput.value;
-            endDateInput.disabled = true;
-            endDateInput.classList.add('opacity-50');
-        } else {
-            endDateInput.disabled = false;
-            endDateInput.classList.remove('opacity-50');
-        }
-    });
-    
+    const syncSpan = () => {
+        const single = singleDayRadio.checked;
+        document.getElementById('lv-end-field').classList.toggle('hidden', single);
+        document.getElementById('lv-start-label').textContent = single ? 'Le' : 'Du';
+        endDateInput.disabled = single;
+        if (single) endDateInput.value = startDateInput.value;
+        updatePreview();
+    };
+    document.querySelectorAll('input[name="leave-span"]').forEach(r => r.addEventListener('change', syncSpan));
+
     startDateInput.addEventListener('change', () => {
-        if (singleDayCheckbox.checked) {
+        if (singleDayRadio.checked || !endDateInput.value || endDateInput.value < startDateInput.value) {
             endDateInput.value = startDateInput.value;
         }
+        if (startDateInput.value) endDateInput.min = startDateInput.value;
+        updatePreview();
     });
+    endDateInput.addEventListener('change', updatePreview);
 
-    const reasonSelect = document.getElementById('leave-reason');
+    const partial = document.getElementById('leave-partial');
+    partial.addEventListener('change', () => {
+        document.getElementById('leave-times-container').classList.toggle('hidden', !partial.checked);
+        if (!partial.checked) {
+            document.getElementById('leave-start-time').value = '';
+            document.getElementById('leave-end-time').value = '';
+        }
+        updatePreview();
+    });
+    ['leave-start-time', 'leave-end-time'].forEach(id => document.getElementById(id).addEventListener('change', updatePreview));
+
     const customReasonContainer = document.getElementById('custom-reason-container');
     const customReasonInput = document.getElementById('leave-reason-custom');
-    
-    reasonSelect.addEventListener('change', (e) => {
-        if (e.target.value === 'Autre') {
+
+    document.querySelectorAll('input[name="leave-reason"]').forEach(radio => radio.addEventListener('change', () => {
+        if (radio.value === 'Autre') {
             customReasonContainer.classList.remove('hidden');
             customReasonInput.required = true;
+            customReasonInput.focus();
         } else {
             customReasonContainer.classList.add('hidden');
             customReasonInput.required = false;
             customReasonInput.value = '';
         }
-    });
+        updatePreview();
+    }));
 
     const charCounter = document.getElementById('char-counter');
     customReasonInput.addEventListener('input', () => {
         const count = customReasonInput.value.length;
         charCounter.textContent = count;
-        charCounter.style.color = count > CUSTOM_REASON_MAX_LENGTH ? 'red' : 'var(--color-text-muted)';
+        charCounter.parentElement.classList.toggle('is-over', count > CUSTOM_REASON_MAX_LENGTH);
     });
 
-    // Bouton Annuler
-    document.getElementById('leave-list-container').addEventListener('click', async (e) => {
+    // Bouton Annuler (mes demandes et planning de l'équipe)
+    pageContent.querySelector('.lv-page').addEventListener('click', async (e) => {
+        if (e.target.closest('#lv-past-toggle')) {
+            showPastRequests = !showPastRequests;
+            renderMyRequests();
+            return;
+        }
+
         const button = e.target.closest('.cancel-leave-btn');
         if (!button) return;
 
@@ -221,7 +293,7 @@ function setupEventListeners() {
                 batch.delete(leaveDocRef);
                 await updatePlanningOnLeaveChange(docId, leaveData, 'deleted', batch);
                 await batch.commit();
-                
+
                 showInfoModal("Succès", "Demande annulée avec succès.");
                 loadAllRequestsAndDisplayList();
             } catch (error) {
@@ -231,151 +303,243 @@ function setupEventListeners() {
     });
 }
 
+// Résumé en direct de la demande en cours de saisie
+function updatePreview() {
+    const preview = document.getElementById('lv-preview');
+    if (!preview) return;
+    const startDate = document.getElementById('leave-start-date').value;
+    const single = document.getElementById('single-day-leave').checked;
+    const endDate = single ? startDate : (document.getElementById('leave-end-date').value || startDate);
+    if (!startDate) { preview.hidden = true; return; }
+
+    const minDate = document.getElementById('leave-start-date').min;
+    const startTime = document.getElementById('leave-start-time').value;
+    const endTime = document.getElementById('leave-end-time').value;
+    const reason = document.querySelector('input[name="leave-reason"]:checked')?.value;
+
+    let html, cls = '';
+    if (startDate < minDate) {
+        cls = 'is-error';
+        html = `${ICONS.info}<span>Trop tôt : la date de début doit être au plus tôt le ${formatDay(minDate, { weekday: 'long', day: 'numeric', month: 'long' })}.</span>`;
+    } else if (endDate < startDate) {
+        cls = 'is-error';
+        html = `${ICONS.info}<span>La date de fin ne peut pas être avant le début.</span>`;
+    } else {
+        const workdays = countWeekdays(startDate, endDate);
+        const range = startDate === endDate
+            ? `Le ${formatDay(startDate, { weekday: 'long', day: 'numeric', month: 'long' })}`
+            : `Du ${formatDay(startDate, { weekday: 'short', day: 'numeric', month: 'short' })} au ${formatDay(endDate, { weekday: 'short', day: 'numeric', month: 'short' })}`;
+        const hours = startTime && endTime ? ` · de ${startTime} à ${endTime}` : '';
+        html = `${ICONS.calendar}<span><strong>${range}</strong>${hours}<small>${workdays} jour${workdays > 1 ? 's' : ''} ouvrable${workdays > 1 ? 's' : ''}${reason ? ` · ${escapeHTML(reason === 'Autre' ? 'Autre motif' : reason)}` : ''}</small></span>`;
+    }
+    preview.className = `lv-preview ${cls}`;
+    preview.innerHTML = html;
+    preview.hidden = false;
+}
+
 async function loadAllRequestsAndDisplayList() {
     try {
         const q = query(collection(db, "leaveRequests"), orderBy("startDate", "desc"));
         const snapshot = await getDocs(q);
         leaveRequestsCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        if (!document.getElementById('leave-list-container')) return;
+        renderSummary();
+        renderMyRequests();
         displayLeaveList();
     } catch (error) { console.error("Erreur de chargement des congés:", error); }
+}
+
+function myRequests() {
+    return leaveRequestsCache.filter(r => r.userId === currentUser.uid);
+}
+
+function renderSummary() {
+    const today = toKey(new Date());
+    const year = new Date().getFullYear();
+    const mine = myRequests();
+
+    // Jours ouvrables approuvés sur l'année en cours (une absence partielle compte pour une demi-journée)
+    let approvedDays = 0;
+    mine.filter(r => r.status === 'approved').forEach(r => {
+        const start = r.startDate > `${year}-01-01` ? r.startDate : `${year}-01-01`;
+        const endRaw = r.endDate || r.startDate;
+        const end = endRaw < `${year}-12-31` ? endRaw : `${year}-12-31`;
+        if (start > end) return;
+        approvedDays += countWeekdays(start, end) * (r.startTime && r.endTime ? 0.5 : 1);
+    });
+    const pending = mine.filter(r => r.status === 'pending').length;
+
+    const next = mine
+        .filter(r => r.status !== 'refused' && (r.endDate || r.startDate) >= today)
+        .sort((a, b) => a.startDate.localeCompare(b.startDate))[0];
+    let nextValue = '—', nextSub = 'Aucun congé prévu';
+    if (next) {
+        const inDays = Math.round((parseDay(next.startDate) - parseDay(today)) / 86400000);
+        nextValue = next.startDate <= today ? 'En cours' : formatDay(next.startDate, { day: 'numeric', month: 'short' });
+        nextSub = next.startDate <= today
+            ? `jusqu'au ${formatDay(next.endDate || next.startDate, { day: 'numeric', month: 'long' })}`
+            : `dans ${inDays} jour${inDays > 1 ? 's' : ''}${next.status === 'pending' ? ' · en attente' : ''}`;
+    }
+
+    const tile = (icon, label, value, sub, tone = '') => `
+        <div class="lv-stat ${tone}">
+            <span class="lv-stat-icon">${icon}</span>
+            <span class="lv-stat-label">${label}</span>
+            <span class="lv-stat-value">${value}</span>
+            <span class="lv-stat-sub">${sub}</span>
+        </div>`;
+
+    document.getElementById('lv-summary').innerHTML = `
+        ${tile(ICONS.sun, `Jours de congé ${year}`, formatDays(approvedDays), 'jours ouvrables approuvés')}
+        ${tile(ICONS.hourglass, 'En attente', pending, pending > 1 ? 'demandes à valider' : 'demande à valider', pending ? 'is-warning' : '')}
+        ${tile(ICONS.plane, 'Prochain congé', nextValue, nextSub)}
+    `;
+}
+
+function renderMyRequests() {
+    const container = document.getElementById('lv-mine');
+    if (!container) return;
+    const today = toKey(new Date());
+    const mine = myRequests();
+    const upcoming = mine.filter(r => (r.endDate || r.startDate) >= today).sort((a, b) => a.startDate.localeCompare(b.startDate));
+    const past = mine.filter(r => (r.endDate || r.startDate) < today).sort((a, b) => b.startDate.localeCompare(a.startDate));
+
+    if (!mine.length) {
+        container.innerHTML = `<div class="lv-empty">${ICONS.plane}<p>Aucune demande pour le moment.<br>Vos demandes apparaîtront ici avec leur statut.</p></div>`;
+        return;
+    }
+
+    const item = (r, isPast) => {
+        const end = r.endDate || r.startDate;
+        const start = parseDay(r.startDate);
+        const workdays = countWeekdays(r.startDate, end);
+        const range = r.startDate === end
+            ? formatDay(r.startDate, { weekday: 'long', day: 'numeric', month: 'long' })
+            : `${formatDay(r.startDate, { day: 'numeric', month: 'short' })} → ${formatDay(end, { day: 'numeric', month: 'short', year: start.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined })}`;
+        const hours = r.startTime && r.endTime ? ` · ${r.startTime}–${r.endTime}` : '';
+        const canCancel = r.status === 'pending' || r.status === 'approved';
+        return `
+            <li class="lv-req is-${r.status}${isPast ? ' is-past' : ''}">
+                <span class="lv-req-date">
+                    <small>${start.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '')}</small>
+                    <strong>${start.getDate()}</strong>
+                </span>
+                <div class="lv-req-main">
+                    <p class="lv-req-reason">${escapeHTML(r.reason)}</p>
+                    <p class="lv-req-range">${range}${hours} · ${workdays} j</p>
+                </div>
+                ${statusBadge(r.status)}
+                ${canCancel ? `<button type="button" class="cancel-leave-btn icon-btn is-danger" data-id="${r.id}" aria-label="${r.status === 'pending' ? 'Annuler ma demande' : 'Annuler ce congé'}" title="${r.status === 'pending' ? 'Annuler ma demande' : 'Annuler ce congé'}">${ICONS.x}</button>` : '<span class="lv-req-spacer"></span>'}
+            </li>`;
+    };
+
+    container.innerHTML = `
+        ${upcoming.length ? `<p class="lv-group-title">À venir</p><ul class="lv-reqs">${upcoming.map(r => item(r, false)).join('')}</ul>` : '<p class="lv-muted">Aucune demande à venir.</p>'}
+        ${past.length ? `
+            <button type="button" id="lv-past-toggle" class="lv-more">${showPastRequests ? 'Masquer l\'historique' : `Voir l'historique (${past.length})`}</button>
+            ${showPastRequests ? `<ul class="lv-reqs">${past.map(r => item(r, true)).join('')}</ul>` : ''}` : ''}
+    `;
 }
 
 function displayLeaveList() {
     const listContainer = document.getElementById('leave-list-container');
     const listTitle = document.getElementById('list-title');
-    listContainer.innerHTML = '';
+    if (!listContainer) return;
 
     const { startOfWeek, endOfWeek } = getWeekDateRange(currentWeekOffset);
-    listTitle.textContent = `Semaine du ${startOfWeek.toLocaleDateString('fr-FR', {day: 'numeric', month: 'long'})}`;
+    const sameMonth = startOfWeek.getUTCMonth() === endOfWeek.getUTCMonth();
+    listTitle.textContent = `${startOfWeek.toLocaleDateString('fr-FR', { timeZone: 'UTC', day: 'numeric', month: sameMonth ? undefined : 'short' })} – ${endOfWeek.toLocaleDateString('fr-FR', { timeZone: 'UTC', day: 'numeric', month: 'short' })}`;
+    document.getElementById('lv-today-btn').hidden = currentWeekOffset === 0;
 
-    const dailyEntries = [];
-    leaveRequestsCache.forEach(req => {
-        const start = new Date(req.startDate + 'T12:00:00Z');
-        const end = new Date((req.endDate || req.startDate) + 'T12:00:00Z');
-        let loopDate = new Date(start);
-        while (loopDate <= end) {
-            if (loopDate >= startOfWeek && loopDate <= endOfWeek) {
-                dailyEntries.push({ date: new Date(loopDate), ...req });
-            }
-            loopDate.setUTCDate(loopDate.getUTCDate() + 1); 
-        }
+    const today = toKey(new Date());
+    const people = new Set();
+    const days = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(startOfWeek);
+        d.setUTCDate(startOfWeek.getUTCDate() + i);
+        const key = d.toISOString().split('T')[0];
+
+        const entries = leaveRequestsCache.filter(req => {
+            if (!(req.startDate <= key && key <= (req.endDate || req.startDate))) return false;
+            // Les demandes en attente des collègues restent privées
+            return !(req.status === 'pending' && req.userId !== currentUser.uid && currentUser.role !== 'admin');
+        });
+        entries.forEach(e => { if (e.status !== 'refused') people.add(e.userId); });
+        return { key, date: d, entries, weekend: i >= 5, today: key === today };
     });
-    
-    const groupedByDay = dailyEntries.reduce((acc, entry) => {
-        const dateString = entry.date.toISOString().split('T')[0];
-        if (!acc[dateString]) acc[dateString] = [];
-        acc[dateString].push(entry);
-        return acc;
-    }, {});
-    
-    const sortedDays = Object.keys(groupedByDay).sort();
 
-    if (sortedDays.length === 0) {
-        listContainer.innerHTML = `
-            <p class="hours-empty">Aucun congé prévu cette semaine-là.</p>`;
-        return;
+    document.getElementById('lv-week-count').textContent = people.size
+        ? `${people.size} personne${people.size > 1 ? 's' : ''} absente${people.size > 1 ? 's' : ''} cette semaine`
+        : 'Personne en congé cette semaine';
+
+    listContainer.innerHTML = days.map(day => `
+        <div class="lv-day${day.today ? ' is-today' : ''}${day.weekend ? ' is-weekend' : ''}${day.entries.length ? '' : ' is-empty'}">
+            <div class="lv-day-head">
+                <span class="lv-day-name">${day.date.toLocaleDateString('fr-FR', { timeZone: 'UTC', weekday: 'short' }).replace('.', '')}</span>
+                <span class="lv-day-num">${day.date.getUTCDate()}</span>
+                ${day.today ? '<span class="lv-day-badge">Aujourd\'hui</span>' : ''}
+            </div>
+            <div class="lv-day-body">
+                ${day.entries.length ? day.entries.map(entryHTML).join('') : '<span class="lv-day-none">—</span>'}
+            </div>
+        </div>`).join('');
+}
+
+function entryHTML(entry) {
+    // --- FILTRE DE CONFIDENTIALITÉ ---
+    // L'admin ou le propriétaire voit la vraie raison, les autres collègues voient juste "Absent(e)"
+    const isMine = entry.userId === currentUser.uid;
+    let reasonText = (currentUser.role === 'admin' || isMine) ? escapeHTML(entry.reason) : 'Absent(e)';
+    // On ajoute quand même les heures si c'est une absence partielle
+    if (entry.startTime && entry.endTime) {
+        reasonText += ` · ${entry.startTime}–${entry.endTime}`;
     }
 
-    sortedDays.forEach(dateString => {
-        const dayEntries = groupedByDay[dateString];
-        const dayDate = new Date(dateString + 'T12:00:00Z');
-        const dayWrapper = document.createElement('div');
-        dayWrapper.className = "leave-day";
-        dayWrapper.innerHTML = `
-            <h4 class="leave-day-title">${dayDate.toLocaleDateString('fr-FR', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' })}</h4>`;
-        
-        const entriesContainer = document.createElement('div');
-        entriesContainer.className = 'grid grid-cols-1 md:grid-cols-2 gap-3';
-
-        dayEntries.forEach(entry => {
-            if (entry.status === 'pending' && entry.userId !== currentUser.uid && currentUser.role !== 'admin') {
-                return;
-            }
-
-            let statusStyle = '', statusText = '', actionHtml = '';
-            
-            if (entry.status === 'approved') {
-                statusStyle = 'is-approved';
-                statusText = '<span class="leave-status is-approved">Approuvé</span>';
-                if (entry.userId === currentUser.uid || currentUser.role === 'admin') {
-                    actionHtml = `<button class="cancel-leave-btn leave-action" data-id="${entry.id}">Annuler ce congé</button>`;
-                }
-            } else if (entry.status === 'refused') {
-                statusStyle = 'is-refused';
-                statusText = '<span class="leave-status is-refused">Refusé</span>';
-            } else if (entry.status === 'pending') {
-                statusStyle = 'is-pending';
-                statusText = '<span class="leave-status is-pending">En attente</span>';
-                if (entry.userId === currentUser.uid) {
-                    actionHtml = `<button class="cancel-leave-btn leave-action" data-id="${entry.id}">Annuler ma demande</button>`;
-                }
-            }
-
-            // --- FILTRE DE CONFIDENTIALITÉ ---
-            let reasonText = "";
-            if (currentUser.role === 'admin' || entry.userId === currentUser.uid) {
-                // L'admin ou le propriétaire voit la vraie raison
-                reasonText = entry.reason;
-            } else {
-                // Les autres collègues voient juste "Absent(e)"
-                reasonText = "Absent(e)";
-            }
-
-            // On ajoute quand même les heures si c'est une absence partielle
-            if (entry.startTime && entry.endTime) {
-                reasonText += ` <span class="leave-hours">de ${entry.startTime} à ${entry.endTime}</span>`;
-            }
-            // ---------------------------------
-            
-            const card = document.createElement('div');
-            card.className = `leave-card ${statusStyle}`;
-            card.innerHTML = `
-                <div class="leave-card-head">
-                    <p class="leave-card-name">${entry.userName}</p>
-                    ${statusText}
-                </div>
-                <p class="leave-card-reason">${reasonText}</p>
-                ${actionHtml}
-            `;
-            entriesContainer.appendChild(card);
-        });
-
-        if (entriesContainer.children.length > 0) {
-            dayWrapper.appendChild(entriesContainer);
-            listContainer.appendChild(dayWrapper);
-        }
-    });
+    const canCancel = (entry.status === 'approved' && (isMine || currentUser.role === 'admin')) || (entry.status === 'pending' && isMine);
+    return `
+        <div class="lv-entry is-${entry.status}${isMine ? ' is-mine' : ''}">
+            <span class="lv-avatar" aria-hidden="true">${escapeHTML(initials(entry.userName))}</span>
+            <div class="lv-entry-main">
+                <span class="lv-entry-name">${escapeHTML(entry.userName)}${isMine ? ' <small>(moi)</small>' : ''}</span>
+                <span class="lv-entry-reason">${reasonText}</span>
+            </div>
+            ${entry.status !== 'approved' ? `<span class="lv-dot is-${entry.status}" title="${entry.status === 'pending' ? 'En attente' : 'Refusé'}"></span>` : ''}
+            ${canCancel ? `<button type="button" class="cancel-leave-btn icon-btn is-danger" data-id="${entry.id}" aria-label="Annuler">${ICONS.x}</button>` : ''}
+        </div>`;
 }
 
 async function submitLeaveRequest(e) {
     e.preventDefault();
     const form = e.target;
     const submitButton = form.querySelector('button[type="submit"]');
-    
+
     const startDate = document.getElementById('leave-start-date').value;
     const isSingleDay = document.getElementById('single-day-leave').checked;
     const endDate = isSingleDay ? startDate : document.getElementById('leave-end-date').value || startDate;
-    let reason = document.getElementById('leave-reason').value;
+    let reason = document.querySelector('input[name="leave-reason"]:checked')?.value || '';
     const customReason = document.getElementById('leave-reason-custom').value;
     const startTime = document.getElementById('leave-start-time').value;
     const endTime = document.getElementById('leave-end-time').value;
 
     // --- SÉCURITÉ : VÉRIFICATION STRICTE DES 7 JOURS EN JAVASCRIPT ---
     const today = new Date();
-    today.setHours(0,0,0,0); 
+    today.setHours(0,0,0,0);
     const limitDate = new Date(today);
-    limitDate.setDate(limitDate.getDate() + 7);
-    
+    limitDate.setDate(limitDate.getDate() + MIN_NOTICE_DAYS);
+
     const requestedStart = new Date(startDate + 'T00:00:00');
-    
+
     if (requestedStart < limitDate) {
         showInfoModal("Opération impossible", "Rappel : Toute demande de congé doit être effectuée au strict minimum 7 jours à l'avance.");
-        submitButton.disabled = false; 
-        submitButton.textContent = "Envoyer la demande"; 
-        return; 
+        submitButton.disabled = false;
+        submitButton.textContent = "Envoyer la demande";
+        return;
     }
 
     // --- VALIDATIONS ---
+    if (!reason) {
+        showInfoModal("Attention", "Veuillez choisir un motif.");
+        return;
+    }
     if (customReason.length > CUSTOM_REASON_MAX_LENGTH) {
         showInfoModal("Erreur", `La raison ne doit pas dépasser ${CUSTOM_REASON_MAX_LENGTH} caractères.`);
         return;
@@ -404,12 +568,16 @@ async function submitLeaveRequest(e) {
         requestData.startTime = startTime;
         requestData.endTime = endTime;
     }
-    
+
     // --- CONFIRMATION ---
-    const options = { timeZone: 'UTC', day: 'numeric', month: 'long' };
-    let summary = `Motif : **${reason}**\nDu **${new Date(startDate+'T12:00:00Z').toLocaleDateString('fr-FR', options)}** au **${new Date(endDate+'T12:00:00Z').toLocaleDateString('fr-FR', options)}**`;
-    if(startTime && endTime) summary += `\nDe **${startTime}** à **${endTime}**`;
-    
+    const options = { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' };
+    let summary = `Motif : ${reason}\n`;
+    summary += startDate === endDate
+        ? `Le ${new Date(startDate+'T12:00:00Z').toLocaleDateString('fr-FR', options)}`
+        : `Du ${new Date(startDate+'T12:00:00Z').toLocaleDateString('fr-FR', options)} au ${new Date(endDate+'T12:00:00Z').toLocaleDateString('fr-FR', options)}`;
+    if(startTime && endTime) summary += `\nDe ${startTime} à ${endTime}`;
+    summary += `\n${countWeekdays(startDate, endDate)} jour(s) ouvrable(s)`;
+
     const confirmed = await showConfirmationModal("Récapitulatif", summary);
     if (!confirmed) {
         submitButton.disabled = false; submitButton.textContent = "Envoyer la demande"; return;
@@ -421,7 +589,10 @@ async function submitLeaveRequest(e) {
         showInfoModal("Succès", "Votre demande a été envoyée au bureau. Vous serez averti(e) de son statut.");
         form.reset();
         document.getElementById('single-day-leave').dispatchEvent(new Event('change'));
-        document.getElementById('leave-reason').dispatchEvent(new Event('change'));
+        document.getElementById('leave-partial').dispatchEvent(new Event('change'));
+        document.getElementById('custom-reason-container').classList.add('hidden');
+        document.getElementById('leave-reason-custom').required = false;
+        document.getElementById('lv-preview').hidden = true;
         loadAllRequestsAndDisplayList();
     } catch (error) {
         showInfoModal("Erreur", "L'envoi de la demande a échoué.");
@@ -429,4 +600,44 @@ async function submitLeaveRequest(e) {
         submitButton.disabled = false;
         submitButton.textContent = "Envoyer la demande";
     }
+}
+
+// --- Utilitaires ---
+
+function statusBadge(status) {
+    if (status === 'approved') return '<span class="leave-status is-approved">Approuvé</span>';
+    if (status === 'refused') return '<span class="leave-status is-refused">Refusé</span>';
+    return '<span class="leave-status is-pending">En attente</span>';
+}
+
+function parseDay(key) {
+    const [y, m, d] = key.split('-').map(Number);
+    return new Date(y, m - 1, d);
+}
+
+function toKey(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function formatDay(key, options) {
+    return parseDay(key).toLocaleDateString('fr-FR', options);
+}
+
+// Jours du lundi au vendredi entre deux dates incluses (format YYYY-MM-DD)
+function countWeekdays(startKey, endKey) {
+    let count = 0;
+    const end = parseDay(endKey);
+    for (const d = parseDay(startKey); d <= end; d.setDate(d.getDate() + 1)) {
+        const dow = d.getDay();
+        if (dow !== 0 && dow !== 6) count++;
+    }
+    return count;
+}
+
+function formatDays(days) {
+    return Number.isInteger(days) ? String(days) : days.toFixed(1).replace('.', ',');
+}
+
+function initials(name = '') {
+    return String(name).trim().split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '?';
 }
