@@ -1,5 +1,17 @@
 export const updatesLog = [
     {
+        version: 'v4.6.0',
+        date: '1er novembre 2026',
+        changes: [
+            "**Messagerie - Groupes** : créez un groupe (bouton +, « Nouveau groupe »), avec un nom et les collègues de votre choix, ou « Toute l'équipe » en un clic. L'admin du groupe peut le renommer, ajouter ou retirer des membres et nommer d'autres admins ; chacun peut le quitter.",
+            "**Messagerie - Réponses et réactions** : touchez un message pour y répondre (le message d'origine est cité), réagir 👍 ❤️ 😂 😮 🙏 ✅, le copier, le modifier ou le supprimer.",
+            "**Messagerie - Vu** : « Vu » sous votre dernier message, et dans un groupe « Vu par » avec les prénoms.",
+            "**Messagerie - Mentions** : tapez @ dans un groupe pour citer un collègue ; son nom ressort dans le message.",
+            "**Messagerie - Organisation** : recherche, discussions épinglées en haut, sourdine (plus de bandeau sur l'accueil), séparateurs par jour, liens cliquables, messages sur plusieurs lignes.",
+            "**Sécurité** : le texte des messages ne peut plus contenir de code caché, et seuls les membres d'un groupe lisent ses messages.",
+        ]
+    },
+    {
         version: 'v4.5.1',
         date: '1er novembre 2026',
         changes: [
