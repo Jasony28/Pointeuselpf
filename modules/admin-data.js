@@ -1,5 +1,7 @@
 import { collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, showInfoModal } from "../app.js";
+import { loadPdf, loadChart } from "./libs.js";
+import { getAllUsers, getAllChantiers } from "./data-service.js";
 import { getWeekDateRange } from "./utils.js";
 
 let chantierChart = null;
@@ -68,14 +70,12 @@ export async function render() {
 
 async function cacheInitialData() {
     try {
-        const usersSnapshot = await getDocs(query(collection(db, "users"), orderBy("displayName")));
-        usersCache = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        usersCache = await getAllUsers();
         const userFilter = document.getElementById('user-filter');
         userFilter.innerHTML = '<option value="all">Tous les employés</option>';
         usersCache.forEach(user => userFilter.innerHTML += `<option value="${user.uid}">${user.displayName}</option>`);
 
-        const chantiersSnapshot = await getDocs(query(collection(db, "chantiers"), orderBy("name")));
-        chantiersCache = chantiersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        chantiersCache = await getAllChantiers();
         const chantierFilter = document.getElementById('chantier-filter');
         chantierFilter.innerHTML = '<option value="all">Tous les chantiers</option>';
         chantiersCache.forEach(c => chantierFilter.innerHTML += `<option value="${c.name}">${c.name}</option>`);
@@ -207,7 +207,9 @@ function updateKPIs(stats) {
     `;
 }
 
-function updateCharts(stats) {
+async function updateCharts(stats) {
+    const Chart = await loadChart();
+    if (!document.getElementById('evolutionLineChart')) return; // page quittée pendant le chargement
     if (chantierChart) chantierChart.destroy();
     if (userChart) userChart.destroy();
     if (evolutionChart) evolutionChart.destroy();
@@ -289,12 +291,12 @@ function displayProfitabilityList(stats) {
     });
 }
 
-function exportToPDF() {
+async function exportToPDF() {
     if (pointagesCache.length === 0) {
         showInfoModal("Information", "Aucune donnée à exporter pour la période sélectionnée.");
         return;
     }
-    const { jsPDF } = window.jspdf;
+    const { jsPDF } = await loadPdf();
     const doc = new jsPDF();
     
     let periodText = "Période personnalisée";

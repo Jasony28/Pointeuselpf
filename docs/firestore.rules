@@ -1,6 +1,6 @@
 rules_version = '2';
 // Règles Firestore de la Pointeuse LPF = règles en production + ajouts pour la planification automatique
-// (règle 1 : lecture réservée aux comptes validés, « affinites », « chats » et « retoursClients » exclus de la lecture générale ; règle 2 : skillsAdmin et superAdmin protégés ; règle 9 : affinites ; règle 10 : retours clients).
+// (règle 1 : lecture réservée aux comptes validés, « affinites », « chats » et « retoursClients » exclus de la lecture générale ; règle 2 : skillsAdmin et superAdmin protégés ; règle 9 : affinites ; règle 10 : retours clients ; règle 11 : résumés quotidiens).
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -20,7 +20,7 @@ service cloud.firestore {
     // 1. LECTURE : comptes validés seulement. « affinites » (9), la messagerie (3), « users » (2) et les retours clients (10) ont leurs propres règles :
     //    sinon cette règle générale (les règles s'additionnent) laisserait lire les messages ou les jetons des autres.
     match /{collection}/{document=**} {
-      allow read: if isApproved() && !(collection in ['affinites', 'chats', 'users', 'retoursClients']);
+      allow read: if isApproved() && !(collection in ['affinites', 'chats', 'users', 'retoursClients', 'resumesJour']);
     }
 
     // 2. UTILISATEURS : impossible de changer soi-même son rôle, son statut, les notes de l'admin ou le statut super admin
@@ -141,6 +141,12 @@ service cloud.firestore {
       allow write: if isOwner(userId)
                    && request.resource.data.keys().hasOnly(['like', 'updatedAt'])
                    && request.resource.data.like is list;
+    }
+
+    // 11. RÉSUMÉS QUOTIDIENS DES HEURES : calculés par le serveur (functions/index.js), lus par l'admin seulement
+    match /resumesJour/{day} {
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     // 10. RETOURS CLIENTS : l'admin crée, annule et supprime ; chaque employé lit seulement les siens.

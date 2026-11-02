@@ -30,21 +30,21 @@ function reportError(error) {
     alert("Le fichier n'a pas pu être enregistré sur le téléphone.");
 }
 
+// PDF : doc.save('nom.pdf') de jsPDF passe par le menu « Partager » du téléphone.
+// Appelé par modules/libs.js juste après le chargement de jsPDF.
+export function patchJsPdfForNativeApp() {
+    if (!isNativeApp()) return;
+    const api = window.jspdf?.jsPDF?.API;
+    if (!api || api.__nativeSave) return;
+    api.__nativeSave = true;
+    api.save = function (fileName) {
+        shareFile(this.output('blob'), fileName || 'document.pdf').catch(reportError);
+        return this;
+    };
+}
+
 export function installNativeFileSaving() {
     if (!isNativeApp()) return;
-
-    // PDF : doc.save('nom.pdf') de jsPDF
-    const patchJsPdf = () => {
-        const api = window.jspdf?.jsPDF?.API;
-        if (!api || api.__nativeSave) return;
-        api.__nativeSave = true;
-        api.save = function (fileName) {
-            shareFile(this.output('blob'), fileName || 'document.pdf').catch(reportError);
-            return this;
-        };
-    };
-    patchJsPdf();
-    window.addEventListener('load', patchJsPdf);
 
     // CSV et autres : liens <a download href="blob:…">
     document.addEventListener('click', (e) => {

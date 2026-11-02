@@ -1,10 +1,17 @@
-import { collection, query, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { collection, query, getDocs, orderBy, where } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent } from "../app.js";
 import { formatMilliseconds } from "./utils.js";
+import { getAllChantiers } from "./data-service.js";
 
 // --- Variables pour la mise en cache des données ---
 let chantiersCache = [];
-let pointagesCache = new Map();  // id chantier -> pointages (historique complet)
+let pointagesCache = new Map();  // id chantier -> pointages (3 derniers mois, ou historique complet une fois chargé)
+let fullHistoryLoaded = false;   // tous les pointages ont été lus (bouton « chantiers plus anciens »)
+const fullHistoryByChantier = new Set(); // chantiers dont l'historique complet a été lu (vue détaillée)
+let rawNamesByKey = new Map();   // nom normalisé -> noms tels qu'écrits dans les pointages
+// Liste : seulement les pointages des 3 derniers mois (mois en cours + 2) : assez pour les totaux du mois,
+// du mois dernier et le dernier passage. L'historique complet d'un chantier se lit quand on l'ouvre.
+const RECENT_MONTHS = 3;
 let activeChantiersCache = [];   // chantiers ayant au moins un pointage
 let currentChantierId = null;
 let listSort = 'month';
@@ -53,12 +60,13 @@ function computeStats(pointages, from = null, to = null) {
  */
 export async function render() {
     currentChantierId = null;
+    fullHistoryLoaded = false;
     pageContent.innerHTML = `
         <div class="max-w-5xl mx-auto space-y-6">
             <div id="chantier-list-view" class="space-y-4">
                 <div>
                     <h2 class="text-2xl font-bold">Heures par chantier</h2>
-                    <p class="mt-1 text-sm" style="color: var(--color-text-muted);">Toutes les heures et tous les pointages enregistrés, chantier par chantier.</p>
+                    <p class="mt-1 text-sm" style="color: var(--color-text-muted);">Les heures chantier par chantier. La liste montre les chantiers passés ces 3 derniers mois ; ouvrir un chantier affiche tout son historique.</p>
                 </div>
 
                 <div id="hours-overview" class="hours-overview">
@@ -78,6 +86,7 @@ export async function render() {
                 </div>
 
                 <div id="chantiers-summary-list" class="hours-grid"></div>
+                <div class="text-center"><button type="button" id="load-older-btn" class="btn btn-secondary">Afficher aussi les chantiers plus anciens</button></div>
             </div>
 
             <div id="chantier-detail-view" class="hidden space-y-4">
@@ -131,20 +140,31 @@ async function loadAndDisplayChantiers() {
     listContainer.innerHTML = '<div class="hours-card is-loading"></div>'.repeat(6);
 
     try {
-        // 1. Récupération de tous les chantiers et de TOUS les pointages (historique complet)
-        const [chantiersSnapshot, pointagesSnapshot] = await Promise.all([
-            getDocs(query(collection(db, "chantiers"), orderBy("name", "asc"))),
-            getDocs(query(collection(db, "pointages"), orderBy("timestamp", "desc"))),
+        // 1. Chantiers + pointages des 3 derniers mois et pointages en cours (ou tout l'historique si demandé)
+        const since = monthBounds(-(RECENT_MONTHS - 1)).start.toISOString();
+        const [chantiers, recentSnapshot, runningSnapshot] = await Promise.all([
+            getAllChantiers(),
+            fullHistoryLoaded
+                ? getDocs(query(collection(db, "pointages"), orderBy("timestamp", "desc")))
+                : getDocs(query(collection(db, "pointages"), where("timestamp", ">=", since), orderBy("timestamp", "desc"))),
+            fullHistoryLoaded ? null : getDocs(query(collection(db, "pointages"), where("endTime", "==", null))),
         ]);
-        chantiersCache = chantiersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        chantiersCache = chantiers;
+        const byId = new Map();
+        recentSnapshot.forEach(d => byId.set(d.id, { id: d.id, ...d.data() }));
+        runningSnapshot?.forEach(d => { if (!byId.has(d.id)) byId.set(d.id, { id: d.id, ...d.data() }); });
+        const pointagesList = [...byId.values()].sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
+        fullHistoryByChantier.clear();
 
         // 2. Regroupement insensible à la casse ("Hustuf" et "hustuf" = même chantier)
         const allPointagesMap = new Map();
-        pointagesSnapshot.forEach(doc => {
-            const data = doc.data();
+        rawNamesByKey = new Map();
+        pointagesList.forEach(data => {
             const normalizedName = (data.chantier || "").toLowerCase().trim();
             if (!allPointagesMap.has(normalizedName)) allPointagesMap.set(normalizedName, []);
             allPointagesMap.get(normalizedName).push(data);
+            if (!rawNamesByKey.has(normalizedName)) rawNamesByKey.set(normalizedName, new Set());
+            if (data.chantier) rawNamesByKey.get(normalizedName).add(data.chantier);
         });
 
         // 3. On relie l'historique aux chantiers officiels et on calcule les indicateurs
@@ -174,6 +194,9 @@ async function loadAndDisplayChantiers() {
 
         // On ne garde que les chantiers qui ont au moins 1 pointage enregistré dans leur histoire
         activeChantiersCache = chantiersWithHours.filter(c => c.hasHistory);
+        if (fullHistoryLoaded) chantiersCache.forEach(c => fullHistoryByChantier.add(c.id));
+        const olderBtn = document.getElementById('load-older-btn');
+        if (olderBtn) olderBtn.hidden = fullHistoryLoaded;
 
         displayOverview(activeChantiersCache);
         applyListFilters();
@@ -314,6 +337,42 @@ function showChantierDetails(chantierId) {
     const pointages = pointagesCache.get(chantier.id) || [];
     displayDetailKpis(chantier, pointages);
     generateSummary('month', pointages);
+    if (!fullHistoryByChantier.has(chantier.id)) loadChantierHistory(chantier);
+}
+
+/**
+ * Historique complet d'un seul chantier (vue détaillée) : par identifiant et par nom tel qu'écrit,
+ * pour garder le regroupement « Hustuf » = « hustuf » sans relire les pointages de tous les chantiers.
+ */
+async function loadChantierHistory(chantier) {
+    const content = document.getElementById('chantier-summary-content');
+    const hint = document.createElement('p');
+    hint.className = 'hours-empty';
+    hint.textContent = "Chargement de l'historique complet…";
+    content?.prepend(hint);
+    try {
+        const key = (chantier.name || '').toLowerCase().trim();
+        const names = [...new Set([chantier.name, ...(rawNamesByKey.get(key) || [])])].filter(Boolean).slice(0, 10);
+        const snaps = await Promise.all([
+            getDocs(query(collection(db, "pointages"), where("chantierId", "==", chantier.id))),
+            names.length ? getDocs(query(collection(db, "pointages"), where("chantier", "in", names))) : null,
+        ]);
+        const byId = new Map();
+        snaps.forEach(snap => snap?.forEach(d => {
+            const data = d.data();
+            if ((data.chantier || '').toLowerCase().trim() === key) byId.set(d.id, { id: d.id, ...data });
+        }));
+        const pointages = [...byId.values()].sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
+        pointagesCache.set(chantier.id, pointages);
+        fullHistoryByChantier.add(chantier.id);
+        if (currentChantierId !== chantier.id) return; // autre chantier ouvert entre-temps
+        displayDetailKpis(chantier, pointages);
+        const period = document.querySelector('.period-btn.active')?.dataset.period || 'month';
+        generateSummary(period, pointages);
+    } catch (error) {
+        console.error("Erreur de chargement de l'historique du chantier:", error);
+        hint.textContent = "L'historique complet n'a pas pu être chargé : seuls les 3 derniers mois sont affichés.";
+    }
 }
 
 /**
@@ -500,6 +559,13 @@ function setupEventListeners() {
     });
 
     document.getElementById('export-csv-btn').addEventListener('click', exportChantierCSV);
+
+    document.getElementById('load-older-btn').addEventListener('click', (e) => {
+        e.currentTarget.disabled = true;
+        e.currentTarget.textContent = "Chargement de tout l'historique…";
+        fullHistoryLoaded = true;
+        loadAndDisplayChantiers();
+    });
 
     document.querySelectorAll('.period-btn').forEach(btn => {
         btn.addEventListener('click', () => {

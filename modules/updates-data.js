@@ -1,5 +1,16 @@
 export const updatesLog = [
     {
+        version: 'v4.10.0',
+        date: '2 novembre 2026',
+        changes: [
+            "**Plus rapide au démarrage** : les outils PDF et graphiques ne se chargent plus à l'ouverture de l'appli, seulement quand on s'en sert.",
+            "**Pages plus fluides** : chaque page commence à se charger dès qu'on touche l'onglet, et les listes d'équipe et de chantiers restent en mémoire quelques minutes.",
+            "**Tableau de bord (admin)** : les heures de la semaine, du mois et de l'année viennent de résumés quotidiens préparés par le serveur. Les chiffres s'affichent tout de suite depuis le téléphone puis se mettent à jour. Les blocs du bas se chargent quand on descend jusqu'à eux.",
+            "**Heures chantiers (admin)** : la liste montre les chantiers passés ces 3 derniers mois ; ouvrir un chantier charge tout son historique. Un bouton affiche aussi les chantiers plus anciens.",
+            "**Journal d'audit (admin)** : les 50 derniers pointages, puis « Voir plus ».",
+        ]
+    },
+    {
         version: 'v4.9.3',
         date: '2 novembre 2026',
         changes: [

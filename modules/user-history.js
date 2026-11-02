@@ -2,7 +2,8 @@ import { collection, query, where, orderBy, getDocs, deleteDoc, doc, updateDoc, 
 import { rebuildDayTrips, localDateKey, isDayOver, clearTripCaches } from "./trips.js";
 import { db, currentUser, pageContent, showConfirmationModal, showInfoModal, navigateTo } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
-import { getUsers } from "./data-service.js";
+import { getUsers, getAllChantiers, getColleagueNames } from "./data-service.js";
+import { loadPdf } from "./libs.js";
 import { openRetourModal, getRetoursForUser, levelPill } from "./retours-clients.js";
 
 let currentWeekOffset = 0;
@@ -312,20 +313,9 @@ function setupReassignModalListeners() {
 }
 
 async function cacheModalData() {
-    const chantiersQuery = query(collection(db, "chantiers"), orderBy("name"));
-    const colleaguesQuery = query(collection(db, "colleagues"), orderBy("name"));
-    const usersQuery = query(collection(db, "users"), where("status", "==", "approved"), orderBy("displayName"));
-    const [chantiersSnapshot, colleaguesSnapshot, usersSnapshot] = await Promise.all([getDocs(chantiersQuery), getDocs(colleaguesQuery), getDocs(usersQuery)]);
-
-    chantiersCache = chantiersSnapshot.docs.map(doc => ({
-        name: doc.data().name,
-        isHideable: doc.data().isHideable || false,
-        status: doc.data().status
-    }));
-
-    const colleagueNames = colleaguesSnapshot.docs.map(doc => doc.data().name);
-    const userNames = usersSnapshot.docs.map(doc => doc.data().displayName);
-    colleaguesCache = [...new Set([...colleagueNames, ...userNames])].sort((a, b) => a.localeCompare(b));
+    const [chantiers, colleagueNames] = await Promise.all([getAllChantiers(), getColleagueNames()]);
+    chantiersCache = chantiers.map(c => ({ name: c.name, isHideable: c.isHideable || false, status: c.status }));
+    colleaguesCache = colleagueNames;
 
     // La page a pu être quittée pendant le chargement (ex. passage à « Ma tournée ») : rien à remplir
     const filterChantierSelect = document.getElementById('filterChantier');
@@ -1259,7 +1249,7 @@ async function saveEntry(e) {
     }
 }
 
-function generateHistoryPDF() {
+async function generateHistoryPDF() {
     const dataForPdf = pointagesPourPdf.filter(p => p.endTime);
 
     if (dataForPdf.length === 0) {
@@ -1267,7 +1257,8 @@ function generateHistoryPDF() {
         return;
     }
 
-    const { jsPDF } = window.jspdf;
+    let jsPDF;
+    try { ({ jsPDF } = await loadPdf()); } catch { jsPDF = null; }
     if (!jsPDF || !jsPDF.API.autoTable) {
         showInfoModal("Erreur", "La librairie PDF n'a pas pu être chargée.");
         return;

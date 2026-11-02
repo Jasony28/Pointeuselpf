@@ -2,11 +2,13 @@
 // us-central1 (même zone que la base nam5, obligatoire pour les déclencheurs), aucune instance allumée en permanence, 2 copies au plus, 256 Mo, lectures ciblées.
 const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { setGlobalOptions, logger } = require('firebase-functions/v2');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
 const rules = require('./notify-rules');
+const summaries = require('./day-summaries');
 
 setGlobalOptions({ region: 'us-central1', memory: '256MiB', minInstances: 0, maxInstances: 2, timeoutSeconds: 60 });
 initializeApp();
@@ -101,6 +103,43 @@ exports.notifyLeaveDecision = onDocumentUpdated('leaveRequests/{id}', async (eve
     if (before.status === after.status) return;
     const users = await getUsers([after.userId]);
     await send(rules.forLeaveDecision({ id: event.params.id, before, after, users }));
+});
+
+// 4c. Résumés quotidiens des heures : le tableau de bord lit un document par jour au lieu de tous les pointages.
+//     Chaque pointage créé, modifié ou supprimé ajuste le ou les jours concernés (aucune lecture, 1 ou 2 écritures).
+exports.updateDaySummaries = onDocumentWritten('pointages/{id}', async (event) => {
+    const before = event.data.before.exists ? event.data.before.data() : null;
+    const after = event.data.after.exists ? event.data.after.data() : null;
+    const changes = summaries.deltas(before, after);
+    if (!changes.length) return;
+    const batch = db.batch();
+    for (const c of changes) {
+        // set + merge avec des objets imbriqués : les noms de chantier sont pris tels quels (points, espaces…)
+        batch.set(db.doc(`resumesJour/${c.day}`), {
+            date: c.day,
+            users: { [c.uid]: { name: c.name, ms: FieldValue.increment(c.ms) } },
+            chantiers: { [c.chantier]: FieldValue.increment(c.ms) },
+        }, { merge: true });
+    }
+    await batch.commit();
+});
+
+// 4d. Recalcul complet des résumés (une seule fois après l'installation, ou pour réparer) : admin seulement.
+//     Lit tous les pointages une fois, réécrit chaque jour, puis marque resumesJour/_meta comme prêt.
+exports.rebuildDaySummaries = onCall({ timeoutSeconds: 300, memory: '512MiB' }, async (request) => {
+    const uid = request.auth?.uid;
+    const userSnap = uid ? await db.doc(`users/${uid}`).get() : null;
+    if (!userSnap?.exists || userSnap.get('role') !== 'admin') throw new HttpsError('permission-denied', 'Réservé aux administrateurs.');
+
+    const [pointagesSnap, existingSnap] = await Promise.all([db.collection('pointages').get(), db.collection('resumesJour').get()]);
+    const days = summaries.buildAll(pointagesSnap.docs.map(d => d.data()));
+    const writer = db.bulkWriter();
+    existingSnap.docs.filter(d => d.id !== '_meta' && !days[d.id]).forEach(d => writer.delete(d.ref));
+    Object.entries(days).forEach(([day, data]) => writer.set(db.doc(`resumesJour/${day}`), data));
+    await writer.close();
+    await db.doc('resumesJour/_meta').set({ ready: true, builtAt: FieldValue.serverTimestamp(), pointages: pointagesSnap.size, days: Object.keys(days).length });
+    logger.info('Résumés quotidiens recalculés', { pointages: pointagesSnap.size, jours: Object.keys(days).length });
+    return { days: Object.keys(days).length };
 });
 
 // 4b. Retour client : l'employé concerné (une lecture : sa fiche)

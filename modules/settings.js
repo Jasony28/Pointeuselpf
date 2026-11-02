@@ -2,6 +2,7 @@ import { pageContent, currentUser, showInfoModal, showToast, db, themes, applyTh
 import { getAuth, signOut, sendPasswordResetEmail, updateEmail, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { doc, updateDoc, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { updatesLog } from "./updates-data.js";
+import { loadPdf } from "./libs.js";
 import { getPushState, getPrefs, savePrefs, enablePush, disablePush, forgetDeviceOnLogout, showTestNotification } from "./push.js";
 
 const auth = getAuth();
@@ -616,7 +617,7 @@ async function exportUserHistoryToPDF() {
     if (!exportData) return; 
 
     const { groupedData, totalExportMs } = exportData;
-    const { jsPDF } = window.jspdf;
+    const { jsPDF } = await loadPdf();
     const doc = new jsPDF('p', 'mm', 'a4');
     let startY = 20; 
 

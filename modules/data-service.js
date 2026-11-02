@@ -3,20 +3,44 @@ import { collection, query, where, orderBy, getDocs, writeBatch, doc } from "htt
 import { db } from "../app.js";
 import { localDateKey, returnTripId } from "./trips.js";
 
+// Listes de base (employés, chantiers, collègues) : gardées en mémoire quelques minutes au lieu d'être
+// retéléchargées à chaque page. forceRefresh = true après une modification faite par l'admin.
+const LISTS_TTL_MS = 5 * 60 * 1000;
 let chantiersCache = null;
+let allChantiersCache = null;
 let teamMembersCache = null;
 let usersCache = null;
+let colleaguesCache = null;
+
+const fresh = (entry) => entry && Date.now() - entry.at < LISTS_TTL_MS;
+const byName = (a, b) => String(a.name || '').localeCompare(String(b.name || ''));
+
+/** Tous les chantiers (actifs ou non), triés par nom. */
+export async function getAllChantiers(forceRefresh = false) {
+    if (fresh(allChantiersCache) && !forceRefresh) return allChantiersCache.list;
+    const snapshot = await getDocs(query(collection(db, "chantiers"), orderBy("name")));
+    allChantiersCache = { at: Date.now(), list: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) };
+    chantiersCache = null;
+    return allChantiersCache.list;
+}
 
 export async function getActiveChantiers(forceRefresh = false) {
-    if (chantiersCache && !forceRefresh) return chantiersCache;
-    const q = query(collection(db, "chantiers"), where("status", "==", "active"), orderBy("name"));
-    const snapshot = await getDocs(q);
-    chantiersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    if (chantiersCache && fresh(allChantiersCache) && !forceRefresh) return chantiersCache;
+    const all = await getAllChantiers(forceRefresh);
+    chantiersCache = all.filter(c => c.status === 'active').sort(byName);
     return chantiersCache;
 }
 
+/** Collègues hors appli (liste « colleagues »), triés par nom. */
+export async function getColleagues(forceRefresh = false) {
+    if (fresh(colleaguesCache) && !forceRefresh) return colleaguesCache.list;
+    const snapshot = await getDocs(query(collection(db, "colleagues"), orderBy("name")));
+    colleaguesCache = { at: Date.now(), list: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) };
+    return colleaguesCache.list;
+}
+
 export async function getTeamMembers(forceRefresh = false) {
-    if (!teamMembersCache || forceRefresh) {
+    if (!teamMembersCache || forceRefresh || !fresh(usersCache)) {
         const users = await getUsers(forceRefresh);
         teamMembersCache = users
             .filter(user => user.status === 'approved' && (user.role === 'user' || user.role === 'admin'))
@@ -25,15 +49,27 @@ export async function getTeamMembers(forceRefresh = false) {
     return teamMembersCache;
 }
 
+/** Tous les comptes, y compris ceux masqués (rapports admin). */
+export async function getAllUsers(forceRefresh = false) {
+    if (fresh(usersCache) && !forceRefresh) return usersCache.list;
+    const snapshot = await getDocs(query(collection(db, "users"), orderBy("displayName")));
+    usersCache = { at: Date.now(), list: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) };
+    return usersCache.list;
+}
+
 export async function getUsers(forceRefresh = false) {
-    if (usersCache && !forceRefresh) {
-        if (isStealthMode()) return usersCache;
-        return usersCache.filter(user => user.visibility !== 'hidden');
-    }
-    const q = query(collection(db, "users"), orderBy("displayName"));
-    const snapshot = await getDocs(q);
-    usersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    return usersCache;
+    const wasCached = fresh(usersCache) && !forceRefresh;
+    const users = await getAllUsers(forceRefresh);
+    // (comportement d'origine : la toute première lecture renvoie aussi les comptes masqués)
+    if (!wasCached || isStealthMode()) return users;
+    return users.filter(user => user.visibility !== 'hidden');
+}
+
+/** Noms des collègues + des comptes validés, sans doublon, triés (listes « avec qui ? »). */
+export async function getColleagueNames() {
+    const [colleagues, users] = await Promise.all([getColleagues(), getAllUsers()]);
+    const names = [...colleagues.map(c => c.name), ...users.filter(u => u.status === 'approved').map(u => u.displayName)].filter(Boolean);
+    return [...new Set(names)].sort((a, b) => a.localeCompare(b));
 }
 
 export async function transferOrDuplicateUserData(oldUid, newUid, copyMode = true, newDisplayName = null) {

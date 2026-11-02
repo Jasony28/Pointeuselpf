@@ -1,4 +1,4 @@
-import { collection, query, orderBy, getDocs, getDoc, doc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { collection, query, orderBy, getDocs, getDoc, doc, limit, startAfter } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent } from "../app.js";
 import { formatMilliseconds } from "./utils.js";
 
@@ -19,11 +19,15 @@ export async function render() {
     setTimeout(loadAllPointages, 0);
 }
 
+// 50 pointages à la fois (les plus récents d'abord), puis « Voir plus » : on ne relit plus tout l'historique
+const PAGE_SIZE = 50;
+let lastLoaded = null;
+
 async function loadAllPointages() {
     const listContainer = document.getElementById('pointages-list-container');
+    lastLoaded = null;
     try {
-        const q = query(collection(db, "pointages"), orderBy("createdAt", "desc"));
-        const snapshot = await getDocs(q);
+        const snapshot = await getDocs(query(collection(db, "pointages"), orderBy("createdAt", "desc"), limit(PAGE_SIZE)));
 
         if (snapshot.empty) {
             listContainer.innerHTML = '<p class="text-center text-gray-500">Aucun pointage trouvé.</p>';
@@ -31,15 +35,36 @@ async function loadAllPointages() {
         }
 
         listContainer.innerHTML = '';
-        snapshot.forEach(doc => {
-            listContainer.appendChild(createPointageElement(doc.id, doc.data()));
-        });
-
+        appendPage(listContainer, snapshot);
         listContainer.addEventListener('click', handlePointageClick);
     } catch (error) {
         console.error("Erreur de chargement des pointages:", error);
         listContainer.innerHTML = '<p class="text-center text-red-500">Erreur de chargement.</p>';
     }
+}
+
+function appendPage(listContainer, snapshot) {
+    listContainer.querySelector('.log-more')?.remove();
+    snapshot.forEach(doc => {
+        listContainer.appendChild(createPointageElement(doc.id, doc.data()));
+    });
+    lastLoaded = snapshot.docs[snapshot.docs.length - 1] || lastLoaded;
+    if (snapshot.size < PAGE_SIZE) return;
+    const more = document.createElement('div');
+    more.className = 'log-more text-center pt-2';
+    more.innerHTML = '<button type="button" class="btn btn-secondary">Voir plus</button>';
+    more.querySelector('button').onclick = async (e) => {
+        e.currentTarget.disabled = true;
+        e.currentTarget.textContent = 'Chargement…';
+        try {
+            appendPage(listContainer, await getDocs(query(collection(db, "pointages"), orderBy("createdAt", "desc"), startAfter(lastLoaded), limit(PAGE_SIZE))));
+        } catch (error) {
+            console.error("Erreur de chargement des pointages:", error);
+            e.currentTarget.disabled = false;
+            e.currentTarget.textContent = 'Réessayer';
+        }
+    };
+    listContainer.appendChild(more);
 }
 
 function createPointageElement(id, data) {

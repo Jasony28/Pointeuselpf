@@ -1,6 +1,7 @@
 import { rebuildDayTrips, localDateKey } from "./trips.js";
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, pageContent, showInfoModal } from "../app.js";
+import { getColleagueNames } from "./data-service.js";
 
 let selectedColleagues = [];
 let allColleaguesCache = [];
@@ -112,16 +113,7 @@ async function loadChantiersIntoSelect() {
 async function loadColleaguesForSelection() {
     const container = document.getElementById("manualColleaguesContainer");
     try {
-        const colleaguesQuery = query(collection(db, "colleagues"), orderBy("name"));
-        const colleaguesSnapshot = await getDocs(colleaguesQuery);
-        const colleagueNames = colleaguesSnapshot.docs.map(doc => doc.data().name);
-
-        const usersQuery = query(collection(db, "users"), where("status", "==", "approved"), orderBy("displayName"));
-        const usersSnapshot = await getDocs(usersQuery);
-        const userNames = usersSnapshot.docs.map(doc => doc.data().displayName);
-        
-        const uniqueNames = [...new Set([...colleagueNames, ...userNames])];
-        allColleaguesCache = uniqueNames.sort((a, b) => a.localeCompare(b));
+        allColleaguesCache = await getColleagueNames();
         
         selectedColleagues = [];
         renderColleaguesSelection();

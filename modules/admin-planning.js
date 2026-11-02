@@ -1,6 +1,7 @@
 import { collection, query, where, getDocs, addDoc, deleteDoc, doc, orderBy, serverTimestamp, updateDoc, setDoc, getDoc, writeBatch, arrayUnion } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, currentUser, showConfirmationModal, showInfoModal } from "../app.js";
 import { getWeekDateRange } from "./utils.js";
+import { loadPdf } from "./libs.js";
 import { getActiveChantiers, getTeamMembers, getUsers } from "./data-service.js";
 import { planWeek, learnDurations, summarizePointageHistory, DEFAULT_WEIGHTS, WEIGHT_LABELS } from "./auto-planner.js";
 import { escapeHTML, missingProfileParts } from "./work-profile.js";
@@ -143,7 +144,7 @@ async function generatePlanningPDF() {
         return;
     }
     
-    const { jsPDF } = window.jspdf;
+    const { jsPDF } = await loadPdf();
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
     
     doc.setFontSize(16);

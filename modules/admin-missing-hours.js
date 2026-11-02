@@ -1,5 +1,7 @@
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, currentUser, showInfoModal } from "../app.js";
+import { loadPdf } from "./libs.js";
+import { getAllChantiers } from "./data-service.js";
 
 const LOGO_BASE64 = ""; // Colle ici ton code base64
 
@@ -149,8 +151,7 @@ function getDateBoundaries(period, offset) {
 
 async function loadInitialData() {
     try {
-        const cSnap = await getDocs(collection(db, "chantiers"));
-        chantiersCache = cSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        chantiersCache = await getAllChantiers();
     } catch (error) {
         console.error("Erreur chargement données de base:", error);
     }
@@ -380,13 +381,13 @@ function setupEventListeners() {
         }
     });
 
-    document.getElementById('exportPdfBtn').onclick = () => {
+    document.getElementById('exportPdfBtn').onclick = async () => {
         if (currentReportData.length === 0) {
             showInfoModal("Info", "Rien à exporter, tout est à jour !");
             return;
         }
 
-        const { jsPDF } = window.jspdf;
+        const { jsPDF } = await loadPdf();
         const doc = new jsPDF('p', 'mm', 'a4');
         
         if (LOGO_BASE64.startsWith('data:image')) {

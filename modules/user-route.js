@@ -175,7 +175,10 @@ async function estimateHoursPerVisit(chantierName) {
     const cached = storage.get(cacheKey);
     if (cached && Date.now() - cached.at < ESTIMATE_TTL_MS) return cached.hours;
     try {
-        const snapshot = await getDocs(query(collection(db, "pointages"), where("chantier", "==", chantierName)));
+        // Les 6 derniers mois suffisent pour les derniers passages ; tout l'historique seulement si rien depuis
+        const since = new Date(Date.now() - 183 * 86400000).toISOString();
+        let snapshot = await getDocs(query(collection(db, "pointages"), where("chantier", "==", chantierName), where("timestamp", ">=", since))).catch(() => null);
+        if (!snapshot || snapshot.empty) snapshot = await getDocs(query(collection(db, "pointages"), where("chantier", "==", chantierName)));
         const byDay = {};
         snapshot.forEach(d => {
             const p = d.data();

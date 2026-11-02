@@ -2,6 +2,7 @@ import { collection, query, where, orderBy, getDocs, getDoc, doc, deleteDoc, lim
 import { db, pageContent, showConfirmationModal, navigateTo, isShowingAllHours } from "../app.js"; // <-- isShowingAllHours IMPORTÉ ICI
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 import { getUsers, getActiveChantiers } from "./data-service.js";
+import { getDocsFast } from "./fast-data.js";
 
 // --- VARIABLES GLOBALES POUR LES CARTES NAVIGABLES ---
 let globalWeekOffset = 0;
@@ -11,27 +12,124 @@ let globalMonthOffset = 0;
 let userStatsFilter = { period: 'week', offset: 0 };
 let chantierStatsFilter = { period: 'week', offset: 0 };
 
-// --- CACHE DES POINTAGES ---
-// Les cartes "Semaine", "Heures par employé" et "Heures par chantier" demandent souvent la même
-// période : on ne télécharge chaque période qu'une fois par affichage du tableau de bord.
-const pointagesCache = new Map();
+// --- HEURES PAR PÉRIODE ---
+// Résumés quotidiens (resumesJour, tenus à jour par le serveur) : un document par jour au lieu de tous les
+// pointages de la période (7 lectures pour une semaine, ~30 pour un mois, 365 pour une année).
+// Tant qu'ils ne sont pas prêts (fonctions pas encore déployées), on compte sur les pointages, comme avant.
+// Totaux : { users: { uid: { name, ms } }, chantiers: { nom: { ms, days } } } — seuls les pointages terminés comptent.
+const totalsCache = new Map();
+const totalsListeners = new Map(); // période → fonctions à rappeler quand le serveur renvoie des chiffres plus frais
+let summariesReady = null;    // promesse → true / false, gardée pour la session si true
+let rebuildRequested = false;  // recalcul complet demandé au serveur (une fois par session)
 
-function fetchPointages(start, end) {
-    const key = `${start.toISOString()}|${end.toISOString()}`;
-    if (!pointagesCache.has(key)) {
-        const q = query(collection(db, "pointages"), where("timestamp", ">=", start.toISOString()), where("timestamp", "<=", end.toISOString()));
-        const request = getDocs(q)
-            .then(snapshot => snapshot.docs.map(d => d.data()))
-            .catch(error => { pointagesCache.delete(key); throw error; });
-        pointagesCache.set(key, request);
+function checkSummaries() {
+    if (!summariesReady) {
+        summariesReady = getDoc(doc(db, "resumesJour", "_meta"))
+            .then(snap => {
+                if (snap.exists() && snap.data().ready) return true;
+                requestSummariesRebuild();
+                summariesReady = null; // on revérifiera au prochain affichage
+                return false;
+            })
+            .catch(() => { summariesReady = null; return false; });
     }
-    return pointagesCache.get(key);
+    return summariesReady;
 }
+
+// Première fois : le serveur calcule les résumés de tout l'historique (une seule fois, quelques secondes)
+function requestSummariesRebuild() {
+    if (rebuildRequested) return;
+    rebuildRequested = true;
+    Promise.all([
+        import("https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js"),
+        import("https://www.gstatic.com/firebasejs/10.5.0/firebase-functions.js"),
+    ]).then(([{ getApp }, { getFunctions, httpsCallable }]) =>
+        httpsCallable(getFunctions(getApp(), 'us-central1'), 'rebuildDaySummaries')({})
+    ).catch(error => console.warn("Résumés quotidiens pas encore disponibles :", error?.code || error?.message || error));
+}
+
+const dayKeyUTC = (date) => date.toISOString().slice(0, 10);
+
+function totalsFromSummaries(start, end, onUpdate) {
+    const q = query(collection(db, "resumesJour"), where("date", ">=", dayKeyUTC(start)), where("date", "<=", dayKeyUTC(end)));
+    return getDocsFast(q, (snap) => {
+        const totals = { users: {}, chantiers: {} };
+        snap.forEach(d => {
+            const day = d.data();
+            Object.entries(day.users || {}).forEach(([uid, u]) => {
+                if (!u.ms) return;
+                const user = totals.users[uid] || (totals.users[uid] = { name: u.name, ms: 0 });
+                user.ms += u.ms;
+                if (u.name) user.name = u.name;
+            });
+            Object.entries(day.chantiers || {}).forEach(([name, ms]) => {
+                if (!ms) return;
+                const c = totals.chantiers[name] || (totals.chantiers[name] = { ms: 0, days: 0 });
+                c.ms += ms;
+                c.days++;
+            });
+        });
+        return totals;
+    }, onUpdate);
+}
+
+async function totalsFromPointages(start, end) {
+    const snap = await getDocs(query(collection(db, "pointages"), where("timestamp", ">=", start.toISOString()), where("timestamp", "<=", end.toISOString())));
+    const totals = { users: {}, chantiers: {} };
+    const seenDays = new Set();
+    snap.forEach(d => {
+        const p = d.data();
+        if (!p.endTime) return;
+        const ms = (new Date(p.endTime) - new Date(p.timestamp)) - (p.pauseDurationMs || 0);
+        const user = totals.users[p.uid] || (totals.users[p.uid] = { name: p.userName, ms: 0 });
+        user.ms += ms;
+        if (p.userName) user.name = p.userName;
+        const c = totals.chantiers[p.chantier] || (totals.chantiers[p.chantier] = { ms: 0, days: 0 });
+        c.ms += ms;
+        const dayKey = `${p.chantier}|${p.timestamp.split('T')[0]}`;
+        if (!seenDays.has(dayKey)) { seenDays.add(dayKey); c.days++; }
+    });
+    return totals;
+}
+
+/** Totaux d'une période ; onUpdate (facultatif) reçoit une version plus fraîche si le serveur répond après le cache. */
+function getPeriodTotals(start, end, onUpdate) {
+    const key = `${start.toISOString()}|${end.toISOString()}`;
+    if (onUpdate) {
+        if (!totalsListeners.has(key)) totalsListeners.set(key, new Set());
+        totalsListeners.get(key).add(onUpdate);
+    }
+    if (!totalsCache.has(key)) {
+        const request = checkSummaries()
+            .then(ready => ready
+                ? totalsFromSummaries(start, end, (fresh) => { totalsCache.set(key, Promise.resolve(fresh)); totalsListeners.get(key)?.forEach(fn => fn(fresh)); })
+                : totalsFromPointages(start, end))
+            .catch(error => { totalsCache.delete(key); throw error; });
+        totalsCache.set(key, request);
+    }
+    return totalsCache.get(key);
+}
+
+// Heures par employé, plafonnées à (contrat + 2 h) × semaines, sauf si « toutes les heures » est activé
+function cappedUserTotals(totals, users, weeks) {
+    const out = {};
+    for (const [uid, u] of Object.entries(totals.users)) {
+        let ms = u.ms;
+        if (!isShowingAllHours) {
+            const user = users.find(x => x.uid === uid);
+            if (user && user.contractHours > 0) ms = Math.min(ms, (user.contractHours + 2) * weeks * 3600000);
+        }
+        out[uid] = { name: u.name, totalMs: ms };
+    }
+    return out;
+}
+const sumMs = (stats) => Object.values(stats).reduce((sum, u) => sum + u.totalMs, 0);
 
 const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 export async function render() {
-    pointagesCache.clear();
+    totalsCache.clear();
+    totalsListeners.clear();
     pageContent.innerHTML = `
         <div class="max-w-7xl mx-auto space-y-8">
             <h2 class="text-2xl font-bold" style="color: var(--color-text-base);">Tableau de Bord Administrateur</h2>
@@ -119,21 +217,29 @@ export async function render() {
         loadTodoPanel();
         loadGlobalStats();
         loadStaticStats(); 
-        loadRecentActivity();
         setupEventListeners();
 
         const loadingMessage = `<p class="text-center p-4" style="color: var(--color-text-muted);">Chargement...</p>`;
         document.getElementById('user-stats-list').innerHTML = loadingMessage;
         document.getElementById('chantier-stats-list').innerHTML = loadingMessage;
 
-        // --- CHARGEMENT DIFFÉRÉ (plus lent) ---
-        setTimeout(() => {
-            if (!document.getElementById('user-stats-list')) return;
-            loadUserStats();
-            loadChantierStats();
-        }, 200);
+        // --- CHARGEMENT À LA DEMANDE : les blocs du bas se chargent quand on descend jusqu'à eux ---
+        whenVisible(document.getElementById('user-stats-list'), () => { loadUserStats(); loadChantierStats(); });
+        whenVisible(document.getElementById('recent-activity-list'), loadRecentActivity);
 
     }, 0);
+}
+
+// Lance load() quand l'élément arrive près de l'écran (tout de suite si le navigateur ne sait pas le dire)
+function whenVisible(element, load) {
+    if (!element) return;
+    if (!('IntersectionObserver' in window)) { load(); return; }
+    const observer = new IntersectionObserver((entries) => {
+        if (!entries.some(e => e.isIntersecting)) return;
+        observer.disconnect();
+        if (element.isConnected) load();
+    }, { rootMargin: '300px 0px' });
+    observer.observe(element);
 }
 
 // --- BLOC "À TRAITER" ---
@@ -285,55 +391,16 @@ async function loadGlobalStats() {
     if(monthTitle) monthTitle.textContent = dateForMonth.toLocaleString('fr-FR', { month: 'long', year: 'numeric' });
 
     try {
-        const [weekPointages, monthPointages] = await Promise.all([ fetchPointages(startOfWeek, endOfWeek), fetchPointages(startOfMonth, endOfMonth) ]);
-        const users = await getUsers();
-        
-        // --- Calcul du total de la Semaine avec ou sans plafonnement (selon bouton rouge) ---
-        let weekUserStats = {};
-        weekPointages.forEach(data => {
-            if (data.endTime) {
-                if (!weekUserStats[data.uid]) weekUserStats[data.uid] = 0;
-                weekUserStats[data.uid] += (new Date(data.endTime) - new Date(data.timestamp)) - (data.pauseDurationMs || 0); 
-            }
-        });
-
-        let weekMs = 0;
-        for (const uid in weekUserStats) {
-            let ms = weekUserStats[uid];
-            if (!isShowingAllHours) {
-                const user = users.find(u => u.uid === uid);
-                if (user && user.contractHours > 0) {
-                    const cap = (user.contractHours + 2) * 3600000;
-                    ms = Math.min(ms, cap);
-                }
-            }
-            weekMs += ms;
-        }
-        if (weekTotal) { weekTotal.textContent = formatMilliseconds(weekMs); weekTotal.classList.remove('animate-pulse'); }
-        
-        // --- Calcul du total du Mois avec ou sans plafonnement (selon bouton rouge) ---
-        let monthUserStats = {};
-        monthPointages.forEach(data => {
-            if (data.endTime) {
-                if (!monthUserStats[data.uid]) monthUserStats[data.uid] = 0;
-                monthUserStats[data.uid] += (new Date(data.endTime) - new Date(data.timestamp)) - (data.pauseDurationMs || 0); 
-            }
-        });
-
-        let monthMs = 0;
-        for (const uid in monthUserStats) {
-            let ms = monthUserStats[uid];
-            if (!isShowingAllHours) {
-                const user = users.find(u => u.uid === uid);
-                if (user && user.contractHours > 0) {
-                    const cap = (user.contractHours + 2) * 4 * 3600000; // Approximation de 4 semaines/mois
-                    ms = Math.min(ms, cap);
-                }
-            }
-            monthMs += ms;
-        }
-        if (monthTotal) { monthTotal.textContent = formatMilliseconds(monthMs); monthTotal.classList.remove('animate-pulse'); }
-
+        // Chiffres affichés depuis la mémoire du téléphone : on réaffiche quand le serveur a répondu
+        const shownWeek = globalWeekOffset, shownMonth = globalMonthOffset;
+        const refresh = () => { if (weekTotal?.isConnected && shownWeek === globalWeekOffset && shownMonth === globalMonthOffset) show(); };
+        const show = async () => {
+            const [weekTotals, monthTotals, users] = await Promise.all([getPeriodTotals(startOfWeek, endOfWeek, refresh), getPeriodTotals(startOfMonth, endOfMonth, refresh), getUsers()]);
+            if (weekTotal) { weekTotal.textContent = formatMilliseconds(sumMs(cappedUserTotals(weekTotals, users, 1))); weekTotal.classList.remove('animate-pulse'); }
+            // Mois : approximation de 4 semaines pour le plafond
+            if (monthTotal) { monthTotal.textContent = formatMilliseconds(sumMs(cappedUserTotals(monthTotals, users, 4))); monthTotal.classList.remove('animate-pulse'); }
+        };
+        await show();
     } catch (error) { console.error("Erreur de chargement des statistiques globales:", error); }
 }
 
@@ -341,10 +408,8 @@ async function loadStaticStats() {
     const projectsCard = document.querySelector('#active-projects-card p');
     if (!projectsCard) return;
 
-    const chantiersQuery = query(collection(db, "chantiers"), where("status", "==", "active"));
     try {
-        const chantiersSnapshot = await getDocs(chantiersQuery);
-        projectsCard.textContent = chantiersSnapshot.size; 
+        projectsCard.textContent = (await getActiveChantiers()).length;
         projectsCard.classList.remove('animate-pulse');
     } catch (error) {
         console.error("Erreur de chargement des stats statiques:", error);
@@ -382,37 +447,15 @@ function getPeriodInfo(filter) {
 async function loadUserStats() {
     const userInfo = getPeriodInfo(userStatsFilter);
     updateFilterUI('user', userStatsFilter, userInfo.displayText);
+    const weeks = { week: 1, month: 4, year: 52 }[userInfo.period] || 1;
+    const stillShown = () => getPeriodInfo(userStatsFilter).startDate.getTime() === userInfo.startDate.getTime() && userStatsFilter.period === userInfo.period;
 
+    const show = async (totals) => {
+        const users = await getUsers();
+        displayStats(cappedUserTotals(totals, users, weeks), document.getElementById('user-stats-list'), "Aucun pointage pour cette période.");
+    };
     try {
-        const [pointages, users] = await Promise.all([fetchPointages(userInfo.startDate, userInfo.endDate), getUsers()]);
-        const userStats = {};
-
-        pointages.forEach(data => {
-            if (data.endTime) {
-                const durationMs = (new Date(data.endTime) - new Date(data.timestamp)) - (data.pauseDurationMs || 0);
-                if (!userStats[data.uid]) {
-                    userStats[data.uid] = { name: data.userName, totalMs: 0 };
-                }
-                userStats[data.uid].totalMs += durationMs;
-            }
-        });
-
-        // Application de la limite Contrat + 2h si le bouton n'est pas activé
-        for (const uid in userStats) {
-            const user = users.find(u => u.uid === uid);
-            if (!isShowingAllHours && user && user.contractHours > 0) {
-                let contractLimitMs = 0;
-                const weeklyCap = (user.contractHours + 2) * 3600000;
-                
-                if (userInfo.period === 'week') contractLimitMs = weeklyCap;
-                else if (userInfo.period === 'month') contractLimitMs = weeklyCap * 4;
-                else if (userInfo.period === 'year') contractLimitMs = weeklyCap * 52;
-                
-                if (contractLimitMs > 0) userStats[uid].totalMs = Math.min(userStats[uid].totalMs, contractLimitMs);
-            }
-        }
-
-        displayStats(userStats, document.getElementById('user-stats-list'), "Aucun pointage pour cette période.");
+        await show(await getPeriodTotals(userInfo.startDate, userInfo.endDate, (fresh) => { if (stillShown()) show(fresh); }));
     } catch (error) {
         console.error("Erreur de chargement des statistiques par employé:", error);
     }
@@ -421,36 +464,27 @@ async function loadUserStats() {
 async function loadChantierStats() {
     const chantierInfo = getPeriodInfo(chantierStatsFilter);
     updateFilterUI('chantier', chantierStatsFilter, chantierInfo.displayText);
+    const stillShown = () => getPeriodInfo(chantierStatsFilter).startDate.getTime() === chantierInfo.startDate.getTime() && chantierStatsFilter.period === chantierInfo.period;
 
-    try {
-        const [pointages, chantiers] = await Promise.all([fetchPointages(chantierInfo.startDate, chantierInfo.endDate), getActiveChantiers()]);
-
+    const show = async (totals) => {
+        const chantiers = await getActiveChantiers();
         const chantierStats = {};
-        const chantierDays = {};
-        pointages.forEach(data => {
-            if (data.endTime) {
-                const durationMs = (new Date(data.endTime) - new Date(data.timestamp)) - (data.pauseDurationMs || 0);
-                chantierStats[data.chantier] = (chantierStats[data.chantier] || 0) + durationMs;
-                if (!chantierDays[data.chantier]) chantierDays[data.chantier] = new Set();
-                chantierDays[data.chantier].add(data.timestamp.split('T')[0]);
-            }
-        });
-
+        Object.entries(totals.chantiers).forEach(([name, c]) => { chantierStats[name] = c.ms; });
         // Budget = jours de passage × heures prévues par passage (même règle que la page "Écarts d'heures")
         const budgets = {};
         chantiers.forEach(chantier => {
             const hoursPerVisit = parseFloat(chantier.totalHeuresPrevues) || 0;
-            if (hoursPerVisit > 0 && chantierDays[chantier.name]) {
-                budgets[chantier.name] = chantierDays[chantier.name].size * hoursPerVisit * 3600000;
-            }
+            const visited = totals.chantiers[chantier.name];
+            if (hoursPerVisit > 0 && visited?.days) budgets[chantier.name] = visited.days * hoursPerVisit * 3600000;
         });
-
         displayStats(chantierStats, document.getElementById('chantier-stats-list'), "Aucun chantier pointé pour cette période.", true, budgets);
+    };
+    try {
+        await show(await getPeriodTotals(chantierInfo.startDate, chantierInfo.endDate, (fresh) => { if (stillShown()) show(fresh); }));
     } catch (error) {
         console.error("Erreur de chargement des statistiques par chantier:", error);
     }
 }
-
 
 function updateFilterUI(type, filter, displayText) {
     const periodDisplay = document.getElementById(`${type}-stats-period-display`);

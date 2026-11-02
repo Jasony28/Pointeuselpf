@@ -2,7 +2,7 @@
 
 import { collection, query, getDocs, doc, updateDoc, deleteDoc, orderBy, where, limit, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, navigateTo, currentUser, showConfirmationModal, showInfoModal, isStealthMode } from "../app.js";
-import { getUsers, transferOrDuplicateUserData } from "./data-service.js";
+import { getUsers, getColleagues, transferOrDuplicateUserData } from "./data-service.js";
 import { formatMilliseconds } from "./utils.js";
 import { clearTripCaches, findWorkedDays, rebuildDayTrips, localDateKey } from "./trips.js";
 
@@ -196,6 +196,7 @@ function setupGlobalHandlers() {
                         createdAt: serverTimestamp()
                     });
                     input.value = '';
+                    getColleagues(true).catch(() => {});
                     showInfoModal("Succès", `Collègue externe "${name}" ajouté.`);
                     await loadColleagues();
                 } catch (error) {
@@ -541,6 +542,7 @@ function createColleagueElement(id, name) {
         if (await showConfirmationModal("Confirmation", `Vraiment supprimer "${name}" ?`)) {
             try {
                 await deleteDoc(doc(db, "colleagues", id));
+                getColleagues(true).catch(() => {});
                 loadColleagues();
             } catch (error) {
                 showInfoModal("Erreur", "La suppression a échoué.");

@@ -1,5 +1,6 @@
 import { collection, query, getDocs, orderBy, where } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent } from "../app.js";
+import { getAllUsers } from "./data-service.js";
 import { getWeekDateRange } from "./utils.js";
 import { localDateKey, isRegularisation, NEW_KM_RULES_SINCE } from "./trips.js";
 
@@ -113,8 +114,7 @@ async function loadTravelReportForPeriod() {
     timeHeader.textContent = `Temps de Trajet total (${periodText})`;
 
     try {
-        const usersSnapshot = await getDocs(query(collection(db, "users"), orderBy("displayName")));
-        const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const users = await getAllUsers();
 
         const trajetsQuery = query(collection(db, "trajets"), 
             where("date_creation", ">=", startDate),
@@ -163,12 +163,12 @@ async function exportTravelDetail() {
     btn.disabled = true;
     try {
         const { startDate, endDate, periodText } = lastRange;
-        const [usersSnap, pointagesSnap, tripsSnap] = await Promise.all([
-            getDocs(collection(db, "users")),
+        const [users, pointagesSnap, tripsSnap] = await Promise.all([
+            getAllUsers(),
             getDocs(query(collection(db, "pointages"), where("timestamp", ">=", startDate.toISOString()), where("timestamp", "<=", endDate.toISOString()))),
             getDocs(query(collection(db, "trajets"), where("date_creation", ">=", startDate), where("date_creation", "<=", endDate))),
         ]);
-        const names = new Map(usersSnap.docs.map(d => [d.id, d.data().displayName || d.id]));
+        const names = new Map(users.map(u => [u.id, u.displayName || u.id]));
         const pointages = new Map(pointagesSnap.docs.map(d => [d.id, d.data()]));
         const time = (iso) => iso ? new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
         const driver = (p) => p?.isDriver === true ? 'oui' : p?.isDriver === false ? 'non' : '';

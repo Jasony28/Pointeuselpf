@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 import { installNativeFileSaving } from './modules/native-files.js';
 
-const APP_VERSION = 'v4.9.3';
+const APP_VERSION = 'v4.10.0';
 
 // Appli Android / iPhone : PDF et CSV proposés dans le menu « Partager » du téléphone
 installNativeFileSaving();
@@ -230,8 +230,8 @@ export function applyTheme(themeName) {
     localStorage.setItem('appTheme', themeName);
 }
 
-// Aligne Chart.js (chargé en script classique) sur la typographie et les couleurs du thème
-function applyChartDefaults() {
+// Aligne Chart.js (chargé à la demande, modules/libs.js) sur la typographie et les couleurs du thème
+export function applyChartDefaults() {
     if (!window.Chart) return;
     const styles = getComputedStyle(document.documentElement);
     window.Chart.defaults.font.family = styles.getPropertyValue('--font-sans').trim() || 'Inter, ui-sans-serif, system-ui, sans-serif';
@@ -444,6 +444,8 @@ function getPageName(pageId) {
     return tab ? tab.name : (extraPageNames[pageId] || '');
 }
 
+let navigationCount = 0;
+
 export async function navigateTo(pageId, params = {}) {
     if (pageId === 'user-details') pageId = 'user-history';
     currentPageId = pageId;
@@ -470,15 +472,22 @@ export async function navigateTo(pageId, params = {}) {
     document.title = pageName ? `${pageName} · Pointeuse LPF` : 'Pointeuse LPF';
 
     pageContent.classList.add('page-exit');
+    // Le fichier de la page se télécharge pendant l'animation de sortie (et non après)
+    const modulePromise = import(`./modules/${pageId}.js`);
+    modulePromise.catch(() => {}); // l'erreur est affichée plus bas
+    const navigation = ++navigationCount;
 
     setTimeout(async () => {
+        if (navigation !== navigationCount) return; // un autre onglet a été touché entre-temps
         pageContent.innerHTML = `<div class="page-loader"><div class="spinner" role="status" aria-label="Chargement"></div></div>`;
         window.scrollTo(0, 0);
 
         try {
             // La page quittée arrête ses écouteurs temps réel / minuteurs (si elle en a)
             try { currentPageModule?.cleanup?.(); } catch (cleanupError) { console.error(cleanupError); }
-            const pageModule = await import(`./modules/${pageId}.js`);
+            currentPageModule = null;
+            const pageModule = await modulePromise;
+            if (navigation !== navigationCount) return;
             currentPageModule = pageModule;
             await pageModule.render(params);
         } catch (error) {
