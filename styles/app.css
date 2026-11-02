@@ -1939,32 +1939,6 @@ html[data-skin="arcade"] body .fixed.inset-0 input:focus,
 html[data-skin="arcade"] body .fixed.inset-0 select:focus,
 html[data-skin="arcade"] body .fixed.inset-0 textarea:focus { box-shadow: 4px 4px 0 var(--arcade-cyan) !important; }
 
-/* Animations de décor coupées si le téléphone demande moins de mouvement */
-@media (prefers-reduced-motion: reduce) {
-    html[data-skin]::before,
-    html[data-skin] body::before,
-    html[data-skin] body::after,
-    html[data-skin="cyber"] .breadcrumb-page::after { animation: none !important; }
-}
-@media print {
-    html[data-skin]::before,
-    html[data-skin] body::before,
-    html[data-skin] body::after,
-    .theme-decor { display: none; }
-}
-
-/* Sélecteur de thèmes (Paramètres) : chaque choix montre une mini-appli dans son ambiance */
-#page-content .theme-group-label {
-    margin: 1.25rem 0 0.625rem;
-    font-size: 0.6875rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--color-text-muted);
-}
-#page-content .theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(136px, 1fr)); gap: 0.75rem; }
-#page-content .theme-option {
-    position: relative;
 /* Couche de décor qui tombe (pétales, neige) : plus haute que l'écran d'une tuile, elle glisse d'une tuile puis recommence */
 html[data-skin="sakura"]::before,
 html[data-skin="sakura"] body::before,
@@ -2225,10 +2199,82 @@ html[data-skin="hiver"] .nav-link.nav-active { color: #fff; }
 html[data-skin="hiver"] .nav-link.nav-active::before { background: var(--hiver-green); box-shadow: 0 0 10px var(--hiver-green); }
 html[data-skin="hiver"] .nav-link.nav-active svg { color: var(--hiver-green); }
 html[data-skin="hiver"] ::selection { background: rgba(60, 196, 124, 0.45); }
+/* Brin de houx dans le coin de chaque carte */
+html[data-skin="hiver"] #page-content [style*="background-color: var(--color-surface)"]:not(button):not(input):not(select):not(textarea),
+html[data-skin="hiver"] #page-content .settings-card {
+    background-image: url("../themes/noel/houx.svg");
+    background-position: right 10px top 8px;
+    background-size: 40px auto;
+    background-repeat: no-repeat;
+}
+/* Bonnet de Père Noël sur le logo et l'avatar */
+html[data-skin="hiver"] .brand-mark,
+html[data-skin="hiver"] .avatar { position: relative; overflow: visible; }
+html[data-skin="hiver"] .brand-mark::after,
+html[data-skin="hiver"] .avatar::after {
+    content: '';
+    position: absolute;
+    top: -42%;
+    left: -14%;
+    width: 92%;
+    aspect-ratio: 64 / 44;
+    background: url("../themes/noel/bonnet.svg") center / contain no-repeat;
+    transform: rotate(-14deg);
+    pointer-events: none;
+}
+/* Le chrono emballé comme un cadeau : gros nœud rouge sur le dessus */
+html[data-skin="hiver"] #live-tracker-container { overflow: visible; margin-top: 26px; }
+html[data-skin="hiver"] #live-tracker-container::before {
+    content: '';
+    position: absolute;
+    top: -30px;
+    left: 50%;
+    width: 104px;
+    height: 52px;
+    transform: translateX(-50%);
+    background: url("../themes/noel/noeud.svg") center / contain no-repeat;
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.35));
+    pointer-events: none;
+}
 
 /* Personnages animés : au-dessus des pages, du menu et de la barre du haut, sous les fenêtres et les messages */
 .theme-decor { position: fixed; inset: 0; z-index: 45; overflow: hidden; pointer-events: none; }
-.theme-decor img { position: absolute; display: block; max-width: none; user-select: none; -webkit-user-drag: none; will-change: transform; }
+.theme-decor > img,
+.theme-decor > div { position: absolute; display: block; max-width: none; user-select: none; -webkit-user-drag: none; will-change: transform; }
+.theme-decor div img { display: block; width: 100%; }
+/* Boules de Noël qui pendent sous la barre du haut */
+.decor-baubles {
+    top: calc(var(--topbar-height) - 2px);
+    right: clamp(10px, 16vw, 240px);
+    width: clamp(64px, 7vw, 92px);
+}
+/* Cadeau lâché par le traîneau à mi-parcours (même cycle que le traîneau) */
+.decor-parachute {
+    top: 18vh;
+    left: 44vw;
+    width: clamp(44px, 5vw, 60px);
+    opacity: 0;
+    animation: noel-drop 40s linear 3s infinite;
+}
+@keyframes noel-drop {
+    0%, 12% { opacity: 0; transform: translate(0, 0); }
+    13% { opacity: 1; transform: translate(0, 0); }
+    24% { transform: translate(-3vw, 30vh); }
+    34% { opacity: 1; transform: translate(2vw, 62vh); }
+    36%, 100% { opacity: 0; transform: translate(2vw, 66vh); }
+}
+/* Deux lutins qui défilent avec une banderole « Joyeux Noël ! » */
+.decor-banner {
+    left: 0;
+    bottom: calc(var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom) + 2px);
+    width: clamp(200px, 22vw, 260px);
+    transform: translateX(-110%);
+    animation: noel-parade 46s linear 17s infinite;
+}
+@keyframes noel-parade {
+    0% { transform: translateX(-110%); }
+    44%, 100% { transform: translateX(calc(100vw + 20px)); }
+}
 /* Le traîneau traverse le ciel de gauche à droite de temps en temps, en ondulant */
 .decor-sleigh {
     top: 13vh;
@@ -2264,19 +2310,62 @@ html[data-skin="hiver"] ::selection { background: rgba(60, 196, 124, 0.45); }
     transform: translateY(calc(100% + var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom) + 12px));
     animation: noel-peek 34s ease-in-out 14s infinite;
 }
+/* Sa pancarte : compte à rebours jusqu'à Noël */
+.decor-sign {
+    position: absolute;
+    right: 82%;
+    bottom: 46%;
+    padding: 0.35rem 0.7rem;
+    border: 2px solid var(--hiver-gold, #f2c14e);
+    border-radius: 10px;
+    background: #fff6e6;
+    color: #b01c28;
+    font-family: 'Fredoka', var(--font-sans);
+    font-size: 0.8125rem;
+    font-weight: 700;
+    white-space: nowrap;
+    box-shadow: 0 6px 14px -6px rgba(0, 0, 0, 0.5);
+    transform: rotate(-6deg);
+}
 @keyframes noel-peek {
     0%, 100% { transform: translateY(calc(100% + var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom) + 12px)); }
     4%, 15% { transform: translateY(6%); }
     19% { transform: translateY(calc(100% + var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom) + 12px)); }
 }
 
+/* Animations de décor coupées si le téléphone demande moins de mouvement */
+@media (prefers-reduced-motion: reduce) {
+    html[data-skin]::before,
+    html[data-skin] body::before,
+    html[data-skin] body::after,
+    html[data-skin="cyber"] .breadcrumb-page::after { animation: none !important; }
+    .theme-decor { display: none; }
+}
+@media print {
+    html[data-skin]::before,
+    html[data-skin] body::before,
+    html[data-skin] body::after,
+    .theme-decor { display: none; }
+}
+
+/* Sélecteur de thèmes (Paramètres) : chaque choix montre une mini-appli dans son ambiance */
+#page-content .theme-group-label {
+    margin: 1.25rem 0 0.625rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+}
+#page-content .theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(136px, 1fr)); gap: 0.75rem; }
+#page-content .theme-option {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
     padding: 0.5rem 0.5rem 0.625rem;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
-    .theme-decor { display: none; }
     background: var(--color-surface-2);
     color: var(--color-text-base);
     text-align: left;

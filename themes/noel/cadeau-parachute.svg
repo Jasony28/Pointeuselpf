@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 110">
+  <!-- Cadeau lâché par le traîneau, qui descend en parachute (thème Noël) -->
+  <style>
+    .p { transform-box: fill-box; transform-origin: 50% 100%; animation: sway 1.4s ease-in-out infinite alternate; }
+    @keyframes sway { from { transform: rotate(-8deg); } to { transform: rotate(8deg); } }
+  </style>
+  <g class="p">
+    <path d="M6 34C6 14 22 2 40 2s34 12 34 32c-4-4-8-4-11 0-4-4-9-4-12 0-3-4-8-4-11 0-3-4-8-4-12 0-3-4-8-4-12 0z" fill="#fff"/>
+    <path d="M17 34c-1-14 6-28 23-32-10 8-12 20-11 32M63 34c1-14-6-28-23-32 10 8 12 20 11 32" fill="#d42a35"/>
+    <path d="M7 34 28 74M73 34 52 74M29 34l7 40M51 34l-7 40" stroke="#b9c6d6" stroke-width="1"/>
+    <rect x="24" y="72" width="32" height="28" rx="3" fill="#1f9d55"/>
+    <path d="M40 72v28M24 86h32" stroke="#f2c14e" stroke-width="4"/>
+    <path d="M40 72c-6-8-14-6-10 0zM40 72c6-8 14-6 10 0z" fill="#f2c14e"/>
+  </g>
+</svg>

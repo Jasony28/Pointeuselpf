@@ -4,7 +4,7 @@ const { precaching, routing, strategies, core } = workbox;
 core.setCacheNameDetails({ prefix: 'pointeuse-lpf-cache' });
 
 // Version synchronisée avec app.js
-const APP_VERSION = 'v4.12.0'; // <--- CHANGEMENT ICI
+const APP_VERSION = 'v4.12.1'; // <--- CHANGEMENT ICI
 
 precaching.precacheAndRoute([
     { url: './', revision: APP_VERSION },
@@ -82,6 +82,12 @@ precaching.precacheAndRoute([
     { url: 'themes/noel/pere-noel-coucou.svg', revision: APP_VERSION },
     { url: 'themes/noel/guirlande.svg', revision: APP_VERSION },
     { url: 'themes/noel/paysage.svg', revision: APP_VERSION },
+    { url: 'themes/noel/bonnet.svg', revision: APP_VERSION },
+    { url: 'themes/noel/houx.svg', revision: APP_VERSION },
+    { url: 'themes/noel/noeud.svg', revision: APP_VERSION },
+    { url: 'themes/noel/boules.svg', revision: APP_VERSION },
+    { url: 'themes/noel/cadeau-parachute.svg', revision: APP_VERSION },
+    { url: 'themes/noel/lutins-banniere.svg', revision: APP_VERSION },
 ]);
 
 // Stratégie pour les pages HTML

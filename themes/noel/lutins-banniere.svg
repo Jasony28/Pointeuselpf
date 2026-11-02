@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 100">
+  <!-- Deux lutins qui portent une banderole « Joyeux Noël ! » en marchant vers la droite (thème Noël) -->
+  <style>
+    .leg { transform-box: fill-box; transform-origin: 50% 0; }
+    .l1 { animation: step .34s ease-in-out infinite alternate; }
+    .l2 { animation: step .34s ease-in-out infinite alternate-reverse; }
+    @keyframes step { from { transform: rotate(24deg); } to { transform: rotate(-24deg); } }
+    .hop { animation: hop .17s ease-in-out infinite alternate; }
+    .hop2 { animation-delay: -.08s; }
+    @keyframes hop { from { transform: translateY(0); } to { transform: translateY(-2.5px); } }
+    .flag { animation: wave 1.1s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: 50% 0; }
+    @keyframes wave { from { transform: skewY(-2deg) translateY(0); } to { transform: skewY(2deg) translateY(2px); } }
+  </style>
+  <defs>
+    <pattern id="st" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="3" fill="#fff"/><rect y="3" width="6" height="3" fill="#d42a35"/></pattern>
+    <g id="elfe">
+      <g class="leg l2"><rect x="27" y="70" width="6" height="16" rx="2" fill="url(#st)"/><path d="M25 84h10c4 0 8-1 10-5 1 4-1 9-6 10H25z" fill="#155e36"/></g>
+      <g class="leg l1"><rect x="35" y="70" width="6" height="16" rx="2" fill="url(#st)"/><path d="M33 84h10c4 0 8-1 10-5 1 4-1 9-6 10H33z" fill="#1b7a45"/></g>
+      <path d="M22 50h26l4 22-5-3-4 4-4-4-4 4-4-4-4 4-4-4-5 3z" fill="#1f9d55"/>
+      <rect x="22" y="62" width="28" height="5" fill="#22181a"/>
+      <rect x="32" y="61" width="7" height="7" rx="1" fill="none" stroke="#f2c14e" stroke-width="1.8"/>
+      <path d="M26 50l9 7 9-7" stroke="#d42a35" stroke-width="3" fill="none" stroke-linejoin="round"/>
+      <path d="M44 53c5-4 8-10 9-18" stroke="#1f9d55" stroke-width="6" stroke-linecap="round" fill="none"/>
+      <circle cx="53" cy="34" r="3.6" fill="#f6c9a6"/>
+      <path d="M24 36l-7-6 9 2z" fill="#f2b896"/>
+      <path d="M44 36l8-6-9 2z" fill="#f2b896"/>
+      <circle cx="34" cy="38" r="11" fill="#f6c9a6"/>
+      <circle cx="38" cy="37" r="1.6" fill="#2a1a14"/>
+      <circle cx="30" cy="37" r="1.6" fill="#2a1a14"/>
+      <circle cx="41" cy="41" r="2.4" fill="#f4a7a0" opacity=".8"/>
+      <circle cx="27" cy="41" r="2.4" fill="#f4a7a0" opacity=".8"/>
+      <path d="M30 43c2 3 6 3 8 0z" fill="#a24a3a"/>
+      <path d="M22 32c0-14 10-20 22-14 4 2 6 7 6 14z" fill="#d42a35"/>
+      <path d="M26 20C18 12 8 12 4 20" stroke="#d42a35" stroke-width="8" stroke-linecap="round" fill="none"/>
+      <rect x="21" y="29" width="30" height="6" rx="3" fill="#fff"/>
+      <circle cx="4" cy="24" r="4.5" fill="#fff"/>
+    </g>
+    <g id="elfe2">
+      <g class="leg l2"><rect x="27" y="70" width="6" height="16" rx="2" fill="url(#st)"/><path d="M25 84h10c4 0 8-1 10-5 1 4-1 9-6 10H25z" fill="#155e36"/></g>
+      <g class="leg l1"><rect x="35" y="70" width="6" height="16" rx="2" fill="url(#st)"/><path d="M33 84h10c4 0 8-1 10-5 1 4-1 9-6 10H33z" fill="#1b7a45"/></g>
+      <path d="M22 50h26l4 22-5-3-4 4-4-4-4 4-4-4-4 4-4-4-5 3z" fill="#1f9d55"/>
+      <rect x="22" y="62" width="28" height="5" fill="#22181a"/>
+      <rect x="32" y="61" width="7" height="7" rx="1" fill="none" stroke="#f2c14e" stroke-width="1.8"/>
+      <path d="M26 50l9 7 9-7" stroke="#d42a35" stroke-width="3" fill="none" stroke-linejoin="round"/>
+      <path d="M26 53c-5-4-8-10-9-18" stroke="#1f9d55" stroke-width="6" stroke-linecap="round" fill="none"/>
+      <circle cx="17" cy="34" r="3.6" fill="#f6c9a6"/>
+      <path d="M24 36l-7-6 9 2z" fill="#f2b896"/>
+      <path d="M44 36l8-6-9 2z" fill="#f2b896"/>
+      <circle cx="34" cy="38" r="11" fill="#f6c9a6"/>
+      <circle cx="38" cy="37" r="1.6" fill="#2a1a14"/>
+      <circle cx="30" cy="37" r="1.6" fill="#2a1a14"/>
+      <circle cx="41" cy="41" r="2.4" fill="#f4a7a0" opacity=".8"/>
+      <circle cx="27" cy="41" r="2.4" fill="#f4a7a0" opacity=".8"/>
+      <path d="M30 43c2 3 6 3 8 0z" fill="#a24a3a"/>
+      <path d="M22 32c0-14 10-20 22-14 4 2 6 7 6 14z" fill="#d42a35"/>
+      <path d="M26 20C18 12 8 12 4 20" stroke="#d42a35" stroke-width="8" stroke-linecap="round" fill="none"/>
+      <rect x="21" y="29" width="30" height="6" rx="3" fill="#fff"/>
+      <circle cx="4" cy="24" r="4.5" fill="#fff"/>
+    </g>
+  </defs>
+  <ellipse cx="34" cy="97" rx="16" ry="2.5" fill="#000" opacity=".18"/>
+  <ellipse cx="260" cy="97" rx="16" ry="2.5" fill="#000" opacity=".18"/>
+  <!-- perches et banderole -->
+  <g class="hop">
+    <path d="M53 40V6M243 40V6" stroke="#8a5a2b" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="53" cy="5" r="3.5" fill="#f2c14e"/><circle cx="243" cy="5" r="3.5" fill="#f2c14e"/>
+    <g class="flag">
+      <path d="M53 8c32 6 63 6 95 0s63-6 95 0v26c-32-6-63-6-95 0s-63 6-95 0z" fill="#fff6e6" stroke="#f2c14e" stroke-width="2"/>
+      <path d="M53 12c32 6 63 6 95 0s63-6 95 0" stroke="#d42a35" stroke-width="2" fill="none" stroke-dasharray="5 4"/>
+      <path d="M53 30c32 6 63 6 95 0s63-6 95 0" stroke="#1f9d55" stroke-width="2" fill="none" stroke-dasharray="5 4"/>
+      <text x="148" y="27" text-anchor="middle" font-family="'Fredoka', 'Arial Rounded MT Bold', 'Trebuchet MS', sans-serif" font-weight="700" font-size="15" fill="#c21f2c" letter-spacing=".5">Joyeux Noël !</text>
+    </g>
+  </g>
+  <g class="hop"><use href="#elfe"/></g>
+  <g class="hop hop2"><use href="#elfe2" x="226"/></g>
+</svg>

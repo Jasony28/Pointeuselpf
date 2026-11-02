@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 import { installNativeFileSaving } from './modules/native-files.js';
 
-const APP_VERSION = 'v4.12.0';
+const APP_VERSION = 'v4.12.1';
 
 // Appli Android / iPhone : PDF et CSV proposés dans le menu « Partager » du téléphone
 installNativeFileSaving();
@@ -285,11 +285,26 @@ export function preloadThemeFonts() {
 // Décors animés posés devant l'appli (ils passent même devant les données, sans jamais capter le toucher)
 const decors = {
     noel: () => `
+        <img class="decor-baubles" src="${asset('./themes/noel/boules.svg')}" alt="">
         <img class="decor-sleigh" src="${asset('./themes/noel/traineau.svg')}" alt="">
+        <img class="decor-parachute" src="${asset('./themes/noel/cadeau-parachute.svg')}" alt="">
         <img class="decor-elf decor-elf-gift" src="${asset('./themes/noel/lutin-cadeau.svg')}" alt="">
         <img class="decor-elf decor-elf-cane" src="${asset('./themes/noel/lutin-sucre-orge.svg')}" alt="">
-        <img class="decor-santa-peek" src="${asset('./themes/noel/pere-noel-coucou.svg')}" alt="">`,
+        <img class="decor-banner" src="${asset('./themes/noel/lutins-banniere.svg')}" alt="">
+        <div class="decor-santa-peek"><span class="decor-sign">${christmasCountdown()}</span><img src="${asset('./themes/noel/pere-noel-coucou.svg')}" alt=""></div>`,
 };
+
+// Pancarte du Père Noël : « J-12 avant Noël », remise à jour à chaque apparition
+function christmasCountdown(now = new Date()) {
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    let christmas = new Date(now.getFullYear(), 11, 25);
+    if (today > christmas && now.getMonth() === 11) return 'Joyeuses fêtes ! ✨';
+    if (today > christmas) christmas = new Date(now.getFullYear() + 1, 11, 25);
+    const days = Math.round((christmas - today) / 86400000);
+    if (days === 0) return 'Joyeux Noël ! 🎁';
+    if (days === 1) return "C'est ce soir ! 🎅";
+    return `J-${days} avant Noël 🎄`;
+}
 
 function applyDecor(name) {
     const current = document.getElementById('theme-decor');
@@ -302,6 +317,9 @@ function applyDecor(name) {
     layer.dataset.decor = name;
     layer.setAttribute('aria-hidden', 'true');
     layer.innerHTML = decors[name]();
+    layer.querySelector('.decor-santa-peek')?.addEventListener('animationiteration', () => {
+        layer.querySelector('.decor-sign').textContent = christmasCountdown();
+    });
     document.body.appendChild(layer);
 }
 

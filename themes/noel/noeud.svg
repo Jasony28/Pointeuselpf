@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 60">
+  <!-- Gros nœud de cadeau posé en haut du chrono (thème Noël) -->
+  <path d="M60 30C44 4 14 2 12 18c-2 14 26 18 48 12z" fill="#d42a35"/>
+  <path d="M60 30c16-26 46-28 48-12 2 14-26 18-48 12z" fill="#d42a35"/>
+  <path d="M60 30C46 12 26 10 22 18c-3 7 16 12 38 12zM60 30c14-18 34-20 38-12 3 7-16 12-38 12z" fill="#b01c28"/>
+  <path d="M56 32c-6 8-12 16-22 24l10-1 4 5c6-8 10-18 12-26zM64 32c6 8 12 16 22 24l-10-1-4 5c-6-8-10-18-12-26z" fill="#c21f2c"/>
+  <ellipse cx="60" cy="30" rx="10" ry="9" fill="#e8394a"/>
+  <path d="M54 26c3-3 9-3 12 0" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".5" fill="none"/>
+  <path d="M20 14c4-4 10-4 14-2M86 12c4-2 10-2 14 2" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".35" fill="none"/>
+</svg>

@@ -1,5 +1,12 @@
 export const updatesLog = [
     {
+        version: 'v4.12.1',
+        date: '2 novembre 2026',
+        changes: [
+            "**Thème Esprit de Noël, encore plus festif** : bonnet de Père Noël sur votre avatar, le chrono emballé comme un cadeau, du houx sur les cartes, des boules qui se balancent, un cadeau qui tombe en parachute du traîneau, des lutins qui défilent avec une banderole « Joyeux Noël ! », un bonhomme de neige, et le Père Noël tient une pancarte avec le compte à rebours jusqu'à Noël.",
+        ]
+    },
+    {
         version: 'v4.12.0',
         date: '2 novembre 2026',
         changes: [

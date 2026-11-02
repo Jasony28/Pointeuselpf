@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 44">
+  <!-- Bonnet de Père Noël posé sur l'avatar et le logo (thème Noël) -->
+  <path d="M8 34C10 14 24 4 40 6c8 1 14 6 16 12-6-3-12-3-16 2 4 6 6 12 6 14z" fill="#d42a35"/>
+  <path d="M40 6c8 1 14 6 16 12-6-3-12-3-16 2" fill="#b01c28"/>
+  <circle cx="56" cy="22" r="6" fill="#fff"/>
+  <rect x="2" y="30" width="50" height="11" rx="5.5" fill="#fff"/>
+  <path d="M8 33h40" stroke="#e6edf5" stroke-width="2" stroke-linecap="round" stroke-dasharray="1 5"/>
+</svg>
