@@ -7,6 +7,7 @@ import { enhanceChantierSelect } from './chantier-picker.js';
 import { mailButtonHTML } from './mail.js';
 import { missingProfileParts, escapeHTML } from './work-profile.js';
 import { getUnreadRetours } from './retours-clients.js';
+import { photoFieldHTML, bindPhotoField, uploadPointagePhoto } from './photos-chantier.js';
 
 
 let timerInterval = null;
@@ -60,6 +61,7 @@ export async function render() {
                         <label for="startChantierSelect" class="field-label">Chantier</label>
                         <select id="startChantierSelect" class="input" required></select>
                     </div>
+                    ${photoFieldHTML('avant')}
                     <p class="auto-km-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Les kilomètres et le temps de route sont calculés automatiquement.</p>
                 </div>
                 <div class="modal-footer">
@@ -77,6 +79,7 @@ export async function render() {
                         <label for="pointageNotes" class="field-label">Note (facultatif)</label>
                         <textarea id="pointageNotes" placeholder="Ex : matériel manquant…" class="input h-24" style="resize: vertical;"></textarea>
                     </div>
+                    ${photoFieldHTML('apres')}
                 </div>
                 <div class="modal-footer">
                     <button type="button" id="cancelStopPointage" class="btn btn-secondary">Annuler</button>
@@ -321,7 +324,8 @@ function resumePointage() {
     initLiveTracker();
 }
 
-async function startPointage(chantierId, chantierName, colleagues) {
+// Renvoie l'identifiant du pointage créé (pour y joindre la photo « avant »)
+function startPointage(chantierId, chantierName, colleagues) {
     const newPointageData = {
         uid: currentUser.uid, userName: currentUser.displayName, 
         chantier: chantierName, 
@@ -343,14 +347,16 @@ async function startPointage(chantierId, chantierName, colleagues) {
         initLiveTracker();
         if (!navigator.onLine) {
             showToast("Hors ligne : pointage démarré. Il sera envoyé dès le retour du réseau.", 'warning');
-            return; // le calcul du trajet demande Internet
+            return newPointageRef.id; // le calcul du trajet demande Internet
         }
 
         // Trajet aller (dépôt ou chantier précédent → ce chantier), avec la même logique que l'historique
         rebuildDayTrips(currentUser.uid, localDateKey(newPointageData.timestamp)).then(loadTodaySummary);
+        return newPointageRef.id;
     } catch (error) {
         console.error("Erreur de démarrage du pointage:", error);
         showInfoModal("Erreur", "Le démarrage du pointage a échoué.");
+        return null;
     }
 }
 
@@ -452,7 +458,8 @@ async function openStartModal() {
 
     chantierSelect.innerHTML = '<option>Chargement...</option>';
     enhanceChantierSelect(chantierSelect);
-    
+    const photo = bindPhotoField(form);
+
     modal.classList.remove('hidden');
     
     const { weeklyChantiers, todaysChantiers } = await getContextualLists();
@@ -499,7 +506,8 @@ async function openStartModal() {
             showInfoModal("Erreur", "Chantier sélectionné non trouvé."); return;
         }
 
-        startPointage(chantierId, chantierName, []);
+        const pointageId = startPointage(chantierId, chantierName, []);
+        uploadPointagePhoto(pointageId, 'avant', photo.file());
         modal.classList.add('hidden');
     };
 }
@@ -533,12 +541,15 @@ function openStopModal() {
     if (!modal || !form) return;
     
     form.reset();
+    const photo = bindPhotoField(form);
     modal.classList.remove('hidden');
-    
+
     form.onsubmit = (e) => {
         e.preventDefault();
         const notes = document.getElementById('pointageNotes').value.trim();
+        const pointageId = JSON.parse(localStorage.getItem('activePointage') || 'null')?.docId;
         stopPointage(notes);
+        uploadPointagePhoto(pointageId, 'apres', photo.file());
         modal.classList.add('hidden');
     };
 }

@@ -1,6 +1,7 @@
 import { collection, query, where, getDocs, getDoc, doc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, currentUser } from "../app.js";
 import { getActiveChantiers } from "./data-service.js";
+import { normName } from "./auto-planner.js";
 import { planRoute, simulate, latestDeparture, toMinutes, fromMinutes, estimateMatrix, RDV_MARGIN_MIN } from "./route-planner.js";
 
 // Ma tournée : l'employé choisit un jour et son heure de départ du dépôt, puis lance le calcul lui-même.
@@ -168,26 +169,19 @@ async function loadMyTasks(dateStr) {
 
 /**
  * Durée d'un passage (total équipe, en heures) d'après l'historique : médiane des derniers passages.
- * Un passage = tous les pointages terminés d'une même journée sur ce chantier.
+ * Un passage = tous les pointages terminés d'une même journée sur ce chantier (pauses déduites).
+ * Lu dans dureesChantiers (une fiche par chantier tenue par le serveur, sans aucun nom de personne) :
+ * un employé ne lit plus les pointages de ses collègues.
  */
 async function estimateHoursPerVisit(chantierName) {
     const cacheKey = `durationEstimate:${normalizeName(chantierName)}`;
     const cached = storage.get(cacheKey);
     if (cached && Date.now() - cached.at < ESTIMATE_TTL_MS) return cached.hours;
     try {
-        // Les 6 derniers mois suffisent pour les derniers passages ; tout l'historique seulement si rien depuis
-        const since = new Date(Date.now() - 183 * 86400000).toISOString();
-        let snapshot = await getDocs(query(collection(db, "pointages"), where("chantier", "==", chantierName), where("timestamp", ">=", since))).catch(() => null);
-        if (!snapshot || snapshot.empty) snapshot = await getDocs(query(collection(db, "pointages"), where("chantier", "==", chantierName)));
-        const byDay = {};
-        snapshot.forEach(d => {
-            const p = d.data();
-            if (!p.endTime) return;
-            const ms = new Date(p.endTime) - new Date(p.timestamp) - (p.pauseDurationMs || 0);
-            if (ms <= 0) return;
-            const day = String(p.timestamp).split('T')[0];
-            byDay[day] = (byDay[day] || 0) + ms;
-        });
+        const key = normName(chantierName);
+        if (!key) return null;
+        const snap = await getDoc(doc(db, "dureesChantiers", key));
+        const byDay = Object.fromEntries(Object.entries(snap.exists() ? snap.data().jours || {} : {}).filter(([, ms]) => ms > 0));
         const passages = Object.keys(byDay).sort().slice(-ESTIMATE_PASSAGES).map(day => byDay[day] / 3600000).sort((a, b) => a - b);
         if (!passages.length) return null;
         const mid = Math.floor(passages.length / 2);

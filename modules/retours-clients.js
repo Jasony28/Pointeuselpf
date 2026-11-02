@@ -98,7 +98,7 @@ async function findTeammatePointages(pointage) {
 }
 
 /** Réduit une photo (JPEG, 1000 px au plus) pour qu'elle tienne dans le document Firestore. */
-function compressImage(file) {
+export function compressImage(file) {
     return new Promise((resolve, reject) => {
         const url = URL.createObjectURL(file);
         const img = new Image();
@@ -120,7 +120,8 @@ function compressImage(file) {
 export function openPhoto(src) {
     const overlay = document.createElement('div');
     overlay.className = 'modal rc-photo-view';
-    overlay.innerHTML = `<img src="${src}" alt="Photo jointe au retour client"><button type="button" class="btn btn-secondary" id="rcPhotoCloseBtn">Fermer</button>`;
+    overlay.innerHTML = `<img src="${src}" alt="Photo"><p class="rc-photo-missing" hidden>Photo introuvable : elle a peut-être été supprimée (les photos de chantier sont gardées 6 mois).</p><button type="button" class="btn btn-secondary" id="rcPhotoCloseBtn">Fermer</button>`;
+    overlay.querySelector('img').onerror = () => { overlay.querySelector('img').hidden = true; overlay.querySelector('.rc-photo-missing').hidden = false; };
     overlay.querySelector('#rcPhotoCloseBtn').onclick = () => overlay.remove();
     overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
     document.body.appendChild(overlay);
@@ -185,6 +186,7 @@ export async function openRetourModal(pointage, { userName, onSaved } = {}) {
                     <div class="rc-photos" id="rcPhotos">
                         <label class="rc-photo-add">+ Photo<input type="file" id="rcPhotoInput" accept="image/*" multiple class="sr-only"></label>
                     </div>
+                    ${['avant', 'apres'].some(k => pointage.photos?.[k]?.url) ? '<button type="button" class="btn btn-secondary rc-attach" id="rcAttachPointagePhotos">Joindre les photos avant / après du pointage</button>' : ''}
                 </div>
 
                 <div class="field">
@@ -233,6 +235,13 @@ export async function openRetourModal(pointage, { userName, onSaved } = {}) {
             photosBox.insertBefore(item, photosBox.querySelector('.rc-photo-add'));
         });
         photosBox.querySelector('.rc-photo-add').hidden = state.photos.length >= MAX_PHOTOS;
+    };
+    const attachBtn = modal.querySelector('#rcAttachPointagePhotos');
+    if (attachBtn) attachBtn.onclick = () => {
+        ['avant', 'apres'].map(k => pointage.photos?.[k]?.url).filter(Boolean)
+            .forEach(url => { if (state.photos.length < MAX_PHOTOS && !state.photos.includes(url)) state.photos.push(url); });
+        attachBtn.remove();
+        renderPhotos();
     };
     photosBox.onclick = (e) => {
         const btn = e.target.closest('[data-remove]');

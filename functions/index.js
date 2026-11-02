@@ -7,6 +7,7 @@ const { setGlobalOptions, logger } = require('firebase-functions/v2');
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
+const { getStorage } = require('firebase-admin/storage');
 const rules = require('./notify-rules');
 const summaries = require('./day-summaries');
 
@@ -105,8 +106,8 @@ exports.notifyLeaveDecision = onDocumentUpdated('leaveRequests/{id}', async (eve
     await send(rules.forLeaveDecision({ id: event.params.id, before, after, users }));
 });
 
-// 4c. Résumés quotidiens des heures : le tableau de bord lit un document par jour au lieu de tous les pointages.
-//     Chaque pointage créé, modifié ou supprimé ajuste le ou les jours concernés (aucune lecture, 1 ou 2 écritures).
+// 4c. Résumés quotidiens des heures (tableau de bord, planification) et durées des passages par chantier (« Ma tournée ») :
+//     chaque pointage créé, modifié ou supprimé ajuste le ou les jours concernés (aucune lecture, 2 à 4 écritures).
 exports.updateDaySummaries = onDocumentWritten('pointages/{id}', async (event) => {
     const before = event.data.before.exists ? event.data.before.data() : null;
     const after = event.data.after.exists ? event.data.after.data() : null;
@@ -119,7 +120,14 @@ exports.updateDaySummaries = onDocumentWritten('pointages/{id}', async (event) =
             date: c.day,
             users: { [c.uid]: { name: c.name, ms: FieldValue.increment(c.ms) } },
             chantiers: { [c.chantier]: FieldValue.increment(c.ms) },
+            planif: { [c.chantier]: { ms: FieldValue.increment(c.planMs), uids: { [c.uid]: FieldValue.increment(c.count) } } },
         }, { merge: true });
+        if (c.routeKey) {
+            batch.set(db.doc(`dureesChantiers/${c.routeKey}`), {
+                name: c.chantier,
+                jours: { [c.day]: FieldValue.increment(c.routeMs) },
+            }, { merge: true });
+        }
     }
     await batch.commit();
 });
@@ -131,15 +139,38 @@ exports.rebuildDaySummaries = onCall({ timeoutSeconds: 300, memory: '512MiB' }, 
     const userSnap = uid ? await db.doc(`users/${uid}`).get() : null;
     if (!userSnap?.exists || userSnap.get('role') !== 'admin') throw new HttpsError('permission-denied', 'Réservé aux administrateurs.');
 
-    const [pointagesSnap, existingSnap] = await Promise.all([db.collection('pointages').get(), db.collection('resumesJour').get()]);
-    const days = summaries.buildAll(pointagesSnap.docs.map(d => d.data()));
+    const [pointagesSnap, existingSnap, routesSnap] = await Promise.all([
+        db.collection('pointages').get(), db.collection('resumesJour').get(), db.collection('dureesChantiers').get(),
+    ]);
+    const { days, routes } = summaries.buildAll(pointagesSnap.docs.map(d => d.data()));
     const writer = db.bulkWriter();
     existingSnap.docs.filter(d => d.id !== '_meta' && !days[d.id]).forEach(d => writer.delete(d.ref));
+    routesSnap.docs.filter(d => !routes[d.id]).forEach(d => writer.delete(d.ref));
     Object.entries(days).forEach(([day, data]) => writer.set(db.doc(`resumesJour/${day}`), data));
+    Object.entries(routes).forEach(([key, data]) => writer.set(db.doc(`dureesChantiers/${key}`), data));
     await writer.close();
-    await db.doc('resumesJour/_meta').set({ ready: true, builtAt: FieldValue.serverTimestamp(), pointages: pointagesSnap.size, days: Object.keys(days).length });
-    logger.info('Résumés quotidiens recalculés', { pointages: pointagesSnap.size, jours: Object.keys(days).length });
+    await db.doc('resumesJour/_meta').set({
+        ready: true, version: summaries.SUMMARY_VERSION, builtAt: FieldValue.serverTimestamp(),
+        pointages: pointagesSnap.size, days: Object.keys(days).length, chantiers: Object.keys(routes).length,
+    });
+    logger.info('Résumés quotidiens recalculés', { pointages: pointagesSnap.size, jours: Object.keys(days).length, chantiers: Object.keys(routes).length });
     return { days: Object.keys(days).length };
+});
+
+// 4e. Photos avant / après des pointages : supprimées après 6 mois (une fois par mois, dossiers photos/AAAA-MM/).
+//     Le lien reste dans le pointage ; l'appli affiche « photo supprimée » si on l'ouvre.
+const PHOTO_MONTHS_KEPT = 6;
+exports.cleanupOldPhotos = onSchedule({ schedule: '0 4 2 * *', timeZone: TIME_ZONE }, async () => {
+    const bucket = getStorage().bucket();
+    const [, , apiResponse] = await bucket.getFiles({ prefix: 'photos/', delimiter: '/', autoPaginate: false });
+    const limit = new Date();
+    limit.setMonth(limit.getMonth() - PHOTO_MONTHS_KEPT);
+    const oldestKept = `${limit.getFullYear()}-${String(limit.getMonth() + 1).padStart(2, '0')}`;
+    const oldMonths = (apiResponse?.prefixes || []).map(p => p.slice('photos/'.length, -1)).filter(m => /^\d{4}-\d{2}$/.test(m) && m < oldestKept);
+    for (const month of oldMonths) {
+        await bucket.deleteFiles({ prefix: `photos/${month}/` });
+        logger.info('Photos supprimées', { mois: month });
+    }
 });
 
 // 4b. Retour client : l'employé concerné (une lecture : sa fiche)

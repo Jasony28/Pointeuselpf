@@ -3,7 +3,7 @@ import { db, pageContent, currentUser, showConfirmationModal, showInfoModal } fr
 import { getWeekDateRange } from "./utils.js";
 import { loadPdf } from "./libs.js";
 import { getActiveChantiers, getTeamMembers, getUsers } from "./data-service.js";
-import { planWeek, learnDurations, summarizePointageHistory, DEFAULT_WEIGHTS, WEIGHT_LABELS } from "./auto-planner.js";
+import { planWeek, visitsFromPointages, visitsFromDaySummaries, durationsFromVisits, historyFromVisits, teamHabitsFromVisits, DEFAULT_WEIGHTS, WEIGHT_LABELS } from "./auto-planner.js";
 import { escapeHTML, missingProfileParts } from "./work-profile.js";
 
 const state = {
@@ -354,7 +354,7 @@ const WEIGHTS_KEY = 'autoPlanWeights';
 function loadWeights() { try { return { ...DEFAULT_WEIGHTS, ...JSON.parse(localStorage.getItem(WEIGHTS_KEY) || '{}') }; } catch (e) { return { ...DEFAULT_WEIGHTS }; } }
 function saveWeights(w) { try { localStorage.setItem(WEIGHTS_KEY, JSON.stringify(w)); } catch (e) { /* stockage indisponible */ } }
 
-const WEIGHT_MAX = { hours: 90, fairness: 60, skills: 15, continuity: 25, affinity: 20, stability: 15, travel: 2, changes: 300 };
+const WEIGHT_MAX = { hours: 90, fairness: 60, skills: 15, continuity: 25, affinity: 20, habits: 20, stability: 15, travel: 2, changes: 300 };
 const autoPlan = { data: null, outcome: null, keepExisting: true, useRealDurations: true, seed: 1, weights: loadWeights(), running: false };
 
 // Données réduites au strict nécessaire (transmissibles au Web Worker, sans objets Firebase)
@@ -383,7 +383,7 @@ async function openAutoPlanner() {
             getActiveChantiers(true),
             getDocs(collection(db, "affinites")).catch((e) => { console.warn("Affinités illisibles", e); return null; }),
             getDocs(query(collection(db, "leaveRequests"), where("status", "==", "approved"))),
-            getDocs(query(collection(db, "pointages"), where("timestamp", ">=", since.toISOString()))).catch((e) => { console.warn("Pointages illisibles", e); return null; }),
+            loadWorkHistory(since),
         ]);
         const lines = weekSnap.docs.map(d => pick({ id: d.id, ...d.data() }, LINE_KEYS)).sort((a, b) => a.date.localeCompare(b.date) || (a.order ?? 0) - (b.order ?? 0));
         if (!lines.length) {
@@ -391,7 +391,8 @@ async function openAutoPlanner() {
             return;
         }
         const chantierList = chantiers.map(c => pick(c, CHANTIER_KEYS));
-        const pointages = (pointSnap?.docs || []).map(d => { const p = d.data(); return { uid: p.uid, chantier: p.chantier, timestamp: p.timestamp, endTime: p.endTime }; });
+        // Passages des 120 derniers jours (qui, où, combien de temps) : depuis les résumés quotidiens si possible
+        const visits = pointSnap?.days ? visitsFromDaySummaries(pointSnap.days, chantierList) : visitsFromPointages(pointSnap?.pointages || [], chantierList);
         autoPlan.data = {
             weekStart, lines, chantiers: chantierList,
             users: users.map(u => pick(u, USER_KEYS)),
@@ -399,8 +400,9 @@ async function openAutoPlanner() {
             affinitiesMissing: !affSnap,
             leaves: leaveSnap.docs.map(d => pick(d.data(), ['userId', 'startDate', 'endDate', 'status'])).filter(l => l.startDate <= weekEnd && (l.endDate || l.startDate) >= weekStart),
             pastLines: pastSnap.docs.map(d => pick(d.data(), ['date', 'chantierId', 'teamNames', 'duration', 'id_leaveRequest'])),
-            durations: [...learnDurations(pointages, chantierList).entries()],
-            pointageHistory: summarizePointageHistory(pointages, chantierList),
+            durations: [...durationsFromVisits(visits).entries()],
+            pointageHistory: historyFromVisits(visits),
+            teamHabits: teamHabitsFromVisits(visits),
         };
         autoPlan.seed = 1;
         runAutoPlan();
@@ -408,6 +410,26 @@ async function openAutoPlanner() {
         console.error("Planification automatique :", error);
         modal.querySelector('.ap-body').innerHTML = `<p class="text-red-500">Impossible de préparer la proposition : ${escapeHTML(error.message || error)}</p>`;
     }
+}
+
+/**
+ * Historique de travail depuis `since` : résumés quotidiens (une lecture par jour, tenus à jour par le serveur)
+ * quand ils sont prêts en version 2 ; sinon les pointages eux-mêmes (une lecture par pointage), comme avant.
+ * Renvoie { days } ou { pointages }, ou null si rien n'est lisible.
+ */
+async function loadWorkHistory(since) {
+    const sinceDay = since.toISOString().slice(0, 10);
+    try {
+        const meta = await getDoc(doc(db, "resumesJour", "_meta"));
+        if (meta.exists() && meta.data().ready && (meta.data().version || 1) >= 2) {
+            const snap = await getDocs(query(collection(db, "resumesJour"), where("date", ">=", sinceDay)));
+            return { days: snap.docs.map(d => d.data()) };
+        }
+    } catch (e) { console.warn("Résumés quotidiens illisibles, lecture des pointages :", e?.code || e); }
+    try {
+        const snap = await getDocs(query(collection(db, "pointages"), where("timestamp", ">=", since.toISOString())));
+        return { pointages: snap.docs.map(d => { const p = d.data(); return { uid: p.uid, chantier: p.chantier, timestamp: p.timestamp, endTime: p.endTime }; }) };
+    } catch (e) { console.warn("Pointages illisibles", e); return null; }
 }
 
 // Calcul dans un Web Worker (écran fluide) ; repli sur un calcul direct si le navigateur ne le permet pas

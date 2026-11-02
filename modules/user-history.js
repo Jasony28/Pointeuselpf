@@ -5,6 +5,7 @@ import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 import { getUsers, getAllChantiers, getColleagueNames } from "./data-service.js";
 import { loadPdf } from "./libs.js";
 import { openRetourModal, getRetoursForUser, levelPill } from "./retours-clients.js";
+import { photoChipsHTML, handlePhotoChipClick } from "./photos-chantier.js";
 
 let currentWeekOffset = 0;
 let currentCalendarDate = new Date();
@@ -906,6 +907,7 @@ async function recalculateDayKm(button) {
 }
 
 function handleHistoryClick(e) {
+    if (handlePhotoChipClick(e)) return;
     const retourLink = e.target.closest('.retour-link');
     if (retourLink) {
         if (currentUser.role === 'admin' && targetUser.uid !== currentUser.uid) navigateTo('admin-retours', { userId: targetUser.uid });
@@ -967,7 +969,7 @@ function createHistoryEntryElement(d, trajetData, retourData, returnPending = fa
     }
     const retourClient = retoursByPointage.get(d.id);
     const retourDisplay = retourClient ? `<button type="button" class="retour-link" data-retour="${retourClient.id}">${levelPill(retourClient.level)}<span>Retour client</span></button>` : '';
-    wrapper.innerHTML = `<div class="${currentUser.role === 'admin' && !localStealthMode ? 'pr-36' : 'pr-20'}"><div class="font-bold">${d.chantier}</div>${retourDisplay}<div class="text-sm" style="color: var(--color-text-muted);">${timeDisplay}</div>${trajetDisplay}</div>${d.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-text-muted);"><strong>Notes:</strong> ${d.notes}</div>` : ""}`;
+    wrapper.innerHTML = `<div class="${currentUser.role === 'admin' && !localStealthMode ? 'pr-36' : 'pr-20'}"><div class="font-bold">${d.chantier}</div>${retourDisplay}${photoChipsHTML(d)}<div class="text-sm" style="color: var(--color-text-muted);">${timeDisplay}</div>${trajetDisplay}</div>${d.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-text-muted);"><strong>Notes:</strong> ${d.notes}</div>` : ""}`;
 
     if (currentUser.role === 'admin' && !localStealthMode) {
         const controlsWrapper = document.createElement("div");

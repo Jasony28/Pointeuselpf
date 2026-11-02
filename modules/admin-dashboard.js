@@ -21,12 +21,17 @@ const totalsCache = new Map();
 const totalsListeners = new Map(); // période → fonctions à rappeler quand le serveur renvoie des chiffres plus frais
 let summariesReady = null;    // promesse → true / false, gardée pour la session si true
 let rebuildRequested = false;  // recalcul complet demandé au serveur (une fois par session)
+const SUMMARY_VERSION = 2;     // = SUMMARY_VERSION de functions/day-summaries.js
 
 function checkSummaries() {
     if (!summariesReady) {
         summariesReady = getDoc(doc(db, "resumesJour", "_meta"))
             .then(snap => {
-                if (snap.exists() && snap.data().ready) return true;
+                if (snap.exists() && snap.data().ready) {
+                    // Résumés d'une version plus ancienne : toujours justes pour les heures, recalculés pour la planification
+                    if ((snap.data().version || 1) < SUMMARY_VERSION) requestSummariesRebuild();
+                    return true;
+                }
                 requestSummariesRebuild();
                 summariesReady = null; // on revérifiera au prochain affichage
                 return false;

@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 import { installNativeFileSaving } from './modules/native-files.js';
 
-const APP_VERSION = 'v4.11.0';
+const APP_VERSION = 'v4.12.0';
 
 // Appli Android / iPhone : PDF et CSV proposés dans le menu « Partager » du téléphone
 installNativeFileSaving();
@@ -378,6 +378,19 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+
+// App Check (anti-abus) : prouve à Firebase que les requêtes viennent bien de l'appli (reCAPTCHA v3, invisible).
+// Inactif tant que la clé de site est vide. Clé créée dans la console Firebase → App Check → appli web.
+// Le blocage (« Appliquer ») s'active ensuite dans la console, une fois que toutes les requêtes sont vérifiées.
+const APP_CHECK_SITE_KEY = '';
+if (APP_CHECK_SITE_KEY && !['localhost', '127.0.0.1'].includes(location.hostname)) {
+    try {
+        const { initializeAppCheck, ReCaptchaV3Provider } = await import("https://www.gstatic.com/firebasejs/10.5.0/firebase-app-check.js");
+        initializeAppCheck(app, { provider: new ReCaptchaV3Provider(APP_CHECK_SITE_KEY), isTokenAutoRefreshEnabled: true });
+    } catch (error) {
+        console.warn("App Check non démarré :", error?.message || error);
+    }
+}
 // Appli App Store / Play Store (Capacitor) : getAuth() peut rester bloqué dans la vue web native,
 // on fixe donc explicitement le stockage de session. Sur le site web, rien ne change.
 export const isNativeApp = !!window.Capacitor?.isNativePlatform?.();

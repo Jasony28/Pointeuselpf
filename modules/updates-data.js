@@ -1,5 +1,15 @@
 export const updatesLog = [
     {
+        version: 'v4.12.0',
+        date: '2 novembre 2026',
+        changes: [
+            "**Photos avant / après** : au démarrage et à l'arrêt d'un pointage, vous pouvez prendre une photo du chantier (facultatif, bouton « Photo avant » / « Photo après »). Elles apparaissent dans l'historique et sont gardées 6 mois.",
+            "**Confidentialité** : chacun ne voit plus que ses propres pointages (et ceux où un collègue l'a noté comme équipier). La responsable voit tout, comme avant.",
+            "**Planification automatique (admin)** : nouveau critère « Garder les équipes habituelles » : les personnes qui travaillent souvent ensemble restent ensemble quand c'est possible. La préparation lit aussi beaucoup moins de données.",
+            "**Retours clients (admin)** : un bouton joint en un clic les photos avant / après du pointage.",
+        ]
+    },
+    {
         version: 'v4.11.0',
         date: '2 novembre 2026',
         changes: [

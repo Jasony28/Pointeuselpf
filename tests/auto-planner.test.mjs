@@ -1,7 +1,7 @@
 // Tests de la planification automatique — lancer avec : npm test
 import test from "node:test";
 import assert from "node:assert/strict";
-import { planWeek, validatePlan, learnDurations, summarizePointageHistory } from "../modules/auto-planner.js";
+import { planWeek, validatePlan, learnDurations, summarizePointageHistory, visitsFromPointages, teamHabitsFromVisits } from "../modules/auto-planner.js";
 import { scenario, teamsOf, WEEK } from "./fixtures.mjs";
 
 const FAST = { restarts: 3, iterations: 15000 };
@@ -230,4 +230,30 @@ test("« connaît le chantier » utilise l'historique des pointages", () => {
     const onC = out.result.filter(r => r.line.chantierId === c.id);
     if (onC.length) assert.ok(onC.some(r => r.teamNames.includes(s.users[5].displayName)), "la personne qui connaît le chantier y est placée");
     assert.ok(out.result.some(r => r.reasons.some(x => x.startsWith('Connaît le chantier'))));
+});
+
+test("habitudes d'équipe : part des journées passées ensemble, au moins 2 jours", () => {
+    const chantiers = [{ id: 'c1', name: 'Gîte 1' }, { id: 'c2', name: 'Gîte 2' }];
+    const pt = (uid, day, chantier = 'Gîte 1') => ({ uid, chantier, timestamp: `2026-10-0${day}T07:00:00.000Z`, endTime: `2026-10-0${day}T10:00:00.000Z` });
+    const pointages = [pt('a', 1), pt('b', 1), pt('a', 2), pt('b', 2), pt('a', 3), pt('c', 3, 'Gîte 2'), pt('a', 4), pt('c', 4), pt('b', 5)];
+    const habits = teamHabitsFromVisits(visitsFromPointages(pointages, chantiers));
+    // a & b : 2 jours ensemble, b a travaillé 3 jours, a 4 → 2/3 ; a & c : 1 seul jour ensemble (le 3, chantiers différents) → ignoré
+    assert.deepEqual(habits, [{ a: 'a', b: 'b', together: 2, share: 0.67 }]);
+});
+
+test("habitudes d'équipe : la planification garde ensemble ceux qui travaillent souvent ensemble", () => {
+    const s = scenario(171, { people: 8, linesPerDay: 4, likes: 0, driverShare: 1 });
+    const pairs = [['u0', 'u1'], ['u2', 'u3'], ['u4', 'u5']];
+    const teamHabits = pairs.map(([a, b]) => ({ a, b, together: 20, share: 1 }));
+    const nameOf = (id) => s.users.find(u => u.id === id).displayName;
+    const kept = (outcome) => outcome.result.filter(r => {
+        const names = new Set(r.teamNames);
+        return pairs.some(([a, b]) => names.has(nameOf(a)) && names.has(nameOf(b)));
+    }).length;
+    const without = planWeek({ ...s, ...FAST, seed: 1 });
+    const withHabits = planWeek({ ...s, ...FAST, seed: 1, teamHabits });
+    assert.equal(withHabits.validation.ok, true);
+    assert.ok(kept(withHabits) > kept(without), `${kept(withHabits)} équipes habituelles gardées contre ${kept(without)} sans le critère`);
+    assert.ok(withHabits.metrics.habitualPairs >= kept(withHabits));
+    assert.ok(withHabits.metrics.maxHoursGap <= without.metrics.maxHoursGap + 1, 'les heures restent équilibrées');
 });

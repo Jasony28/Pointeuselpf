@@ -20,7 +20,8 @@
 
  Ordre des priorités (lexicographique grâce aux ordres de grandeur des poids) :
    règles strictes ≫ heures (somme des carrés + pire écart) ≫ compétences, continuité, affinités,
-   stabilité de la journée, kilomètres, changements par rapport au planning existant.
+   habitudes d'équipe (qui travaille souvent avec qui), stabilité de la journée, kilomètres,
+   changements par rapport au planning existant.
  Règles strictes : congé · chevauchement (trajet + 15 min compris) · plus de MAX_DAY_HOURS par jour ·
    équipe sans conducteur · dépassement de contrat alors qu'il reste de la place.
 */
@@ -33,13 +34,14 @@ export const SPEED_KMH = 45;           // vitesse moyenne sur route
 export const ROAD_FACTOR = 1.3;        // distance route ≈ vol d'oiseau × 1,3
 const HARD = 100000;
 
-export const DEFAULT_WEIGHTS = { hours: 30, fairness: 20, skills: 4, continuity: 8, affinity: 6, stability: 5, travel: 0.3, changes: 0 };
+export const DEFAULT_WEIGHTS = { hours: 30, fairness: 20, skills: 4, continuity: 8, affinity: 6, habits: 6, stability: 5, travel: 0.3, changes: 0 };
 export const WEIGHT_LABELS = {
     hours: 'Heures selon les contrats',
     fairness: 'Personne n\'est lésé (pire écart)',
     skills: 'Compétences',
     continuity: 'Connaît déjà le chantier',
     affinity: 'Affinités',
+    habits: 'Garder les équipes habituelles',
     stability: 'Mêmes coéquipiers sur la journée',
     travel: 'Moins de kilomètres',
     changes: 'Changer le moins possible',
@@ -90,20 +92,69 @@ export const isLeaveLine = (l) => l?.chantierId === 'LEAVE_ID' || !!l?.id_leaveR
  * valeurs aberrantes écartées (méthode de l'écart interquartile), puis médiane.
  * @returns {Map<string, {hours:number, samples:number}>} chantierId → durée
  */
-export function learnDurations(pointages, chantiers, { maxSamples = 15, minSamples = 3 } = {}) {
+export function learnDurations(pointages, chantiers, options) {
+    return durationsFromVisits(visitsFromPointages(pointages, chantiers), options);
+}
+
+// Nom de chantier (ou ancien nom « Petites Fées ») → identifiant ; les vrais noms passent avant les alias
+function chantierIdResolver(chantiers) {
     const idByName = new Map(chantiers.map(c => [normName(c.name), c.id]));
     for (const c of chantiers) for (const a of c.lpfAliases || []) if (!idByName.has(normName(a))) idByName.set(normName(a), c.id);
-    const perDay = new Map(); // id → Map(date → minutes)
+    return (name) => idByName.get(normName(name));
+}
+
+/**
+ * Passages (un par jour et par chantier) : { date, chantierId, uids: Set, minutes }.
+ * minutes = durée brute de l'équipe (fin − début), pointages entre 0 et 16 h seulement ;
+ * uids = toutes les personnes pointées ce jour-là sur ce chantier.
+ */
+export function visitsFromPointages(pointages, chantiers) {
+    const resolve = chantierIdResolver(chantiers);
+    const visits = new Map();
     for (const p of pointages) {
-        if (!p || !p.timestamp || !p.endTime) continue;
-        const id = idByName.get(normName(p.chantier));
+        if (!p || !p.timestamp) continue;
+        const id = resolve(p.chantier);
         if (!id) continue;
-        const min = (new Date(p.endTime) - new Date(p.timestamp)) / 60000;
-        if (!(min > 0) || min > 16 * 60) continue;
         const date = String(p.timestamp).slice(0, 10);
-        if (!perDay.has(id)) perDay.set(id, new Map());
-        const m = perDay.get(id);
-        m.set(date, (m.get(date) || 0) + min);
+        const key = date + '|' + id;
+        if (!visits.has(key)) visits.set(key, { date, chantierId: id, uids: new Set(), minutes: 0 });
+        const v = visits.get(key);
+        if (p.uid) v.uids.add(p.uid);
+        if (!p.endTime) continue;
+        const min = (new Date(p.endTime) - new Date(p.timestamp)) / 60000;
+        if (min > 0 && min <= 16 * 60) v.minutes += min;
+    }
+    return [...visits.values()];
+}
+
+/**
+ * Mêmes passages, lus dans les résumés quotidiens (resumesJour, champ planif) au lieu des pointages :
+ * une lecture par jour au lieu d'une par pointage. Seuls les pointages terminés y figurent.
+ */
+export function visitsFromDaySummaries(days, chantiers) {
+    const resolve = chantierIdResolver(chantiers);
+    const visits = new Map();
+    for (const day of days) {
+        for (const [name, plan] of Object.entries(day?.planif || {})) {
+            const id = resolve(name);
+            if (!id) continue;
+            const key = day.date + '|' + id;
+            if (!visits.has(key)) visits.set(key, { date: day.date, chantierId: id, uids: new Set(), minutes: 0 });
+            const v = visits.get(key);
+            Object.entries(plan.uids || {}).forEach(([uid, n]) => { if (n > 0) v.uids.add(uid); });
+            if (plan.ms > 0) v.minutes += plan.ms / 60000;
+        }
+    }
+    return [...visits.values()];
+}
+
+/** Durée réelle de chaque chantier à partir des passages (voir learnDurations). */
+export function durationsFromVisits(visits, { maxSamples = 15, minSamples = 3 } = {}) {
+    const perDay = new Map(); // id → Map(date → minutes)
+    for (const v of visits) {
+        if (!(v.minutes > 0)) continue;
+        if (!perDay.has(v.chantierId)) perDay.set(v.chantierId, new Map());
+        perDay.get(v.chantierId).set(v.date, v.minutes);
     }
     const out = new Map();
     for (const [id, m] of perDay) {
@@ -159,6 +210,14 @@ export function prepare(input) {
         const a = affinities.get(u.id) || {};
         new Set(a.like || []).forEach(id => { const j = idx.get(id); if (j !== undefined && j !== i) { pair[i][j] += 1; pair[j][i] += 1; } });
     });
+
+    // Habitudes d'équipe : part des journées passées ensemble ces derniers mois (0 à 1)
+    const habit = Array.from({ length: P }, () => new Float64Array(P));
+    for (const h of input.teamHabits || []) {
+        const i = idx.get(h.a), j = idx.get(h.b);
+        if (i === undefined || j === undefined || i === j) continue;
+        habit[i][j] = habit[j][i] = Math.max(0, Math.min(1, h.share || 0));
+    }
 
     // Historique : continuité + heures déjà faites ce mois-ci
     const known = new Map();
@@ -243,7 +302,7 @@ export function prepare(input) {
     if (totalWork > totalAvail + 0.01) warnings.push(`Il y a ${round1(totalWork - totalAvail)} h de travail de plus que les contrats disponibles : certaines personnes dépasseront leur contrat (heures supplémentaires à valider).`);
 
     return {
-        W, days, people, P, idx, byName, onLeave, avail, skill, driver, needDriver, pair, known, target, ratio,
+        W, days, people, P, idx, byName, onLeave, avail, skill, driver, needDriver, pair, habit, known, target, ratio,
         totalWork, totalAvail, L, linesByDay: days.map((_, d) => L.filter(l => l.day === d)),
         warnings, dataWarnings, keepExisting, driverGapLB,
     };
@@ -251,7 +310,7 @@ export function prepare(input) {
 
 // ---------- 2. Coût ----------
 function makeCost(M) {
-    const { W, P, L, linesByDay, onLeave, driver, needDriver, pair, skill, known, target, avail, ratio } = M;
+    const { W, P, L, linesByDay, onLeave, driver, needDriver, pair, habit, skill, known, target, avail, ratio } = M;
     const hours = new Float64Array(P);
     const recomputeHours = () => { hours.fill(0); for (const l of L) for (const i of l.team) hours[i] += l.ph; };
 
@@ -279,6 +338,7 @@ function makeCost(M) {
         }
         for (let a = 0; a < t.length; a++) for (let b = a + 1; b < t.length; b++) {
             c -= W.affinity * pair[t[a]][t[b]];
+            if (W.habits) c -= W.habits * habit[t[a]][t[b]];
         }
         const k = known.get(l.chantierId);
         if (k) for (const i of t) c -= W.continuity * Math.min(k[i], 3) / 3;
@@ -474,20 +534,45 @@ function solveOnce(M, seed, iterations) {
  * Les pointages désignent le chantier par son nom (et ses autres noms côté Petites Fées).
  */
 export function summarizePointageHistory(pointages, chantiers) {
-    const idByName = new Map();
-    for (const c of chantiers) {
-        idByName.set(normName(c.name), c.id);
-        for (const a of c.lpfAliases || []) if (!idByName.has(normName(a))) idByName.set(normName(a), c.id);
+    return historyFromVisits(visitsFromPointages(pointages, chantiers));
+}
+
+/** [{ uid, chantierId, days }] : nombre de jours où chacun a travaillé sur chaque chantier. */
+export function historyFromVisits(visits) {
+    const days = new Map(); // "uid|chantierId" → nombre de jours (un passage = un jour)
+    for (const v of visits) for (const uid of v.uids) {
+        const k = uid + '|' + v.chantierId;
+        days.set(k, (days.get(k) || 0) + 1);
     }
-    const days = new Map(); // "uid|chantierId" → Set(dates)
-    for (const p of pointages) {
-        const id = idByName.get(normName(p?.chantier));
-        if (!id || !p.uid || !p.timestamp) continue;
-        const k = p.uid + '|' + id;
-        if (!days.has(k)) days.set(k, new Set());
-        days.get(k).add(String(p.timestamp).slice(0, 10));
+    return [...days.entries()].map(([k, n]) => { const [uid, chantierId] = k.split('|'); return { uid, chantierId, days: n }; });
+}
+
+/**
+ * Habitudes d'équipe : pour chaque paire, part des journées passées ensemble sur un même chantier,
+ * rapportée au plus petit nombre de journées travaillées des deux (1 = toujours ensemble).
+ * Seules les paires qui ont travaillé au moins 2 jours ensemble comptent.
+ * @returns {Array<{a:string, b:string, together:number, share:number}>}
+ */
+export function teamHabitsFromVisits(visits) {
+    const worked = new Map();   // uid → Set(dates)
+    const together = new Map(); // "a|b" (a < b) → Set(dates)
+    for (const v of visits) {
+        const uids = [...v.uids].sort();
+        uids.forEach(u => { if (!worked.has(u)) worked.set(u, new Set()); worked.get(u).add(v.date); });
+        for (let i = 0; i < uids.length; i++) for (let j = i + 1; j < uids.length; j++) {
+            const k = uids[i] + '|' + uids[j];
+            if (!together.has(k)) together.set(k, new Set());
+            together.get(k).add(v.date);
+        }
     }
-    return [...days.entries()].map(([k, set]) => { const [uid, chantierId] = k.split('|'); return { uid, chantierId, days: set.size }; });
+    const out = [];
+    for (const [k, dates] of together) {
+        if (dates.size < 2) continue;
+        const [a, b] = k.split('|');
+        const share = dates.size / Math.min(worked.get(a).size, worked.get(b).size);
+        out.push({ a, b, together: dates.size, share: round2(share) });
+    }
+    return out.sort((x, y) => y.share - x.share || x.a.localeCompare(y.a) || x.b.localeCompare(y.b));
 }
 
 /**
@@ -519,7 +604,7 @@ export function planWeek(input) {
 
 // ---------- Résultat expliqué ----------
 function buildResult(M, input) {
-    const { people, L, days, skill, driver, needDriver, pair, known, onLeave, target, avail } = M;
+    const { people, L, days, skill, driver, needDriver, pair, habit, known, onLeave, target, avail } = M;
     const name = (i) => people[i].displayName;
     const hours = new Float64Array(M.P);
     L.forEach(l => l.team.forEach(i => { hours[i] += l.ph; }));
@@ -541,6 +626,7 @@ function buildResult(M, input) {
             const s = pair[t[a]][t[b]];
             if (s >= 2) reasons.push(`💚 ${name(t[a])} & ${name(t[b])} (réciproque)`);
             else if (s > 0) reasons.push(`💚 ${name(t[a])} & ${name(t[b])}`);
+            else if (habit[t[a]][t[b]] >= 0.5) reasons.push(`🤝 ${name(t[a])} & ${name(t[b])} travaillent souvent ensemble`);
         }
         const k = known.get(l.chantierId);
         const knowers = k ? t.filter(i => k[i] > 0) : [];
@@ -582,8 +668,11 @@ export function evaluatePlan(M, validation) {
     withTeam.forEach(l => l.needs.forEach(([k, n]) => { if (n >= 3) essentials.push([l, k]); }));
     const covered = essentials.filter(([l, k]) => Math.max(...l.team.map(i => skill[i][k])) >= 4).length;
     const withHistory = withTeam.filter(l => known.has(l.chantierId));
-    let mutual = 0;
-    withTeam.forEach(l => { for (let a = 0; a < l.team.length; a++) for (let b = a + 1; b < l.team.length; b++) if (pair[l.team[a]][l.team[b]] >= 2) mutual++; });
+    let mutual = 0, habitual = 0;
+    withTeam.forEach(l => { for (let a = 0; a < l.team.length; a++) for (let b = a + 1; b < l.team.length; b++) {
+        if (pair[l.team[a]][l.team[b]] >= 2) mutual++;
+        if (M.habit[l.team[a]][l.team[b]] >= 0.5) habitual++;
+    } });
     let km = 0;
     M.linesByDay.forEach(ls => {
         const per = new Map();
@@ -600,6 +689,7 @@ export function evaluatePlan(M, validation) {
         essentialSkillCoverage: essentials.length ? Math.round(100 * covered / essentials.length) : null,
         continuity: withHistory.length ? Math.round(100 * withHistory.filter(l => l.team.some(i => known.get(l.chantierId)[i] > 0)).length / withHistory.length) : null,
         mutualPairs: mutual,
+        habitualPairs: habitual,
         km: Math.round(km),
         changes,
     };

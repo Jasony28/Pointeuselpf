@@ -1,0 +1,21 @@
+rules_version = '2';
+// Règles Firebase Storage de la Pointeuse LPF (déployées avec `firebase deploy --only storage`).
+// Seules les photos avant / après des pointages sont stockées (modules/photos-chantier.js) :
+//   photos/{AAAA-MM}/{uid}/{fichier}.jpg — chacun envoie seulement dans son dossier, des images de moins de 1,5 Mo.
+// L'affichage passe par le lien de téléchargement gardé dans le pointage (lisible par l'employé, ses équipiers notés
+// et l'admin selon les règles Firestore). Les photos sont supprimées par le serveur après 6 mois.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /photos/{month}/{uid}/{file} {
+      allow create: if request.auth != null
+                    && request.auth.uid == uid
+                    && request.resource.size < 1.5 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+      allow read: if request.auth != null && request.auth.uid == uid;
+    }
+    // Tout le reste est fermé
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

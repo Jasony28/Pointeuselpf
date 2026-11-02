@@ -4,7 +4,7 @@ const { precaching, routing, strategies, core } = workbox;
 core.setCacheNameDetails({ prefix: 'pointeuse-lpf-cache' });
 
 // Version synchronisée avec app.js
-const APP_VERSION = 'v4.11.0'; // <--- CHANGEMENT ICI
+const APP_VERSION = 'v4.12.0'; // <--- CHANGEMENT ICI
 
 precaching.precacheAndRoute([
     { url: './', revision: APP_VERSION },
@@ -40,6 +40,7 @@ precaching.precacheAndRoute([
     { url: 'modules/route-planner.js', revision: APP_VERSION },
     { url: 'modules/retours-clients.js', revision: APP_VERSION },
     { url: 'modules/user-retours.js', revision: APP_VERSION },
+    { url: 'modules/photos-chantier.js', revision: APP_VERSION },
 
     // Modules Admin
     { url: 'modules/admin-chantiers.js', revision: APP_VERSION },
