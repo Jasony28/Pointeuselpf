@@ -1,5 +1,12 @@
 export const updatesLog = [
     {
+        version: 'v4.12.2',
+        date: '2 novembre 2026',
+        changes: [
+            "**Correction - Planning qui ne s'affichait plus** : après une mise à jour installée pendant que l'appli était ouverte, une page pouvait afficher « Une erreur est survenue ». Désormais, le changement de page suivant recharge l'appli directement sur la bonne page, et une page qui plante pour cette raison se répare toute seule.",
+        ]
+    },
+    {
         version: 'v4.12.1',
         date: '2 novembre 2026',
         changes: [

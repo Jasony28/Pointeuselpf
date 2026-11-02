@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 import { installNativeFileSaving } from './modules/native-files.js';
 
-const APP_VERSION = 'v4.12.1';
+const APP_VERSION = 'v4.12.2';
 
 // Appli Android / iPhone : PDF et CSV proposés dans le menu « Partager » du téléphone
 installNativeFileSaving();
@@ -601,9 +601,32 @@ function getPageName(pageId) {
 }
 
 let navigationCount = 0;
+// Nouvelle version installée pendant que l'appli est ouverte : les fichiers déjà chargés sont anciens,
+// ceux de la prochaine page seraient nouveaux. Pour ne jamais mélanger deux versions (page qui plante),
+// le prochain changement de page recharge l'appli directement sur la page demandée.
+let newVersionReady = false;
+const RESUME_PAGE_KEY = 'resumePage';
+const MODULE_MISMATCH = /does not provide an export named|Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i;
+
+function reloadInto(pageId, params) {
+    try { sessionStorage.setItem(RESUME_PAGE_KEY, JSON.stringify({ pageId, params, at: Date.now() })); } catch { /* stockage indisponible : on recharge sur l'accueil */ }
+    window.location.reload();
+}
+
+// Après un tel rechargement : la page demandée (2 minutes au plus), sinon null
+function takeResumePage() {
+    try {
+        const saved = JSON.parse(sessionStorage.getItem(RESUME_PAGE_KEY) || 'null');
+        sessionStorage.removeItem(RESUME_PAGE_KEY);
+        if (!saved?.pageId || Date.now() - saved.at > 2 * 60 * 1000 || !/^[a-z-]+$/.test(saved.pageId)) return null;
+        if (saved.pageId.startsWith('admin-') && !isAdmin) return null;
+        return saved;
+    } catch { return null; }
+}
 
 export async function navigateTo(pageId, params = {}) {
     if (pageId === 'user-details') pageId = 'user-history';
+    if (newVersionReady) { reloadInto(pageId, params); return; }
     currentPageId = pageId;
 
     document.querySelectorAll('#main-nav-list a').forEach(link => {
@@ -647,6 +670,16 @@ export async function navigateTo(pageId, params = {}) {
             currentPageModule = pageModule;
             await pageModule.render(params);
         } catch (error) {
+            // Fichiers de deux versions mélangés (mise à jour pendant que l'appli était ouverte) : un rechargement
+            // remet tout à la même version. Une seule fois par minute, pour ne jamais boucler.
+            let lastHeal = 0;
+            try { lastHeal = Number(sessionStorage.getItem('moduleHealAt')) || 0; } catch { /* rien */ }
+            if (MODULE_MISMATCH.test(String(error?.message)) && Date.now() - lastHeal > 60 * 1000) {
+                try { sessionStorage.setItem('moduleHealAt', String(Date.now())); } catch { /* rien */ }
+                console.warn(`Page ${pageId} : fichiers de versions différentes, rechargement.`, error?.message);
+                reloadInto(pageId, params);
+                return;
+            }
             console.error(`Erreur module ${pageId}:`, error);
             let errorMsg = "Impossible de charger la page.";
             if (error.message.includes('404')) errorMsg = "Le fichier du module est introuvable.";
@@ -820,7 +853,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             document.getElementById('app-version-display').textContent = APP_VERSION;
                             setupNavigation();
 
-                            if (!openFromNotification(startLink)) navigateTo('user-dashboard');
+                            const resume = takeResumePage();
+                            if (resume?.pageId.startsWith('admin-') && isMasqueradingAsUser) { isMasqueradingAsUser = false; setupNavigation(); }
+                            if (resume) navigateTo(resume.pageId, resume.params || {});
+                            else if (!openFromNotification(startLink)) navigateTo('user-dashboard');
                             delete startLink.page;
                             prefetchPages();
                             appContainer.style.display = 'block';
@@ -933,6 +969,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Recharge uniquement lors d'une mise à jour, pas à la toute première installation
                 if (!event.isUpdate) return;
                 reloadPending = true;
+                newVersionReady = true;
                 reloadWhenIdle();
             });
             setInterval(reloadWhenIdle, 10 * 1000);
