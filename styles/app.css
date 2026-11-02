@@ -1924,7 +1924,8 @@ html[data-skin="arcade"] body .fixed.inset-0 textarea:focus { box-shadow: 4px 4p
 @media print {
     html[data-skin]::before,
     html[data-skin] body::before,
-    html[data-skin] body::after { display: none; }
+    html[data-skin] body::after,
+    .theme-decor { display: none; }
 }
 
 /* Sélecteur de thèmes (Paramètres) : chaque choix montre une mini-appli dans son ambiance */
@@ -1939,12 +1940,318 @@ html[data-skin="arcade"] body .fixed.inset-0 textarea:focus { box-shadow: 4px 4p
 #page-content .theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(136px, 1fr)); gap: 0.75rem; }
 #page-content .theme-option {
     position: relative;
+/* Couche de décor qui tombe (pétales, neige) : plus haute que l'écran d'une tuile, elle glisse d'une tuile puis recommence */
+html[data-skin="sakura"]::before,
+html[data-skin="sakura"] body::before,
+html[data-skin="hiver"]::before,
+html[data-skin="hiver"] body::before {
+    content: '';
+    position: fixed;
+    left: -40px;
+    right: -40px;
+    top: -320px;
+    bottom: 0;
+    z-index: -1;
+    pointer-events: none;
+    will-change: transform;
+}
+@keyframes decor-fall { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(0, 320px, 0); } }
+@keyframes decor-sway { from { translate: -18px 0; } to { translate: 18px 0; } }
+
+/* ---- Carnet : papier quadrillé, marge rouge, titres à la main, encre bleue ---- */
+html[data-skin="carnet"] {
+    --shadow-xs: 0 1px 1px rgba(60, 50, 20, 0.08);
+    --shadow-sm: 0 1px 2px rgba(60, 50, 20, 0.1), 0 2px 0 rgba(60, 50, 20, 0.04);
+    --shadow-md: 0 2px 4px rgba(60, 50, 20, 0.08), 0 6px 14px -6px rgba(60, 50, 20, 0.18);
+    --carnet-line: rgba(70, 110, 190, 0.13);
+    --carnet-margin: rgba(220, 60, 60, 0.4);
+}
+html[data-skin="carnet"] body {
+    background-image:
+        linear-gradient(var(--carnet-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--carnet-line) 1px, transparent 1px);
+    background-size: 22px 22px;
+    background-attachment: fixed;
+}
+/* Marge rouge du cahier, côté contenu */
+html[data-skin="carnet"] body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: clamp(14px, 4vw, 48px);
+    z-index: -1;
+    width: 2px;
+    background: var(--carnet-margin);
+    box-shadow: 5px 0 0 -0.5px var(--carnet-margin);
+    pointer-events: none;
+}
+@media (min-width: 1024px) { html[data-skin="carnet"] body::before { left: calc(var(--sidebar-width) + 28px); } }
+html[data-skin="carnet"] #page-content [style*="background-color: var(--color-surface)"]:not(button):not(input):not(select):not(textarea),
+html[data-skin="carnet"] #page-content .settings-card {
+    border: 1px solid var(--color-border) !important;
+}
+html[data-skin="carnet"] #page-content h1,
+html[data-skin="carnet"] #page-content h2,
+html[data-skin="carnet"] .breadcrumb-page,
+html[data-skin="carnet"] .tracker-chantier { color: var(--color-primary); letter-spacing: 0.01em; }
+html[data-skin="carnet"] #page-content h1,
+html[data-skin="carnet"] #page-content h2 {
+    text-decoration: underline wavy color-mix(in srgb, var(--color-primary) 35%, transparent) 1.5px;
+    text-underline-offset: 6px;
+}
+html[data-skin="carnet"] #page-content .settings-section-title { font-size: 1.15rem; color: var(--color-primary); }
+html[data-skin="carnet"] #page-content .settings-section-title::before { content: '✎ '; }
+html[data-skin="carnet"] .tracker-timer { color: var(--color-primary); }
+html[data-skin="carnet"] .btn-primary,
+html[data-skin="carnet"] .tracker-btn-start { box-shadow: 2px 2px 0 color-mix(in srgb, var(--color-primary) 35%, transparent); }
+html[data-skin="carnet"] .brand-mark,
+html[data-skin="carnet"] .avatar { background: var(--color-primary); box-shadow: 2px 2px 0 rgba(220, 60, 60, 0.55); }
+html[data-skin="carnet"] .nav-link.nav-active::before { background: #f2c94c; }
+html[data-skin="carnet"] ::selection { background: rgba(255, 226, 80, 0.6); color: inherit; }
+
+/* ---- Aurore boréale : ciel polaire, voiles verts et violets qui ondulent, verre dépoli ---- */
+html[data-skin="aurore"] body {
+    background-image: linear-gradient(180deg, #071526 0%, #040b18 55%, #03070f 100%);
+    background-attachment: fixed;
+}
+html[data-skin="aurore"]::before,
+html[data-skin="aurore"] body::after {
+    content: '';
+    position: fixed;
+    z-index: -1;
+    pointer-events: none;
+    filter: blur(48px);
+    will-change: transform, opacity;
+}
+/* Voile vert */
+html[data-skin="aurore"]::before {
+    top: -10vh;
+    left: -20vw;
+    width: 110vw;
+    height: 70vh;
+    background:
+        radial-gradient(45% 55% at 30% 60%, rgba(62, 230, 176, 0.85), transparent 70%),
+        radial-gradient(35% 45% at 70% 40%, rgba(40, 200, 220, 0.6), transparent 70%);
+    border-radius: 50%;
+    animation: aurore-wave 16s ease-in-out infinite alternate;
+}
+/* Voile violet */
+html[data-skin="aurore"] body::after {
+    top: -5vh;
+    right: -25vw;
+    width: 90vw;
+    height: 65vh;
+    background:
+        radial-gradient(45% 55% at 60% 50%, rgba(150, 90, 255, 0.8), transparent 70%),
+        radial-gradient(30% 40% at 30% 70%, rgba(230, 90, 200, 0.45), transparent 70%);
+    border-radius: 50%;
+    animation: aurore-wave 21s ease-in-out -7s infinite alternate-reverse;
+}
+/* Quelques étoiles discrètes */
+html[data-skin="aurore"] body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+        radial-gradient(1px 1px at 30px 40px, rgba(255, 255, 255, 0.8), transparent),
+        radial-gradient(1px 1px at 150px 110px, rgba(255, 255, 255, 0.55), transparent),
+        radial-gradient(1.5px 1.5px at 240px 30px, #fff, transparent),
+        radial-gradient(1px 1px at 90px 200px, rgba(255, 255, 255, 0.5), transparent);
+    background-size: 300px 260px;
+    opacity: 0.7;
+}
+@keyframes aurore-wave {
+    0% { transform: translate3d(0, 0, 0) skewX(-8deg) scaleY(1); opacity: 0.75; }
+    50% { transform: translate3d(6vw, 3vh, 0) skewX(10deg) scaleY(1.25); opacity: 1; }
+    100% { transform: translate3d(-4vw, 6vh, 0) skewX(-4deg) scaleY(0.9); opacity: 0.6; }
+}
+html[data-skin="aurore"] .topbar { border-bottom-color: rgba(120, 220, 200, 0.1); }
+html[data-skin="aurore"] .sidebar { background: color-mix(in srgb, var(--sidebar-bg) 72%, transparent); }
+html[data-skin="aurore"] #page-content [style*="background-color: var(--color-surface)"]:not(button):not(input):not(select):not(textarea),
+html[data-skin="aurore"] #page-content .settings-card {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 18px 40px -20px rgba(0, 0, 0, 0.8);
+}
+html[data-skin="aurore"] .btn-primary,
+html[data-skin="aurore"] .tracker-btn-start,
+html[data-skin="aurore"] #page-content button[style*="background-color: var(--color-primary)"] {
+    background-image: linear-gradient(135deg, #3ee6b0, #4fb8ff 60%, #9b6bff) !important;
+    color: var(--color-on-primary) !important;
+    box-shadow: 0 8px 24px -8px rgba(62, 230, 176, 0.6);
+}
+html[data-skin="aurore"] .tracker-timer {
+    background: linear-gradient(90deg, #3ee6b0, #8ad8ff, #b38cff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 0 18px rgba(62, 230, 176, 0.3));
+}
+html[data-skin="aurore"] #page-content .settings-section-title::before { content: '◆ '; color: var(--color-primary); }
+html[data-skin="aurore"] .brand-mark,
+html[data-skin="aurore"] .avatar { background: linear-gradient(135deg, #3ee6b0, #9b6bff); color: #03140e; box-shadow: 0 0 16px rgba(62, 230, 176, 0.45); }
+html[data-skin="aurore"] .nav-link.nav-active::before { background: var(--color-primary); box-shadow: 0 0 10px var(--color-primary); }
+html[data-skin="aurore"] .nav-link.nav-active svg { color: var(--color-primary); }
+
+/* ---- Sakura : rose pâle, pétales de cerisier qui tombent en se balançant ---- */
+html[data-skin="sakura"] body {
+    background-image:
+        radial-gradient(900px 520px at 100% -10%, rgba(255, 196, 216, 0.55), transparent 70%),
+        radial-gradient(700px 480px at -10% 110%, rgba(255, 214, 228, 0.5), transparent 70%);
+    background-attachment: fixed;
+}
+html[data-skin="sakura"]::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320'%3E%3Cg fill='%23f4a6c0'%3E%3Cpath transform='translate(40 50) rotate(25) scale(1.6)' d='M0 0c4-7 13-7 15 0c-2 7-11 7-15 0z'/%3E%3Cpath transform='translate(210 20) rotate(-40) scale(1.6)' d='M0 0c3-5 10-5 11 0c-1 5-8 5-11 0z' fill-opacity='.8'/%3E%3Cpath transform='translate(150 170) rotate(70) scale(1.6)' d='M0 0c4-7 13-7 15 0c-2 7-11 7-15 0z' fill='%23f7bfd0'/%3E%3Cpath transform='translate(270 250) rotate(10) scale(1.6)' d='M0 0c3-6 11-6 13 0c-2 6-9 6-13 0z'/%3E%3Cpath transform='translate(60 270) rotate(-60) scale(1.6)' d='M0 0c3-5 10-5 11 0c-1 5-8 5-11 0z' fill='%23eb93b2'/%3E%3C/g%3E%3C/svg%3E");
+    opacity: 0.85;
+    animation: decor-fall 22s linear infinite, decor-sway 5s ease-in-out infinite alternate;
+}
+html[data-skin="sakura"] body::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='320'%3E%3Cg fill='%23f9cada'%3E%3Cpath transform='translate(100 80) rotate(-20)' d='M0 0c2-4 7-4 8 0c-1 4-6 4-8 0z'/%3E%3Cpath transform='translate(20 200) rotate(50)' d='M0 0c2-4 7-4 8 0c-1 4-6 4-8 0z'/%3E%3Cpath transform='translate(200 140) rotate(5)' d='M0 0c2-3 6-3 7 0c-1 3-5 3-7 0z'/%3E%3Cpath transform='translate(170 290) rotate(-70)' d='M0 0c2-4 7-4 8 0c-1 4-6 4-8 0z'/%3E%3C/g%3E%3C/svg%3E");
+    opacity: 0.7;
+    animation: decor-fall 34s linear -8s infinite, decor-sway 7s ease-in-out -2s infinite alternate-reverse;
+}
+html[data-skin="sakura"] #page-content [style*="background-color: var(--color-surface)"]:not(button):not(input):not(select):not(textarea),
+html[data-skin="sakura"] #page-content .settings-card {
+    box-shadow: 0 10px 28px -16px rgba(199, 58, 109, 0.35);
+}
+html[data-skin="sakura"] .topbar { background: color-mix(in srgb, var(--color-background) 75%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+html[data-skin="sakura"] .btn-primary,
+html[data-skin="sakura"] .tracker-btn-start,
+html[data-skin="sakura"] #page-content button[style*="background-color: var(--color-primary)"] {
+    background-image: linear-gradient(135deg, #e0608f, #c73a6d) !important;
+    box-shadow: 0 8px 20px -8px rgba(199, 58, 109, 0.6);
+}
+html[data-skin="sakura"] .btn,
+html[data-skin="sakura"] .tracker-btn { border-radius: 999px; }
+html[data-skin="sakura"] .tracker-timer { color: var(--color-primary); }
+html[data-skin="sakura"] #page-content .settings-section-title::before { content: '❀ '; color: #e47aa0; }
+html[data-skin="sakura"] .brand-mark,
+html[data-skin="sakura"] .avatar { background: linear-gradient(135deg, #f19bbb, #c73a6d); }
+html[data-skin="sakura"] .nav-link.nav-active::before { background: #f4a6c0; }
+html[data-skin="sakura"] ::selection { background: #ffd1e0; }
+
+/* ---- Esprit de Noël (clé « hiver ») : nuit de Noël, neige, guirlande lumineuse, village enneigé ----
+   Les personnages (traîneau, lutins, Père Noël) sont dans #theme-decor, posé par app.js devant l'appli */
+html[data-skin="hiver"] { --hiver-red: #d93848; --hiver-green: #3cc47c; --hiver-gold: #f2c14e; --hiver-snow: #eef5fc; }
+html[data-skin="hiver"] body {
+    background-image:
+        radial-gradient(900px 520px at 85% -10%, rgba(80, 140, 220, 0.3), transparent 65%),
+        radial-gradient(700px 420px at 0% 0%, rgba(217, 56, 72, 0.12), transparent 65%),
+        linear-gradient(180deg, #0c2340 0%, #0a1d33 60%, #0d2540 100%);
+    background-attachment: fixed;
+}
+html[data-skin="hiver"]::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320'%3E%3Cg fill='%23fff'%3E%3Ccircle cx='30' cy='40' r='2.6'/%3E%3Ccircle cx='140' cy='20' r='1.8' fill-opacity='.8'/%3E%3Ccircle cx='250' cy='90' r='3'/%3E%3Ccircle cx='90' cy='150' r='2' fill-opacity='.7'/%3E%3Ccircle cx='200' cy='200' r='2.4'/%3E%3Ccircle cx='300' cy='260' r='1.8' fill-opacity='.8'/%3E%3Ccircle cx='50' cy='280' r='2.8' fill-opacity='.9'/%3E%3C/g%3E%3C/svg%3E");
+    opacity: 0.75;
+    animation: decor-fall 14s linear infinite, decor-sway 4s ease-in-out infinite alternate;
+}
+html[data-skin="hiver"] body::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='320'%3E%3Cg fill='%23dbe9ff'%3E%3Ccircle cx='20' cy='60' r='1.2'/%3E%3Ccircle cx='120' cy='30' r='1'/%3E%3Ccircle cx='180' cy='140' r='1.4'/%3E%3Ccircle cx='70' cy='210' r='1'/%3E%3Ccircle cx='150' cy='280' r='1.2'/%3E%3C/g%3E%3C/svg%3E");
+    opacity: 0.6;
+    animation: decor-fall 24s linear -5s infinite, decor-sway 6s ease-in-out -3s infinite alternate-reverse;
+}
+/* Village enneigé au pied de l'écran : collines, sapin illuminé, maison qui fume */
+html[data-skin="hiver"] body::after {
+    content: '';
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: var(--bottom-nav-height, 0px);
+    height: 120px;
+    z-index: -1;
+    pointer-events: none;
+    background: url("../themes/noel/paysage.svg") center bottom / auto 120px repeat-x;
+    opacity: 0.5;
+}
+/* Cartes coiffées de neige */
+html[data-skin="hiver"] #page-content [style*="background-color: var(--color-surface)"]:not(button):not(input):not(select):not(textarea),
+html[data-skin="hiver"] #page-content .settings-card {
+    box-shadow: inset 0 3px 0 var(--hiver-snow), 0 16px 36px -18px rgba(0, 0, 0, 0.7);
+}
+/* Guirlande lumineuse qui pend sous la barre du haut */
+html[data-skin="hiver"] .topbar { border-bottom-color: rgba(255, 255, 255, 0.06); }
+html[data-skin="hiver"] .topbar::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -15px;
+    height: 22px;
+    background: url("../themes/noel/guirlande.svg") 0 0 / 140px 22px repeat-x;
+    pointer-events: none;
+}
+/* Boutons en sucre d'orge */
+html[data-skin="hiver"] .btn-primary,
+html[data-skin="hiver"] .tracker-btn-start,
+html[data-skin="hiver"] #page-content button[style*="background-color: var(--color-primary)"] {
+    background-image:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent),
+        repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.16) 0 8px, transparent 8px 16px) !important;
+    box-shadow: 0 8px 20px -8px rgba(217, 56, 72, 0.7);
+}
+html[data-skin="hiver"] .tracker-timer { color: #fff; text-shadow: 0 0 22px rgba(170, 210, 255, 0.45); }
+html[data-skin="hiver"] #page-content h1.text-2xl::after,
+html[data-skin="hiver"] #page-content h2.text-2xl::after { content: ' 🎄'; }
+html[data-skin="hiver"] #page-content .settings-section-title::before { content: '❄ '; color: #a9d2ff; }
+html[data-skin="hiver"] .brand-mark,
+html[data-skin="hiver"] .avatar { background: linear-gradient(135deg, var(--hiver-red), #a31d2c); box-shadow: 0 0 0 2px var(--hiver-green); }
+html[data-skin="hiver"] .nav-link.nav-active { color: #fff; }
+html[data-skin="hiver"] .nav-link.nav-active::before { background: var(--hiver-green); box-shadow: 0 0 10px var(--hiver-green); }
+html[data-skin="hiver"] .nav-link.nav-active svg { color: var(--hiver-green); }
+html[data-skin="hiver"] ::selection { background: rgba(60, 196, 124, 0.45); }
+
+/* Personnages animés : au-dessus des pages, du menu et de la barre du haut, sous les fenêtres et les messages */
+.theme-decor { position: fixed; inset: 0; z-index: 45; overflow: hidden; pointer-events: none; }
+.theme-decor img { position: absolute; display: block; max-width: none; user-select: none; -webkit-user-drag: none; will-change: transform; }
+/* Le traîneau traverse le ciel de gauche à droite de temps en temps, en ondulant */
+.decor-sleigh {
+    top: 13vh;
+    left: 0;
+    width: clamp(210px, 32vw, 380px);
+    transform: translateX(-110%);
+    filter: drop-shadow(0 0 14px rgba(255, 224, 138, 0.35));
+    animation: noel-sleigh 40s linear 3s infinite, noel-fly 2.6s ease-in-out infinite alternate;
+}
+@keyframes noel-sleigh {
+    0% { transform: translateX(-110%); }
+    26%, 100% { transform: translateX(100vw); }
+}
+@keyframes noel-fly { from { translate: 0 -16px; rotate: -7deg; } to { translate: 0 16px; rotate: -1deg; } }
+/* Deux lutins qui marchent en bas de l'écran, l'un derrière l'autre */
+.decor-elf {
+    left: 0;
+    bottom: calc(var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom) + 2px);
+    width: 54px;
+    transform: translateX(-80px);
+    animation: noel-walk 28s linear 1s infinite;
+}
+.decor-elf-cane { width: 48px; animation-delay: 3.4s; }
+@keyframes noel-walk {
+    0% { transform: translateX(-80px); }
+    62%, 100% { transform: translateX(calc(100vw + 20px)); }
+}
+/* Le Père Noël sort du bas à droite, fait coucou, puis redescend */
+.decor-santa-peek {
+    right: clamp(12px, 4vw, 40px);
+    bottom: calc(var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom));
+    width: clamp(84px, 11vw, 116px);
+    transform: translateY(calc(100% + var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom) + 12px));
+    animation: noel-peek 34s ease-in-out 14s infinite;
+}
+@keyframes noel-peek {
+    0%, 100% { transform: translateY(calc(100% + var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom) + 12px)); }
+    4%, 15% { transform: translateY(6%); }
+    19% { transform: translateY(calc(100% + var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom) + 12px)); }
+}
+
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
     padding: 0.5rem 0.5rem 0.625rem;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
+    .theme-decor { display: none; }
     background: var(--color-surface-2);
     color: var(--color-text-base);
     text-align: left;

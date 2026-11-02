@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 120" preserveAspectRatio="xMidYMax slice">
+  <!-- Collines enneigées, sapins illuminés et petite maison, posés au pied de l'écran (thème Noël) -->
+  <style>
+    .l { animation: on 1.4s ease-in-out infinite alternate; }
+    .d1 { animation-delay: .35s; } .d2 { animation-delay: .7s; } .d3 { animation-delay: 1.05s; }
+    @keyframes on { from { opacity: .3; } to { opacity: 1; } }
+    .smoke { animation: rise 4s ease-out infinite; }
+    @keyframes rise { from { transform: translateY(0); opacity: .5; } to { transform: translateY(-22px); opacity: 0; } }
+  </style>
+  <path d="M0 90c80-30 160-30 240-6s170 18 240-8 100-14 120-8v52H0z" fill="#cfe0f2" opacity=".35"/>
+  <!-- sapins du fond -->
+  <g fill="#0f3b2c" opacity=".8">
+    <path d="M70 92 86 50l16 42z"/><path d="M120 90l12-30 12 30z"/><path d="M430 84l14-34 14 34z"/><path d="M520 82l11-28 11 28z"/>
+  </g>
+  <!-- maison -->
+  <g transform="translate(330 66)">
+    <circle class="smoke" cx="32" cy="-6" r="4" fill="#cfe0f2"/>
+    <rect x="28" y="-4" width="7" height="12" fill="#5a3a2a"/>
+    <rect x="4" y="12" width="40" height="26" fill="#7a4a32"/>
+    <path d="M-2 14 24-6l26 20z" fill="#eef5fc"/>
+    <rect x="12" y="18" width="10" height="9" fill="#ffd27a"/>
+    <rect x="28" y="22" width="9" height="16" fill="#4a2a1c"/>
+  </g>
+  <!-- sapin illuminé -->
+  <g transform="translate(200 40)">
+    <rect x="-4" y="62" width="8" height="10" fill="#4a2a1c"/>
+    <path d="M0 0 22 34H12l18 30H-30l18-30h-10z" fill="#17603f"/>
+    <path d="M-14 26c10 6 18 6 28 0M-20 48c14 7 26 7 40 0" stroke="#f2c14e" stroke-width="1.5" fill="none"/>
+    <path d="M0-8l2.5 5.5 6 .5-4.5 4 1.5 6L0 5l-5.5 3 1.5-6-4.5-4 6-.5z" fill="#ffd23f"/>
+    <circle class="l" cx="-8" cy="29" r="2.4" fill="#ff4d5e"/><circle class="l d1" cx="6" cy="30" r="2.4" fill="#5ab4ff"/>
+    <circle class="l d2" cx="-14" cy="51" r="2.4" fill="#ffd23f"/><circle class="l d3" cx="0" cy="54" r="2.4" fill="#3ddc84"/>
+    <circle class="l d1" cx="14" cy="51" r="2.4" fill="#ff4d5e"/><circle class="l d2" cx="0" cy="16" r="2.2" fill="#ffd23f"/>
+  </g>
+  <!-- neige au premier plan -->
+  <path d="M0 104c60-12 130-14 200-4s150 12 230 0 140-8 170-2v22H0z" fill="#eef5fc"/>
+</svg>

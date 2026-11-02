@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 96">
+  <!-- Lutin qui marche vers la droite, sucre d'orge sur l'épaule (thème Noël) -->
+  <style>
+    .leg { transform-box: fill-box; transform-origin: 50% 0; }
+    .l1 { animation: step .32s ease-in-out infinite alternate; }
+    .l2 { animation: step .32s ease-in-out infinite alternate-reverse; }
+    @keyframes step { from { transform: rotate(26deg); } to { transform: rotate(-26deg); } }
+    .body { animation: hop .16s ease-in-out infinite alternate; }
+    @keyframes hop { from { transform: translateY(0); } to { transform: translateY(-3px); } }
+    .cane { transform-box: fill-box; transform-origin: 70% 80%; animation: swing .32s ease-in-out infinite alternate; }
+    @keyframes swing { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
+  </style>
+  <defs>
+    <pattern id="stripes2" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="3" fill="#fff"/><rect y="3" width="6" height="3" fill="#1f9d55"/></pattern>
+  </defs>
+  <ellipse cx="34" cy="93" rx="16" ry="2.5" fill="#000" opacity=".18"/>
+  <g class="leg l2"><rect x="27" y="66" width="6" height="18" rx="2" fill="url(#stripes2)"/><path d="M25 82h10c4 0 8-1 10-5 1 4-1 9-6 10H25z" fill="#8e1621"/></g>
+  <g class="leg l1"><rect x="35" y="66" width="6" height="18" rx="2" fill="url(#stripes2)"/><path d="M33 82h10c4 0 8-1 10-5 1 4-1 9-6 10H33z" fill="#b01c28"/></g>
+  <g class="body">
+    <!-- sucre d'orge sur l'épaule -->
+    <g class="cane">
+      <path d="M14 66 30 30c3-7 12-6 12 1" stroke="#fff" stroke-width="6" stroke-linecap="round" fill="none"/>
+      <path d="M14 66 30 30c3-7 12-6 12 1" stroke="#d42a35" stroke-width="6" stroke-linecap="round" stroke-dasharray="4 5" fill="none"/>
+    </g>
+    <path d="M22 46h26l4 22-5-3-4 4-4-4-4 4-4-4-4 4-4-4-5 3z" fill="#d42a35"/>
+    <rect x="22" y="58" width="28" height="5" fill="#22181a"/>
+    <rect x="32" y="57" width="7" height="7" rx="1" fill="none" stroke="#f2c14e" stroke-width="1.8"/>
+    <path d="M26 46l9 7 9-7" stroke="#1f9d55" stroke-width="3" fill="none" stroke-linejoin="round"/>
+    <path d="M24 50c-4 4-6 8-6 12" stroke="#d42a35" stroke-width="6" stroke-linecap="round" fill="none"/>
+    <circle cx="19" cy="62" r="3.6" fill="#f6c9a6"/>
+    <path d="M46 50c4 4 6 8 7 12" stroke="#d42a35" stroke-width="6" stroke-linecap="round" fill="none"/>
+    <circle cx="53" cy="62" r="3.6" fill="#f6c9a6"/>
+    <path d="M24 32l-7-6 9 2z" fill="#f2b896"/>
+    <path d="M44 32l8-6-9 2z" fill="#f2b896"/>
+    <circle cx="34" cy="34" r="11" fill="#f6c9a6"/>
+    <path d="M28 33c1-1.5 3-1.5 4 0M36 33c1-1.5 3-1.5 4 0" stroke="#2a1a14" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+    <circle cx="41" cy="37" r="2.4" fill="#f4a7a0" opacity=".8"/>
+    <circle cx="27" cy="37" r="2.4" fill="#f4a7a0" opacity=".8"/>
+    <path d="M30 39c2 3 6 3 8 0z" fill="#a24a3a"/>
+    <path d="M22 28c0-14 10-20 22-14 4 2 6 7 6 14z" fill="#d42a35"/>
+    <path d="M26 16C18 8 8 8 4 16" stroke="#d42a35" stroke-width="8" stroke-linecap="round" fill="none"/>
+    <rect x="21" y="25" width="30" height="6" rx="3" fill="#fff"/>
+    <circle cx="4" cy="20" r="4.5" fill="#fff"/>
+  </g>
+</svg>

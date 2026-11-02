@@ -1,5 +1,12 @@
 export const updatesLog = [
     {
+        version: 'v4.11.0',
+        date: '2 novembre 2026',
+        changes: [
+            "**Thèmes - 4 nouvelles ambiances** : Carnet (papier quadrillé, titres écrits à la main), Aurore boréale (voiles verts et violets qui ondulent), Sakura (rose pâle, pétales de cerisier qui tombent) et Esprit de Noël (le traîneau du Père Noël traverse le ciel, des lutins passent en bas de l'écran, le Père Noël vient faire coucou, avec neige, guirlande lumineuse et village enneigé). À choisir dans Paramètres → Thème.",
+        ]
+    },
+    {
         version: 'v4.10.0',
         date: '2 novembre 2026',
         changes: [

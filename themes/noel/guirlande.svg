@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 22" width="140" height="22">
+  <!-- Guirlande lumineuse qui se répète sous la barre du haut (thème Noël) -->
+  <style>
+    .b { animation: on 1.6s ease-in-out infinite alternate; }
+    .b2 { animation-delay: .4s; } .b3 { animation-delay: .8s; } .b4 { animation-delay: 1.2s; }
+    @keyframes on { from { opacity: .35; } to { opacity: 1; } }
+  </style>
+  <defs>
+    <radialGradient id="halo"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset=".35" stop-opacity=".55" stop-color="currentColor"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></radialGradient>
+  </defs>
+  <path d="M0 3C17 11 18 11 35 3S53 11 70 3s18 8 35 0 18 8 35 0" stroke="#2a4a35" stroke-width="1.6" fill="none"/>
+  <g class="b" color="#ff4d5e"><circle cx="17.5" cy="15" r="7" fill="url(#halo)"/><rect x="16" y="6.5" width="3" height="3" fill="#3a3a3a"/><ellipse cx="17.5" cy="13.5" rx="3" ry="4.2" fill="#ff4d5e"/></g>
+  <g class="b b2" color="#3ddc84"><circle cx="52.5" cy="15" r="7" fill="url(#halo)"/><rect x="51" y="6.5" width="3" height="3" fill="#3a3a3a"/><ellipse cx="52.5" cy="13.5" rx="3" ry="4.2" fill="#3ddc84"/></g>
+  <g class="b b3" color="#ffd23f"><circle cx="87.5" cy="15" r="7" fill="url(#halo)"/><rect x="86" y="6.5" width="3" height="3" fill="#3a3a3a"/><ellipse cx="87.5" cy="13.5" rx="3" ry="4.2" fill="#ffd23f"/></g>
+  <g class="b b4" color="#5ab4ff"><circle cx="122.5" cy="15" r="7" fill="url(#halo)"/><rect x="121" y="6.5" width="3" height="3" fill="#3a3a3a"/><ellipse cx="122.5" cy="13.5" rx="3" ry="4.2" fill="#5ab4ff"/></g>
+</svg>

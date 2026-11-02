@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 import { installNativeFileSaving } from './modules/native-files.js';
 
-const APP_VERSION = 'v4.10.0';
+const APP_VERSION = 'v4.11.0';
 
 // Appli Android / iPhone : PDF et CSV proposés dans le menu « Partager » du téléphone
 installNativeFileSaving();
@@ -158,6 +158,107 @@ export const themes = {
             '--font-pixel': "'Press Start 2P', monospace",
             '--radius-scale': '0',
         }
+    },
+    carnet: {
+        name: 'Carnet',
+        tagline: 'Papier quadrillé, encre bleue',
+        preview: '#2449a8',
+        group: 'ambiance',
+        skin: 'carnet',
+        fonts: ['Kalam:wght@400;700'],
+        previewBackground: 'linear-gradient(90deg, transparent 14px, rgba(220, 60, 60, 0.45) 14px, rgba(220, 60, 60, 0.45) 15px, transparent 15px), linear-gradient(rgba(70, 110, 190, 0.18) 1px, transparent 1px) 0 0 / 8px 8px, linear-gradient(90deg, rgba(70, 110, 190, 0.18) 1px, transparent 1px) 0 0 / 8px 8px, #fbf8ef',
+        colors: {
+            '--color-primary': '#2449a8',
+            '--color-primary-hover': '#1b3887',
+            '--color-background': '#fbf8ef',
+            '--color-surface': '#fffdf6',
+            '--color-text-base': '#1d2742',
+            '--color-text-muted': '#6b6a62',
+            '--color-border': '#e2dac4',
+            '--sidebar-bg': '#1d2742',
+            '--sidebar-bg-2': '#2c3a5e',
+            '--sidebar-active-bg': 'rgba(255, 255, 255, 0.1)',
+            '--font-display': "'Kalam', cursive",
+            '--radius-scale': '0.6',
+        }
+    },
+    aurore: {
+        name: 'Aurore boréale',
+        tagline: 'Voiles verts et violets',
+        preview: '#3ee6b0',
+        group: 'ambiance',
+        skin: 'aurore',
+        dark: true,
+        glass: true,
+        fonts: ['Outfit:wght@400;500;600;700'],
+        previewBackground: 'radial-gradient(60% 40% at 30% 30%, rgba(62, 230, 176, 0.55), transparent 70%), radial-gradient(50% 40% at 75% 25%, rgba(150, 90, 255, 0.5), transparent 70%), linear-gradient(180deg, #071526, #03070f)',
+        colors: {
+            '--color-primary': '#3ee6b0',
+            '--color-primary-hover': '#72f2c9',
+            '--color-on-primary': '#03140e',
+            '--color-background': '#03070f',
+            '--color-surface': 'rgba(14, 26, 44, 0.6)',
+            '--color-text-base': '#e8f4f2',
+            '--color-text-muted': '#8fa9b8',
+            '--color-border': 'rgba(120, 220, 200, 0.14)',
+            '--sidebar-bg': '#040a16',
+            '--sidebar-bg-2': '#10213a',
+            '--sidebar-active-bg': 'rgba(62, 230, 176, 0.12)',
+            '--glass-blur': 'blur(16px)',
+            '--font-sans': "'Outfit', 'Inter', sans-serif",
+            '--font-display': "'Outfit', sans-serif",
+            '--radius-scale': '1.4',
+        }
+    },
+    sakura: {
+        name: 'Sakura',
+        tagline: 'Rose pâle, pétales qui tombent',
+        preview: '#d6457a',
+        group: 'ambiance',
+        skin: 'sakura',
+        fonts: ['Zen+Maru+Gothic:wght@500;700'],
+        previewBackground: 'radial-gradient(4px 2.5px at 20% 30%, #f4a6c0, transparent), radial-gradient(4px 2.5px at 70% 55%, #f7b9cd, transparent), radial-gradient(3px 2px at 45% 80%, #f4a6c0, transparent), radial-gradient(90% 60% at 100% 0%, #ffd9e5, transparent 70%), #fff6f8',
+        colors: {
+            '--color-primary': '#c73a6d',
+            '--color-primary-hover': '#a82d5a',
+            '--color-background': '#fff6f8',
+            '--color-surface': 'rgba(255, 255, 255, 0.86)',
+            '--color-text-base': '#3d1f2b',
+            '--color-text-muted': '#8f6676',
+            '--color-border': '#f3d9e2',
+            '--sidebar-bg': '#4a2234',
+            '--sidebar-bg-2': '#6b3249',
+            '--sidebar-active-bg': 'rgba(255, 190, 215, 0.16)',
+            '--font-display': "'Zen Maru Gothic', sans-serif",
+            '--radius-scale': '1.5',
+        }
+    },
+    // Thème « Esprit de Noël » (clé « hiver » gardée) : illustrations dans themes/noel, traîneau et lutins qui traversent l'écran
+    hiver: {
+        name: 'Esprit de Noël',
+        tagline: 'Père Noël, lutins et neige',
+        preview: '#d93848',
+        group: 'ambiance',
+        skin: 'hiver',
+        decor: 'noel',
+        dark: true,
+        fonts: ['Fredoka:wght@500;600;700'],
+        previewBackground: `url("${asset('./themes/noel/traineau.svg')}") 50% 30% / 92% no-repeat, url("${asset('./themes/noel/paysage.svg')}") bottom / 160% no-repeat, radial-gradient(1.5px 1.5px at 15% 20%, #fff, transparent), radial-gradient(2px 2px at 60% 75%, #fff, transparent), radial-gradient(1.5px 1.5px at 85% 15%, #fff, transparent), linear-gradient(180deg, #0c2340, #12395f)`,
+        colors: {
+            '--color-primary': '#d93848',
+            '--color-primary-hover': '#ec5462',
+            '--color-background': '#0a1d33',
+            '--color-surface': '#10294a',
+            '--color-text-base': '#f1f6fc',
+            '--color-text-muted': '#9db3cc',
+            '--color-border': '#1d3c62',
+            '--color-success': '#3cc47c',
+            '--sidebar-bg': '#071629',
+            '--sidebar-bg-2': '#123257',
+            '--sidebar-active-bg': 'rgba(60, 196, 124, 0.14)',
+            '--font-display': "'Fredoka', sans-serif",
+            '--radius-scale': '1.2',
+        }
     }
 };
 
@@ -179,6 +280,29 @@ function loadThemeFonts(fonts = []) {
 // Page Paramètres : charge d'un coup les polices de tous les thèmes pour les aperçus
 export function preloadThemeFonts() {
     loadThemeFonts(Object.values(themes).flatMap(theme => theme.fonts || []));
+}
+
+// Décors animés posés devant l'appli (ils passent même devant les données, sans jamais capter le toucher)
+const decors = {
+    noel: () => `
+        <img class="decor-sleigh" src="${asset('./themes/noel/traineau.svg')}" alt="">
+        <img class="decor-elf decor-elf-gift" src="${asset('./themes/noel/lutin-cadeau.svg')}" alt="">
+        <img class="decor-elf decor-elf-cane" src="${asset('./themes/noel/lutin-sucre-orge.svg')}" alt="">
+        <img class="decor-santa-peek" src="${asset('./themes/noel/pere-noel-coucou.svg')}" alt="">`,
+};
+
+function applyDecor(name) {
+    const current = document.getElementById('theme-decor');
+    if (current?.dataset.decor === name) return;
+    current?.remove();
+    if (!name || !decors[name]) return;
+    const layer = document.createElement('div');
+    layer.id = 'theme-decor';
+    layer.className = `theme-decor decor-${name}`;
+    layer.dataset.decor = name;
+    layer.setAttribute('aria-hidden', 'true');
+    layer.innerHTML = decors[name]();
+    document.body.appendChild(layer);
 }
 
 // Mode clair / sombre, indépendant de la couleur choisie ('light' | 'dark' | 'auto' = réglage du téléphone)
@@ -224,6 +348,7 @@ export function applyTheme(themeName) {
     root.classList.toggle('cat', !!theme.cat);
     if (theme.skin) root.dataset.skin = theme.skin;
     else delete root.dataset.skin;
+    applyDecor(theme.decor);
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', colors['--color-background'] || '#0f172a');
 
     applyChartDefaults();

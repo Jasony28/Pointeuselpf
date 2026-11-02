@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 150">
+  <!-- Traîneau du Père Noël tiré par deux rennes, en vol vers la droite (thème Noël) -->
+  <style>
+    .leg { transform-box: fill-box; transform-origin: 50% 0; }
+    .lf { animation: gallop .42s ease-in-out infinite alternate; }
+    .lb { animation: gallop .42s ease-in-out infinite alternate-reverse; }
+    @keyframes gallop { from { transform: rotate(32deg); } to { transform: rotate(-28deg); } }
+    .r1 { animation: bob .42s ease-in-out infinite alternate; }
+    .r2 { animation: bob .42s ease-in-out .2s infinite alternate; }
+    @keyframes bob { from { transform: translateY(-2px); } to { transform: translateY(3px); } }
+    .sleigh { animation: sway 1.6s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: 80% 100%; }
+    @keyframes sway { from { transform: rotate(-2deg); } to { transform: rotate(2deg); } }
+    .spark { animation: twinkle 1s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: center; }
+    .s2 { animation-delay: .3s; } .s3 { animation-delay: .6s; } .s4 { animation-delay: .15s; } .s5 { animation-delay: .45s; }
+    @keyframes twinkle { from { opacity: .15; transform: scale(.5); } to { opacity: 1; transform: scale(1.1); } }
+    .nose { animation: glow 1.2s ease-in-out infinite alternate; }
+    @keyframes glow { from { opacity: .45; } to { opacity: 1; } }
+    .arm { transform-box: fill-box; transform-origin: 0 50%; animation: wave .5s ease-in-out infinite alternate; }
+    @keyframes wave { from { transform: rotate(-8deg); } to { transform: rotate(10deg); } }
+  </style>
+  <defs>
+    <path id="star" d="M0-7C1-2 2-1 7 0 2 1 1 2 0 7-1 2-2 1-7 0-2-1-1-2 0-7Z"/>
+    <radialGradient id="noseGlow"><stop offset="0" stop-color="#ff6b6b" stop-opacity=".9"/><stop offset="1" stop-color="#ff6b6b" stop-opacity="0"/></radialGradient>
+    <g id="reindeer">
+      <!-- pattes arrière puis avant -->
+      <g class="leg lb"><rect x="-26" y="4" width="5" height="24" rx="2.5" fill="#7d4f31"/><rect x="-26.5" y="25" width="6" height="5" rx="2" fill="#3b2418"/></g>
+      <g class="leg lf"><rect x="-17" y="4" width="5" height="24" rx="2.5" fill="#8c5a38"/><rect x="-17.5" y="25" width="6" height="5" rx="2" fill="#3b2418"/></g>
+      <path d="M-34-4c-6-4-10-2-12 2 4 0 7 1 9 4z" fill="#e9d2b4"/>
+      <ellipse cx="0" cy="0" rx="32" ry="14" fill="#9a6440"/>
+      <ellipse cx="2" cy="6" rx="21" ry="6.5" fill="#c99a6f"/>
+      <g class="leg lb"><rect x="14" y="4" width="5" height="24" rx="2.5" fill="#7d4f31"/><rect x="13.5" y="25" width="6" height="5" rx="2" fill="#3b2418"/></g>
+      <g class="leg lf"><rect x="22" y="4" width="5" height="24" rx="2.5" fill="#8c5a38"/><rect x="21.5" y="25" width="6" height="5" rx="2" fill="#3b2418"/></g>
+      <path d="M18-8 28-30l12 4-9 24z" fill="#9a6440"/>
+      <!-- harnais et grelot -->
+      <path d="M20-6c5 3 11 4 15 1" stroke="#c8202f" stroke-width="5" fill="none" stroke-linecap="round"/>
+      <circle cx="28" cy="-1" r="3.2" fill="#f2c14e" stroke="#b8862a" stroke-width="1"/>
+      <path d="M33-36 28-50M30-44l-7-4M28-50l-4-6M29-47l2-7" stroke="#6b4226" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+      <path d="M38-37 41-52M39-46l7-4M41-52l3-6M40-49l-3-6" stroke="#6b4226" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+      <ellipse cx="27" cy="-34" rx="6" ry="2.6" transform="rotate(-35 27 -34)" fill="#7d4f31"/>
+      <ellipse cx="37" cy="-29" rx="12" ry="8.5" fill="#9a6440"/>
+      <ellipse cx="46" cy="-25.5" rx="7" ry="5.5" fill="#c99a6f"/>
+      <circle cx="39" cy="-32" r="1.8" fill="#1d1410"/>
+      <circle cx="39.6" cy="-32.6" r=".6" fill="#fff"/>
+    </g>
+  </defs>
+
+  <!-- poussière d'étoiles derrière le traîneau -->
+  <g fill="#ffe08a">
+    <use href="#star" class="spark" x="14" y="96"/>
+    <use href="#star" class="spark s2" x="40" y="80"/>
+    <use href="#star" class="spark s3" x="30" y="112"/>
+    <use href="#star" class="spark s4" x="58" y="98"/>
+    <use href="#star" class="spark s5" x="6" y="72"/>
+  </g>
+  <g fill="#fff" opacity=".9">
+    <circle cx="22" cy="86" r="1.6"/><circle cx="48" cy="114" r="1.3"/><circle cx="66" cy="84" r="1.5"/><circle cx="10" cy="106" r="1.1"/>
+  </g>
+
+  <!-- rênes -->
+  <path d="M176 70C210 62 232 62 262 70M262 70c26-6 50-10 78-6" stroke="#7a2a1a" stroke-width="2" fill="none"/>
+
+  <g class="sleigh">
+    <!-- sac de cadeaux -->
+    <path d="M92 66c-8-22 6-38 24-36 16 2 22 18 16 36z" fill="#8a5a2b"/>
+    <path d="M100 38c6-6 18-6 22 0" stroke="#6b4422" stroke-width="3" fill="none"/>
+    <rect x="96" y="22" width="16" height="16" rx="2" fill="#3cc47c" transform="rotate(-12 104 30)"/>
+    <path d="M104 22v16M96 30h16" stroke="#f2c14e" stroke-width="3" transform="rotate(-12 104 30)"/>
+    <rect x="113" y="26" width="13" height="13" rx="2" fill="#4f8fe8" transform="rotate(10 119 32)"/>
+    <path d="M119.5 26v13M113 32.5h13" stroke="#fff" stroke-width="2.5" transform="rotate(10 119 32)"/>
+
+    <!-- Père Noël -->
+    <ellipse cx="152" cy="68" rx="22" ry="20" fill="#d42a35"/>
+    <rect x="131" y="70" width="43" height="6" fill="#22181a"/>
+    <rect x="148" y="69" width="9" height="8" rx="1.5" fill="none" stroke="#f2c14e" stroke-width="2"/>
+    <g class="arm"><path d="M166 58c6 2 10 6 13 11" stroke="#d42a35" stroke-width="9" stroke-linecap="round" fill="none"/><circle cx="180" cy="70" r="5.5" fill="#f3f3f3"/></g>
+    <circle cx="158" cy="38" r="12.5" fill="#f6c9a6"/>
+    <path d="M144 40c0 18 10 26 18 26s16-8 16-24c-4 4-10 5-16 5s-14-2-18-7z" fill="#fff"/>
+    <path d="M154 46c2-3 6-3 8 0 2-3 6-3 8 0" stroke="#e8e8e8" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+    <circle cx="163" cy="42" r="3" fill="#f39c8e"/>
+    <circle cx="160" cy="35" r="1.6" fill="#2a1a14"/>
+    <circle cx="168" cy="35" r="1.6" fill="#2a1a14"/>
+    <circle cx="157" cy="39" r="2.4" fill="#f4a7a0" opacity=".7"/>
+    <path d="M145 32c2-14 14-20 26-12 6 4 4 10 4 10z" fill="#d42a35"/>
+    <path d="M147 26c-8-6-18-2-22 6" stroke="#d42a35" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <circle cx="124" cy="33" r="5" fill="#fff"/>
+    <rect x="143" y="27" width="34" height="7" rx="3.5" fill="#fff"/>
+
+    <!-- traîneau -->
+    <path d="M78 62c-6 26 4 46 26 46h70c14 0 22-10 20-26h-14c-4-14-14-18-28-16H110c-6-10-20-12-32-4z" fill="#c21f2c"/>
+    <path d="M86 70c-2 16 6 28 22 28h62" stroke="#f2c14e" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M180 82h14" stroke="#f2c14e" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="96" cy="84" r="4" fill="#f2c14e"/>
+    <!-- patins -->
+    <path d="M96 108v10M170 108v10" stroke="#b8862a" stroke-width="4"/>
+    <path d="M74 120h120c12 0 18-6 16-16" stroke="#f2c14e" stroke-width="5" stroke-linecap="round" fill="none"/>
+  </g>
+
+  <!-- rennes -->
+  <g class="r1"><use href="#reindeer" x="262" y="96"/><circle cx="314" cy="70.5" r="3.6" fill="#3b2418"/></g>
+  <g class="r2">
+    <use href="#reindeer" x="346" y="84"/>
+    <circle cx="398" cy="58.5" r="11" fill="url(#noseGlow)" class="nose"/>
+    <circle cx="398" cy="58.5" r="4" fill="#ff3340"/>
+  </g>
+</svg>
