@@ -1,5 +1,12 @@
 export const updatesLog = [
     {
+        version: 'v4.9.1',
+        date: '2 novembre 2026',
+        changes: [
+            "**Retours clients** : une photo ouverte en grand s'affiche maintenant bien au milieu de l'écran, sur téléphone aussi.",
+        ]
+    },
+    {
         version: 'v4.9.0',
         date: '2 novembre 2026',
         changes: [

@@ -1538,8 +1538,18 @@ body .fixed.inset-0.bg-black > div > h3:first-child {
 }
 .rc-photo-add { position: relative; width: 84px; height: 84px; display: grid; place-items: center; border: 1.5px dashed var(--color-border-strong); border-radius: var(--radius); color: var(--color-text-muted); font-size: 0.8125rem; cursor: pointer; }
 .rc-photo-add:hover { border-color: var(--color-primary); color: var(--color-primary); }
-.rc-photo-view { flex-direction: column; gap: 0.75rem; }
-.rc-photo-view img { max-width: 100%; max-height: calc(100dvh - 7rem); border-radius: var(--radius-lg); box-shadow: var(--shadow-xl); }
+/* Photo en grand : toujours au milieu de l'écran (la règle mobile des modales les colle en bas, d'où .modal.rc-photo-view) */
+.modal.rc-photo-view {
+    flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem;
+    padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+    overflow: hidden;
+}
+.rc-photo-view img {
+    display: block; width: auto; height: auto; max-width: 100%;
+    max-height: calc(100dvh - 6rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    object-fit: contain; border-radius: var(--radius-lg); box-shadow: var(--shadow-xl);
+}
+.rc-photo-view .btn { flex: none; }
 
 /* Historique : bouton et repère « Retour client » */
 #page-content .icon-btn.is-retour:hover { background: color-mix(in srgb, var(--color-warning) 14%, transparent); color: var(--color-warning); }
