@@ -138,4 +138,19 @@ function forReminders({ nowMs, today, nowMinutes, openPointages, todayPlanning, 
     return out;
 }
 
-module.exports = { DEFAULT_PREFS, preview, shortDate, forMessage, forPlanningChange, forPlanningPublished, forLeaveCreated, forLeaveDecision, forReminders };
+/** Nouveau retour client : l'employé concerné, toujours prévenu (pas de réglage pour le couper). */
+function forRetourClient({ id, retour, users }) {
+    if (!retour || retour.cancelled) return [];
+    const user = users[retour.uid];
+    if (!user || user.status !== 'approved') return [];
+    const chantier = String(retour.chantier || '').split(' · ')[0].trim();
+    return [{
+        uid: retour.uid,
+        title: retour.level === 3 ? 'Retour client important' : 'Retour client',
+        body: `${chantier ? `Sur le chantier ${chantier}` : 'Sur un de tes chantiers'}${retour.date ? ` (${shortDate(retour.date)})` : ''}. Touche pour le lire.`,
+        tag: `retour-${id}`,
+        page: 'user-retours',
+    }];
+}
+
+module.exports = { DEFAULT_PREFS, preview, shortDate, forMessage, forPlanningChange, forPlanningPublished, forLeaveCreated, forLeaveDecision, forReminders, forRetourClient };

@@ -1,5 +1,16 @@
 export const updatesLog = [
     {
+        version: 'v4.9.0',
+        date: '2 novembre 2026',
+        changes: [
+            "**Retours clients** : quand un client n'est pas satisfait d'un passage, la responsable peut vous transmettre son message. Vous recevez une notification et un bandeau s'affiche sur l'accueil.",
+            "**Lire un retour** : menu → Retours clients. Vous y trouvez le message du client, le mot de la responsable et les photos éventuelles. Touchez « J'ai pris connaissance » une fois lu.",
+            "**Donner sa version** : si vous n'êtes pas d'accord, vous pouvez répondre une fois. La responsable voit votre réponse.",
+            "**Historique** : le chantier concerné est marqué « Retour client ».",
+            "**Responsable** : dans l'historique d'un employé, le bouton bulle d'un pointage crée un retour (niveau, ce qui n'allait pas, message du client à coller, photos, collègues du même chantier). Tout est regroupé dans Admin → Retours clients.",
+        ]
+    },
+    {
         version: 'v4.8.0',
         date: '1er novembre 2026',
         changes: [

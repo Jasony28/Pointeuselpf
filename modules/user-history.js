@@ -3,6 +3,7 @@ import { rebuildDayTrips, localDateKey, isDayOver, clearTripCaches } from "./tri
 import { db, currentUser, pageContent, showConfirmationModal, showInfoModal, navigateTo } from "../app.js";
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 import { getUsers } from "./data-service.js";
+import { openRetourModal, getRetoursForUser, levelPill } from "./retours-clients.js";
 
 let currentWeekOffset = 0;
 let currentCalendarDate = new Date();
@@ -11,6 +12,7 @@ let chantiersCache = [];
 let colleaguesCache = [];
 let pointagesPourPdf = [];
 let allPointages = [];
+let retoursByPointage = new Map(); // retours clients non annulés, par pointage
 let entryWizardStep = 1;
 let entryWizardData = {};
 
@@ -584,9 +586,13 @@ async function displayHistoryList(startDate, endDate, chantierFilter = null) {
     if (!historyList) return;
     historyList.innerHTML = `<p class='text-center p-4' style='color: var(--color-text-muted);'>Chargement...</p>`;
 
-    const { pointages, trajetsMap, retoursMap } = await getPointages(startDate, endDate, chantierFilter);
+    const [{ pointages, trajetsMap, retoursMap }, retoursClients] = await Promise.all([
+        getPointages(startDate, endDate, chantierFilter),
+        getRetoursForUser(targetUser.uid).catch(() => []),
+    ]);
     if (!historyList.isConnected) return; // page quittée pendant le chargement
     allPointages = pointages;
+    retoursByPointage = new Map(retoursClients.filter(r => !r.cancelled).map(r => [r.pointageId, r]));
 
     let displayPointages = [...pointages];
     if (localStealthMode === true) {
@@ -910,9 +916,18 @@ async function recalculateDayKm(button) {
 }
 
 function handleHistoryClick(e) {
+    const retourLink = e.target.closest('.retour-link');
+    if (retourLink) {
+        if (currentUser.role === 'admin' && targetUser.uid !== currentUser.uid) navigateTo('admin-retours', { userId: targetUser.uid });
+        else navigateTo('user-retours', { retourId: retourLink.dataset.retour });
+        return;
+    }
     if (currentUser.role !== 'admin' || localStealthMode === true) return;
     const target = e.target;
-    if (target.closest('.recalc-km-btn')) {
+    if (target.closest('.retour-btn')) {
+        const pointageData = allPointages.find(p => p.id === target.closest('.retour-btn').dataset.id);
+        if (pointageData) openRetourModal(pointageData, { userName: targetUser.name, onSaved: () => displayHistoryList(lastLoadedState.start, lastLoadedState.end, lastLoadedState.chantier) });
+    } else if (target.closest('.recalc-km-btn')) {
         recalculateDayKm(target.closest('.recalc-km-btn'));
     } else if (target.closest('.add-pointage-btn')) {
         openEntryModal({ isEditing: false, date: target.closest('.add-pointage-btn').dataset.date });
@@ -960,7 +975,9 @@ function createHistoryEntryElement(d, trajetData, retourData, returnPending = fa
         timeDisplay = `Débuté à ${startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · en cours`;
         durationDisplay = `<span class="hours-live mt-1"><span class="hours-live-dot"></span>En cours</span>`;
     }
-    wrapper.innerHTML = `<div class="${currentUser.role === 'admin' && !localStealthMode ? 'pr-28' : 'pr-20'}"><div class="font-bold">${d.chantier}</div><div class="text-sm" style="color: var(--color-text-muted);">${timeDisplay}</div>${trajetDisplay}</div>${d.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-text-muted);"><strong>Notes:</strong> ${d.notes}</div>` : ""}`;
+    const retourClient = retoursByPointage.get(d.id);
+    const retourDisplay = retourClient ? `<button type="button" class="retour-link" data-retour="${retourClient.id}">${levelPill(retourClient.level)}<span>Retour client</span></button>` : '';
+    wrapper.innerHTML = `<div class="${currentUser.role === 'admin' && !localStealthMode ? 'pr-36' : 'pr-20'}"><div class="font-bold">${d.chantier}</div>${retourDisplay}<div class="text-sm" style="color: var(--color-text-muted);">${timeDisplay}</div>${trajetDisplay}</div>${d.notes ? `<div class="mt-2 pt-2 border-t text-xs" style="border-color: var(--color-border); color: var(--color-text-muted);"><strong>Notes:</strong> ${d.notes}</div>` : ""}`;
 
     if (currentUser.role === 'admin' && !localStealthMode) {
         const controlsWrapper = document.createElement("div");
@@ -968,6 +985,7 @@ function createHistoryEntryElement(d, trajetData, retourData, returnPending = fa
         const buttonsDiv = document.createElement('div');
         buttonsDiv.className = 'entry-actions';
         buttonsDiv.innerHTML = `
+            <button class="retour-btn icon-btn is-retour" title="Retour client" aria-label="Retour client" data-id="${d.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 7v4M12 14h.01"/></svg></button>
             <button class="edit-btn icon-btn" title="Modifier" aria-label="Modifier" data-id="${d.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
             <button class="reassign-btn icon-btn" title="Réattribuer" aria-label="Réattribuer" data-id="${d.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></button>
             <button class="delete-btn icon-btn is-danger" title="Supprimer" aria-label="Supprimer" data-id="${d.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></button>

@@ -6,6 +6,7 @@ import { rebuildDayTrips, localDateKey, isDayOver, returnTripId, DEPOT_ADDRESS }
 import { enhanceChantierSelect } from './chantier-picker.js';
 import { mailButtonHTML } from './mail.js';
 import { missingProfileParts, escapeHTML } from './work-profile.js';
+import { getUnreadRetours } from './retours-clients.js';
 
 
 let timerInterval = null;
@@ -29,6 +30,7 @@ export async function render() {
 
     pageContent.innerHTML = `
         <div class="max-w-4xl mx-auto space-y-8">
+            <div id="retours-clients-banner" hidden></div>
             <div id="profile-reminder" class="hidden"></div>
             <div id="live-tracker-container" class="p-6 rounded-lg shadow-lg" style="background-color: var(--color-surface); border: 1px solid var(--color-border);"></div>
             <div id="missed-pointage-suggestions" class="space-y-4"></div>
@@ -103,6 +105,7 @@ export async function render() {
             await cacheDataForModals();
             await checkForOpenPointage();
             loadProfileReminder();
+            loadRetoursBanner();
             initUnreadMessagesListener();
             if (!localStorage.getItem('activePointage')) checkForMissedPointages();
             
@@ -814,6 +817,25 @@ async function handleSuggestionClick(e) {
         }
     }
     button.closest('div.border-l-4').remove();
+}
+
+// Bandeau « retour client à lire » : reste affiché tant que l'employé n'a pas touché « J'ai pris connaissance »
+async function loadRetoursBanner() {
+    const box = document.getElementById('retours-clients-banner');
+    if (!box) return;
+    let unread = [];
+    try { unread = await getUnreadRetours(); } catch (error) { console.error("Erreur de chargement des retours clients:", error); }
+    if (!box.isConnected || !unread.length) return;
+    const first = unread[0];
+    const serious = unread.some(r => r.level === 3);
+    box.innerHTML = `
+        <button type="button" class="rc-banner ${serious ? 'is-serious' : ''}">
+            <span class="rc-banner-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 7v4M12 14h.01"/></svg></span>
+            <span class="rc-banner-text"><b>${unread.length > 1 ? `${unread.length} retours clients à lire` : 'Tu as un retour client à lire'}</b><span>${escapeHTML(first.chantier)}</span></span>
+            <svg class="rc-banner-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+        </button>`;
+    box.querySelector('button').onclick = () => navigateTo('user-retours', { retourId: first.id });
+    box.hidden = false;
 }
 
 function initUnreadMessagesListener() {

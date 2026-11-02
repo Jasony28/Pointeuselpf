@@ -1,6 +1,6 @@
 rules_version = '2';
 // Règles Firestore de la Pointeuse LPF = règles en production + ajouts pour la planification automatique
-// (règle 1 : lecture réservée aux comptes validés, « affinites » et « chats » exclus de la lecture générale ; règle 2 : skillsAdmin et superAdmin protégés ; règle 9 : affinites).
+// (règle 1 : lecture réservée aux comptes validés, « affinites », « chats » et « retoursClients » exclus de la lecture générale ; règle 2 : skillsAdmin et superAdmin protégés ; règle 9 : affinites ; règle 10 : retours clients).
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -17,10 +17,10 @@ service cloud.firestore {
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'approved';
     }
 
-    // 1. LECTURE : comptes validés seulement. « affinites » (9), la messagerie (3) et « users » (2) ont leurs propres règles :
+    // 1. LECTURE : comptes validés seulement. « affinites » (9), la messagerie (3), « users » (2) et les retours clients (10) ont leurs propres règles :
     //    sinon cette règle générale (les règles s'additionnent) laisserait lire les messages ou les jetons des autres.
     match /{collection}/{document=**} {
-      allow read: if isApproved() && !(collection in ['affinites', 'chats', 'users']);
+      allow read: if isApproved() && !(collection in ['affinites', 'chats', 'users', 'retoursClients']);
     }
 
     // 2. UTILISATEURS : impossible de changer soi-même son rôle, son statut, les notes de l'admin ou le statut super admin
@@ -141,6 +141,26 @@ service cloud.firestore {
       allow write: if isOwner(userId)
                    && request.resource.data.keys().hasOnly(['like', 'updatedAt'])
                    && request.resource.data.like is list;
+    }
+
+    // 10. RETOURS CLIENTS : l'admin crée, annule et supprime ; chaque employé lit seulement les siens.
+    //     L'employé peut seulement marquer « lu » (une fois) puis répondre (une fois, 1000 caractères au plus).
+    match /retoursClients/{retourId} {
+      function own() { return isApproved() && resource.data.uid == request.auth.uid && resource.data.get('cancelled', false) == false; }
+      function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+      allow read: if isAdmin() || (isApproved() && resource.data.uid == request.auth.uid);
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (own() && (
+                       (changed().hasOnly(['readAt'])
+                        && resource.data.get('readAt', null) == null
+                        && request.resource.data.readAt == request.time)
+                    || (changed().hasOnly(['reply', 'replyAt'])
+                        && resource.data.get('readAt', null) != null
+                        && resource.data.get('reply', '') == ''
+                        && request.resource.data.reply is string
+                        && request.resource.data.reply.size() > 0
+                        && request.resource.data.reply.size() <= 1000
+                        && request.resource.data.replyAt == request.time)));
     }
   }
 }

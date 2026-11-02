@@ -103,6 +103,14 @@ exports.notifyLeaveDecision = onDocumentUpdated('leaveRequests/{id}', async (eve
     await send(rules.forLeaveDecision({ id: event.params.id, before, after, users }));
 });
 
+// 4b. Retour client : l'employé concerné (une lecture : sa fiche)
+exports.notifyRetourClient = onDocumentCreated('retoursClients/{id}', async (event) => {
+    const retour = event.data?.data();
+    if (!retour) return;
+    const users = await getUsers([retour.uid]);
+    await send(rules.forRetourClient({ id: event.params.id, retour, users }));
+});
+
 function parisNow() {
     const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
         timeZone: TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',

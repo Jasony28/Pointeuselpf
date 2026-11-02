@@ -129,3 +129,12 @@ test('rappels : case décochée respectée, lignes de congé ignorées', () => {
     const out = rules.forReminders({ ...base, users: offUsers, todayPlanning: [...base.todayPlanning, conge], nowMs: 0, nowMinutes: 8 * 60 + 45, openPointages: [], todayPointageUids: new Set() });
     assert.deepEqual(out.map(n => n.key), ['start_p1_leo']);
 });
+
+test('retour client : l\'employé concerné, même s\'il a coupé les autres notifications ; rien si annulé ou banni', () => {
+    const retour = { uid: 'sam', chantier: 'Mme Dupont · Rue des Lilas', date: '2026-10-30', level: 2, cancelled: false };
+    const out = rules.forRetourClient({ id: 'rc1', retour, users });
+    assert.deepEqual(out, [{ uid: 'sam', title: 'Retour client', body: 'Sur le chantier Mme Dupont (ven. 30 oct.). Touche pour le lire.', tag: 'retour-rc1', page: 'user-retours' }]);
+    assert.equal(rules.forRetourClient({ id: 'rc1', retour: { ...retour, level: 3 }, users })[0].title, 'Retour client important');
+    assert.deepEqual(rules.forRetourClient({ id: 'rc1', retour: { ...retour, cancelled: true }, users }), []);
+    assert.deepEqual(rules.forRetourClient({ id: 'rc1', retour: { ...retour, uid: 'ina' }, users }), []);
+});
