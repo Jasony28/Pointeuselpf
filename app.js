@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 import { installNativeFileSaving } from './modules/native-files.js';
 
-const APP_VERSION = 'v4.9.2';
+const APP_VERSION = 'v4.9.3';
 
 // Appli Android / iPhone : PDF et CSV proposés dans le menu « Partager » du téléphone
 installNativeFileSaving();
@@ -744,10 +744,11 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if ('serviceWorker' in navigator && !isNativeApp) {
         import('https://storage.googleapis.com/workbox-cdn/releases/6.5.4/workbox-window.prod.mjs').then(({ Workbox }) => {
             const wb = new Workbox('./sw.js');
-            // Nouvelle version : installée toute seule, sans rien demander, à un moment où le rechargement
-            // ne dérange pas : appli en arrière-plan, ou personne en train de saisir, de lire une fenêtre
-            // ou de toucher l'écran depuis 20 s. Sinon on réessaie toutes les 10 s et au passage en arrière-plan.
-            let updateWaiting = false;
+            // Nouvelle version : elle s'installe et s'active toute seule (sw.js), sans rien demander.
+            // La page se recharge ensuite pour l'utiliser, à un moment où ça ne dérange pas : appli en arrière-plan,
+            // ou personne en train de saisir, de lire une fenêtre ou de toucher l'écran depuis 20 s.
+            // Sinon on réessaie toutes les 10 s et au passage en arrière-plan.
+            let reloadPending = false;
             let lastInteraction = 0;
             ['pointerdown', 'keydown', 'scroll'].forEach(type =>
                 window.addEventListener(type, () => { lastInteraction = Date.now(); }, { passive: true, capture: true }));
@@ -756,18 +757,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 if ([...document.querySelectorAll(OVERLAY_SELECTOR)].some(el => getComputedStyle(el).display !== 'none')) return true;
                 return Date.now() - lastInteraction < 20 * 1000;
             };
-            const applyUpdate = () => {
-                if (!updateWaiting || (document.visibilityState === 'visible' && isBusy())) return;
-                updateWaiting = false;
-                wb.messageSkipWaiting();
+            const reloadWhenIdle = () => {
+                if (!reloadPending || (document.visibilityState === 'visible' && isBusy())) return;
+                reloadPending = false;
+                window.location.reload();
             };
-            wb.addEventListener('waiting', () => { updateWaiting = true; applyUpdate(); });
-            setInterval(applyUpdate, 10 * 1000);
-            document.addEventListener('visibilitychange', applyUpdate);
+            // Ancienne version restée en attente (téléphone pas encore passé par ce code) : activée sans demander
+            wb.addEventListener('waiting', () => wb.messageSkipWaiting());
             wb.addEventListener('controlling', (event) => {
                 // Recharge uniquement lors d'une mise à jour, pas à la toute première installation
-                if (event.isUpdate) window.location.reload();
+                if (!event.isUpdate) return;
+                reloadPending = true;
+                reloadWhenIdle();
             });
+            setInterval(reloadWhenIdle, 10 * 1000);
+            document.addEventListener('visibilitychange', reloadWhenIdle);
             wb.register();
             // L'appli installée reste souvent ouverte en arrière-plan : on vérifie s'il y a une
             // nouvelle version à chaque retour dans l'appli et toutes les 30 minutes.

@@ -1,5 +1,12 @@
 export const updatesLog = [
     {
+        version: 'v4.9.3',
+        date: '2 novembre 2026',
+        changes: [
+            "**Mises à jour automatiques** : l'appli ne demande plus jamais « Mettre à jour / Plus tard ». Chaque nouvelle version s'installe toute seule et l'appli se recharge dès que vous ne vous en servez pas (jamais pendant une saisie).",
+        ]
+    },
+    {
         version: 'v4.9.2',
         date: '2 novembre 2026',
         changes: [
