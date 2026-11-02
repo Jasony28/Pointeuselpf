@@ -4,7 +4,7 @@ const { precaching, routing, strategies, core } = workbox;
 core.setCacheNameDetails({ prefix: 'pointeuse-lpf-cache' });
 
 // Version synchronisée avec app.js
-const APP_VERSION = 'v4.9.1'; // <--- CHANGEMENT ICI
+const APP_VERSION = 'v4.9.2'; // <--- CHANGEMENT ICI
 
 precaching.precacheAndRoute([
     { url: './', revision: APP_VERSION },
@@ -104,7 +104,7 @@ routing.registerRoute(
 // Discussion ouverte à l'écran (envoyée par la messagerie) : pas de notification pour elle
 let activeChatId = null;
 
-// La nouvelle version attend que l'utilisateur appuie sur « Mettre à jour » (pop-up dans app.js)
+// La nouvelle version s'installe toute seule quand l'appli le demande (app.js : dès que personne n'est en train de s'en servir)
 self.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
     if (event.data && event.data.type === 'ACTIVE_CHAT') activeChatId = event.data.chatId || null;

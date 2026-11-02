@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 import { installNativeFileSaving } from './modules/native-files.js';
 
-const APP_VERSION = 'v4.9.1';
+const APP_VERSION = 'v4.9.2';
 
 // Appli Android / iPhone : PDF et CSV proposés dans le menu « Partager » du téléphone
 installNativeFileSaving();
@@ -744,36 +744,26 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if ('serviceWorker' in navigator && !isNativeApp) {
         import('https://storage.googleapis.com/workbox-cdn/releases/6.5.4/workbox-window.prod.mjs').then(({ Workbox }) => {
             const wb = new Workbox('./sw.js');
-            const showUpdateToast = () => {
-                let toast = document.getElementById('update-toast');
-                if (toast) return;
-                toast = document.createElement('div');
-                toast.id = 'update-toast';
-                toast.setAttribute('role', 'status');
-                toast.innerHTML = `
-                    <img src="./icons/lpf-192.png" alt="" class="update-toast-icon">
-                    <div class="update-toast-text">
-                        <strong>Nouvelle version disponible</strong>
-                        <span>Mettez à jour pour profiter des dernières nouveautés.</span>
-                    </div>
-                    <div class="update-toast-actions">
-                        <button id="later-button" class="btn btn-secondary">Plus tard</button>
-                        <button id="reload-button" class="btn btn-primary">Mettre à jour</button>
-                    </div>
-                `;
-                document.body.appendChild(toast);
-                document.getElementById('reload-button').onclick = (e) => {
-                    e.currentTarget.disabled = true;
-                    e.currentTarget.textContent = 'Mise à jour…';
-                    wb.messageSkipWaiting();
-                };
-                document.getElementById('later-button').onclick = () => {
-                    toast.classList.remove('show');
-                    setTimeout(() => toast.remove(), 400);
-                };
-                setTimeout(() => toast.classList.add('show'), 100);
+            // Nouvelle version : installée toute seule, sans rien demander, à un moment où le rechargement
+            // ne dérange pas : appli en arrière-plan, ou personne en train de saisir, de lire une fenêtre
+            // ou de toucher l'écran depuis 20 s. Sinon on réessaie toutes les 10 s et au passage en arrière-plan.
+            let updateWaiting = false;
+            let lastInteraction = 0;
+            ['pointerdown', 'keydown', 'scroll'].forEach(type =>
+                window.addEventListener(type, () => { lastInteraction = Date.now(); }, { passive: true, capture: true }));
+            const isBusy = () => {
+                if (document.activeElement?.matches('input, textarea, select, [contenteditable="true"]')) return true;
+                if ([...document.querySelectorAll(OVERLAY_SELECTOR)].some(el => getComputedStyle(el).display !== 'none')) return true;
+                return Date.now() - lastInteraction < 20 * 1000;
             };
-            wb.addEventListener('waiting', showUpdateToast);
+            const applyUpdate = () => {
+                if (!updateWaiting || (document.visibilityState === 'visible' && isBusy())) return;
+                updateWaiting = false;
+                wb.messageSkipWaiting();
+            };
+            wb.addEventListener('waiting', () => { updateWaiting = true; applyUpdate(); });
+            setInterval(applyUpdate, 10 * 1000);
+            document.addEventListener('visibilitychange', applyUpdate);
             wb.addEventListener('controlling', (event) => {
                 // Recharge uniquement lors d'une mise à jour, pas à la toute première installation
                 if (event.isUpdate) window.location.reload();
@@ -856,23 +846,30 @@ export function showUpdatesModal(updatesToShow, callbackOnClose = null) {
     };
 }
 
+// « v4.10.0 » est plus récente que « v4.9.1 » (une comparaison de texte dirait l'inverse)
+function isNewerVersion(version, than) {
+    const parts = (v) => String(v || 'v0').replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+    const a = parts(version), b = parts(than);
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+        if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0);
+    }
+    return false;
+}
+
+// Après une mise à jour : un simple message discret (plus de fenêtre à fermer).
+// Les nouveautés restent consultables depuis ce message ou dans Paramètres → Nouveautés.
 function checkForUpdates(userData, userRef) {
     const lastSeenVersion = userData.lastSeenAppVersion;
     const currentVersion = APP_VERSION;
+    if (lastSeenVersion === currentVersion) return;
 
-    if (lastSeenVersion !== currentVersion) {
-        const updatesToShow = updatesLog ? updatesLog.filter(u => u.version > (lastSeenVersion || 'v0.0.0')) : [];
+    // Version vue enregistrée tout de suite : le message ne revient pas au prochain démarrage
+    updateDoc(userRef, { lastSeenAppVersion: currentVersion }).catch(error => console.error("Erreur version:", error));
+    if (!lastSeenVersion) return; // premier démarrage du compte : rien à annoncer
 
-        if (updatesToShow.length > 0) {
-            const markVersionAsSeen = async () => {
-                try {
-                    await updateDoc(userRef, { lastSeenAppVersion: currentVersion });
-                } catch (error) {
-                    console.error("Erreur version:", error);
-                }
-            };
-            showUpdatesModal(updatesToShow, markVersionAsSeen);
-        }
+    const updatesToShow = (updatesLog || []).filter(u => isNewerVersion(u.version, lastSeenVersion));
+    if (updatesToShow.length > 0) {
+        showToast(`Appli mise à jour (${currentVersion}).`, 'info', { label: 'Nouveautés', onClick: () => showUpdatesModal(updatesToShow) });
     }
 }
 
@@ -903,7 +900,8 @@ const toastIcons = {
     warning: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/>',
 };
 
-export function showToast(message, type = 'success') {
+// action (facultatif) : { label, onClick } → petit bouton dans le message
+export function showToast(message, type = 'success', action = null) {
     let region = document.getElementById('toast-region');
     if (!region) {
         region = document.createElement('div');
@@ -916,15 +914,23 @@ export function showToast(message, type = 'success') {
     toast.setAttribute('role', 'status');
     toast.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${toastIcons[type] || toastIcons.info}</svg><span></span>`;
     toast.querySelector('span').textContent = message;
-    region.appendChild(toast);
-    requestAnimationFrame(() => toast.classList.add('show'));
-
     const dismiss = () => {
         toast.classList.remove('show');
         setTimeout(() => toast.remove(), 250);
     };
+    if (action) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'toast-action';
+        btn.textContent = action.label;
+        btn.onclick = (e) => { e.stopPropagation(); dismiss(); action.onClick(); };
+        toast.appendChild(btn);
+    }
+    region.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('show'));
+
     toast.onclick = dismiss;
-    setTimeout(dismiss, Math.min(7000, 2500 + message.length * 35));
+    setTimeout(dismiss, action ? 9000 : Math.min(7000, 2500 + message.length * 35));
 }
 
 export function showInfoModal(title, message) {
