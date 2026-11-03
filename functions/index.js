@@ -8,8 +8,10 @@ const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
 const { getStorage } = require('firebase-admin/storage');
+const { getAuth } = require('firebase-admin/auth');
 const rules = require('./notify-rules');
 const summaries = require('./day-summaries');
+const adminRules = require('./admin-rules');
 
 setGlobalOptions({ region: 'us-central1', memory: '256MiB', minInstances: 0, maxInstances: 2, timeoutSeconds: 60 });
 initializeApp();
@@ -155,6 +157,27 @@ exports.rebuildDaySummaries = onCall({ timeoutSeconds: 300, memory: '512MiB' }, 
     });
     logger.info('Résumés quotidiens recalculés', { pointages: pointagesSnap.size, jours: Object.keys(days).length, chantiers: Object.keys(routes).length });
     return { days: Object.keys(days).length };
+});
+
+// 4f. Nouveau mot de passe choisi par un admin (employé qui l'a oublié, ou sans vraie adresse e-mail).
+//     Un admin change celui des employés ; celui d'un autre admin, seulement un super admin.
+//     Les autres appareils connectés au compte sont déconnectés.
+exports.adminSetPassword = onCall(async (request) => {
+    const callerUid = request.auth?.uid;
+    const { uid, password } = request.data || {};
+    const [callerSnap, targetSnap] = await Promise.all([
+        callerUid ? db.doc(`users/${callerUid}`).get() : null,
+        typeof uid === 'string' && uid ? db.doc(`users/${uid}`).get() : null,
+    ]);
+    const refusal = adminRules.checkSetPassword({
+        callerUid, caller: callerSnap?.exists ? callerSnap.data() : null,
+        uid, target: targetSnap?.exists ? targetSnap.data() : null, password,
+    });
+    if (refusal) throw new HttpsError(refusal.code, refusal.message);
+    await getAuth().updateUser(uid, { password });
+    if (uid !== callerUid) await getAuth().revokeRefreshTokens(uid);
+    logger.info('Mot de passe changé par un admin', { par: callerUid, parNom: callerSnap.get('displayName') || '', pour: uid, pourNom: targetSnap.get('displayName') || '' });
+    return { ok: true };
 });
 
 // 4e. Photos avant / après des pointages : supprimées après 6 mois (une fois par mois, dossiers photos/AAAA-MM/).
