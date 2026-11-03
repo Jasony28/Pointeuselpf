@@ -5,6 +5,7 @@ import { getActiveChantiers } from "./data-service.js";
 import { clearTripCaches, findDaysUsingAddress, rebuildDayTrips, geocodeDetails, crowDistanceKm, DEPOT_ADDRESS } from "./trips.js";
 import { isValidEmail, mailButtonHTML } from "./mail.js";
 import { pendingAddressFixes } from "./address-fixes.js";
+import { exportChantiersPdf } from "./chantiers-pdf.js";
 import { THEMES, NEED_PRESETS, DEFAULT_TEAM_SIZE, needRowHTML } from "./work-profile.js";
 
 
@@ -46,6 +47,10 @@ export async function render() {
                     <p class="mt-1 text-sm" style="color: var(--color-text-muted);">Adresses, durées, horaires imposés et codes d'accès de chaque chantier.</p>
                 </div>
                 <div class="flex flex-wrap gap-2">
+                    <button id="exportChantiersPdfBtn" class="btn btn-secondary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events: none;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 12v6M9 15l3 3 3-3"/></svg>
+                        Exporter en PDF
+                    </button>
                     <button id="checkAddressesBtn" class="btn btn-secondary">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events: none;"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><path d="m9 10 2 2 4-4"/></svg>
                         Vérifier les adresses
@@ -744,9 +749,24 @@ async function checkAddresses() {
     });
 }
 
+async function exportPdf() {
+    const btn = document.getElementById('exportChantiersPdfBtn');
+    if (!chantiersCache.length) return showInfoModal("Information", "Aucun chantier à exporter.");
+    btn.disabled = true;
+    try {
+        await exportChantiersPdf(chantiersCache);
+    } catch (e) {
+        console.error("Export PDF des chantiers:", e);
+        showInfoModal("Erreur", "Le PDF n'a pas pu être créé. Vérifiez la connexion internet et réessayez.");
+    } finally {
+        btn.disabled = false;
+    }
+}
+
 function setupEventListeners() {
     document.getElementById('openAddChantierBtn').onclick = () => openChantierForm(null);
     document.getElementById('checkAddressesBtn').onclick = checkAddresses;
+    document.getElementById('exportChantiersPdfBtn').onclick = exportPdf;
     document.getElementById('closeAddressCheckBtn').onclick = () => document.getElementById('addressCheckModal').classList.add('hidden');
     document.getElementById('chantierForm').onsubmit = saveChantier;
     document.querySelectorAll('[data-preset]').forEach(btn => btn.onclick = () => renderNeeds(NEED_PRESETS[btn.dataset.preset]));
