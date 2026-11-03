@@ -48,11 +48,24 @@ export const ADDRESS_FIXES = [
     { name: 'Gite Pascal', from: 'Chemin des sangliers 40 biron', to: 'Chemin des Sangliers 40, Biron, 6940 Durbuy', why: 'commune (trouvée à Durbuy)' },
     { name: 'Hustuf deer boar lynx', from: 'rue pont des gattes 16 20 6687 bertogne', to: 'Rue Pont des Gattes 16, 6687 Bertogne', why: 'deux numéros : la carte ne trouvait que Bertogne' },
     { name: 'Hustuf weasel badger racoon', from: 'rue pont des gattes 40 44 6687 bertogne', to: 'Rue Pont des Gattes 40, 6687 Bertogne', why: 'deux numéros : la carte ne trouvait que Bertogne' },
-    { name: 'Wiesmes', from: '', to: "Rue de l'Abreuvoir 14, 5570 Beauraing", why: 'adresse vide, reprise de la liste du 03/02 (« wiemes »)' },
+    { name: 'Wiesmes', from: '', to: "Rue de l'Abreuvoir 14, Wiesme, 5571 Beauraing", why: 'adresse vide, reprise de la liste du 03/02 (« wiemes »)' },
     { name: 'Polimage', from: '', to: 'Rue de Mulhouse 35, 4020 Liège', why: 'adresse vide, reprise de la liste du 03/02 (« POLIIMAGE »)' },
     { name: 'Rati', from: '', to: 'Rue du Polissou 6/13, Achêne, 5590 Ciney', why: 'adresse vide, reprise de la liste du 03/02 (« Raty »)' },
+    // Troisième passage : feuilles écrites à la main (photos du 03/11/2026)
+    { name: 'Wiesmes', from: "Rue de l'Abreuvoir 14, 5570 Beauraing", to: "Rue de l'Abreuvoir 14, Wiesme, 5571 Beauraing", why: 'feuille : code postal 5571 (Wiesme)' },
+    { name: 'Durbuy', from: '', to: 'Bohon 15, Bohon, 6940 Durbuy', why: 'adresse vide, feuille : « Bohon 15 »' },
+    { name: 'Huet hotton', from: '', to: 'Rue de Barvaux 1, 6990 Hotton', why: 'adresse vide, feuille' },
+    { name: 'Huet manhay', from: '', to: 'Route de Bomal 21/1, 6960 Manhay', why: 'adresse vide, feuille' },
+    { name: 'Hustuf', from: '', to: 'Rue Pont des Gattes 16, 6687 Bertogne', why: 'adresse vide, feuille' },
+    { name: 'FORAGE', from: 'BOUGE', to: "Route d'Hannut 113, 5004 Bouge", why: 'feuille : rue et numéro' },
+    { name: 'Galaire', from: 'Bouge', to: 'Chaussée de Marche 264, 5100 Namur', why: 'feuille : Chaussée de Marche (numéro de la liste du 03/02)' },
+    { name: 'Hilde', from: 'BOMAL', to: 'Allée de Pierreuses, 6941 Bomal-sur-Ourthe', why: 'feuille : rue (sans numéro)' },
+    { name: 'Anders', from: 'Barvaux', to: 'Route de Marche 106, Barvaux, 6940 Durbuy', why: 'feuille : rue et numéro' },
+    { name: 'Generet', from: 'Bonsin', to: 'Rue Chardeneux 1, Bonsin, 5377 Somme-Leuze', why: 'feuille : rue et numéro' },
+    { name: 'Ockenove', from: 'Chem. des Bouleaux 25', to: 'Chemin des Bouleaux 25, Barvaux, 6940 Durbuy', why: 'feuille : à Barvaux (la carte le mettait à Rochefort)' },
+    { name: 'Bockenove', from: 'Chem. des Bouleaux 29', to: 'Chemin des Bouleaux 29, Barvaux, 6940 Durbuy', why: 'feuille : à Barvaux' },
+    { name: 'COMMUN MARCHE', from: 'PLACE AUX FOIRE', to: 'Rue Victor Libert 5, 6900 Marche-en-Famenne', why: 'feuille : rue Victor Libert (numéro de la liste du 03/02)' },
 ];
-
 const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
 
 /** Corrections encore à faire : le chantier existe et porte toujours l'ancienne adresse. */
