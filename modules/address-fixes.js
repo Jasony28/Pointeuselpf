@@ -41,6 +41,16 @@ export const ADDRESS_FIXES = [
     { name: 'Boulangerie', from: 'Grande rue 233 Champlon', to: 'Grande Rue 233, 6971 Champlon', why: 'code postal' },
     { name: 'Camping', from: 'Berguème 9 tenneville', to: 'Berguème 9, 6970 Tenneville', why: 'code postal' },
     { name: 'Louftémont', from: 'Rue du Pierroy 4 Loutémont', to: 'Rue du Pierroy 4, Louftémont', why: 'faute : Louftémont' },
+
+    // Deuxième passage : résultats de « Vérifier les adresses » (novembre 2026)
+    { name: 'Virton', from: 'Rue Dr Jeanty 4', to: 'Rue Docteur Jeanty 4, 6760 Virton', why: 'commune manquante (trouvée à Virton)' },
+    { name: 'Docteur Benny', from: 'Dom. de Tchession 19, 6980 La Roche-en-Ardenne', to: 'Domaine de Tchession 19, 6980 La Roche-en-Ardenne', why: 'abréviation « Dom. » non reconnue' },
+    { name: 'Gite Pascal', from: 'Chemin des sangliers 40 biron', to: 'Chemin des Sangliers 40, Biron, 6940 Durbuy', why: 'commune (trouvée à Durbuy)' },
+    { name: 'Hustuf deer boar lynx', from: 'rue pont des gattes 16 20 6687 bertogne', to: 'Rue Pont des Gattes 16, 6687 Bertogne', why: 'deux numéros : la carte ne trouvait que Bertogne' },
+    { name: 'Hustuf weasel badger racoon', from: 'rue pont des gattes 40 44 6687 bertogne', to: 'Rue Pont des Gattes 40, 6687 Bertogne', why: 'deux numéros : la carte ne trouvait que Bertogne' },
+    { name: 'Wiesmes', from: '', to: "Rue de l'Abreuvoir 14, 5570 Beauraing", why: 'adresse vide, reprise de la liste du 03/02 (« wiemes »)' },
+    { name: 'Polimage', from: '', to: 'Rue de Mulhouse 35, 4020 Liège', why: 'adresse vide, reprise de la liste du 03/02 (« POLIIMAGE »)' },
+    { name: 'Rati', from: '', to: 'Rue du Polissou 6/13, Achêne, 5590 Ciney', why: 'adresse vide, reprise de la liste du 03/02 (« Raty »)' },
 ];
 
 const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
