@@ -3629,3 +3629,11 @@ html.cat .toast > svg { display: none; }
 }
 .push-pref strong { color: var(--color-text-base); }
 .push-pref input { width: 18px; height: 18px; margin-top: 0.125rem; flex-shrink: 0; accent-color: var(--color-primary) !important; }
+
+/* Équipe : nouveau mot de passe choisi par l'admin */
+.pw-row { display: flex; gap: 0.5rem; align-items: center; }
+.pw-row .input { flex: 1; min-width: 0; font-family: var(--font-mono); letter-spacing: 0.03em; }
+.pw-error { margin: 0.25rem 0 0; font-size: 0.8125rem; font-weight: 600; color: var(--color-danger); }
+.pw-done { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.875rem 1rem; border-radius: var(--radius-lg); background: color-mix(in srgb, var(--color-success) 10%, transparent); border: 1px solid color-mix(in srgb, var(--color-success) 30%, transparent); }
+.pw-done p { margin: 0; font-size: 0.9375rem; }
+.pw-value { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 1.125rem; font-weight: 600; letter-spacing: 0.04em; padding: 0.5rem 0.75rem; border-radius: var(--radius); background: var(--color-surface); border: 1px solid var(--color-border); overflow-wrap: anywhere; user-select: all; }

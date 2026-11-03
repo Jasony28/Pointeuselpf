@@ -1,7 +1,7 @@
 // modules/admin-team.js
 
 import { collection, query, getDocs, doc, updateDoc, deleteDoc, orderBy, where, limit, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, pageContent, navigateTo, currentUser, showConfirmationModal, showInfoModal, isStealthMode } from "../app.js";
+import { db, pageContent, navigateTo, currentUser, showConfirmationModal, showInfoModal, showToast, isStealthMode } from "../app.js";
 import { getUsers, getColleagues, transferOrDuplicateUserData } from "./data-service.js";
 import { formatMilliseconds } from "./utils.js";
 import { clearTripCaches, findWorkedDays, rebuildDayTrips, localDateKey } from "./trips.js";
@@ -87,6 +87,34 @@ export async function render() {
                     <button type="button" id="kmRecalcStartBtn" class="btn btn-primary" disabled>Recalculer</button>
                 </div>
             </div>
+        </div>
+
+        <div id="passwordModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="passwordModalTitle">
+            <form id="passwordForm" class="modal-panel" novalidate>
+                <div class="modal-body space-y-4">
+                    <div>
+                        <h3 id="passwordModalTitle" class="modal-title">Nouveau mot de passe</h3>
+                        <p class="modal-text" id="passwordModalText"></p>
+                    </div>
+                    <div id="passwordFormFields" class="space-y-1">
+                        <label for="newPasswordInput" class="field-label">Nouveau mot de passe (6 caractères minimum)</label>
+                        <div class="pw-row">
+                            <input id="newPasswordInput" class="input" type="text" minlength="6" maxlength="128" autocomplete="new-password" spellcheck="false" required>
+                            <button type="button" id="generatePasswordBtn" class="btn btn-secondary">Proposer</button>
+                        </div>
+                        <p class="field-hint">L'employé se reconnecte avec ce mot de passe. Ses autres appareils sont déconnectés.</p>
+                        <p id="passwordError" class="pw-error" role="alert" hidden></p>
+                    </div>
+                    <div id="passwordDone" class="pw-done" hidden>
+                        <p>Mot de passe changé. Donnez-le à <b id="passwordDoneName"></b> :</p>
+                        <div class="pw-row"><code id="passwordDoneValue" class="pw-value"></code><button type="button" id="copyPasswordBtn" class="btn btn-secondary">Copier</button></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" id="closePasswordBtn" class="btn btn-secondary">Annuler</button>
+                    <button type="submit" id="savePasswordBtn" class="btn btn-primary">Enregistrer</button>
+                </div>
+            </form>
         </div>
 
         <div id="transferModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="transferModalTitle">
@@ -292,6 +320,7 @@ const STATUS_LABELS = { approved: 'Actif', pending: 'En attente', banned: 'Banni
 const teamIcons = {
     history: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l4 2"/></svg>',
     role: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+    key: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.8-9.8M17 6l3 3M14 9l2 2"/></svg>',
     trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>',
 };
 
@@ -389,6 +418,7 @@ function createUserCard(user, highlight) {
             <button data-action="history" class="icon-btn" title="Voir l'historique" aria-label="Voir l'historique">${teamIcons.history}</button>
             ${!isSuper ? `<button data-action="role" class="icon-btn" title="Passer ${isAdminRole ? 'Employé' : 'Admin'}" aria-label="Passer ${isAdminRole ? 'Employé' : 'Admin'}">${teamIcons.role}</button>` : ''}
             ${isApproved ? `<button data-action="super" class="icon-btn" title="${isSuper ? 'Retirer super admin' : 'Passer super admin (jamais planifié)'}" aria-label="${isSuper ? 'Retirer super admin' : 'Passer super admin'}" aria-pressed="${isSuper}">⭐</button>` : ''}
+            <button data-action="password" class="icon-btn" title="Changer le mot de passe" aria-label="Changer le mot de passe de ${escapeHTML(user.displayName || '')}">${teamIcons.key}</button>
             <button data-action="delete" class="icon-btn is-danger" title="Supprimer" aria-label="Supprimer">${teamIcons.trash}</button>
         </div>
     `;
@@ -423,6 +453,8 @@ function createUserCard(user, highlight) {
             await loadUsers();
         }
     });
+
+    div.querySelector('[data-action="password"]').onclick = () => openPasswordModal(user);
 
     div.querySelector('[data-action="delete"]').onclick = async () => {
         if (await showConfirmationModal("Suppression", `Vraiment supprimer définitivement l'utilisateur "${user.displayName}" ?`)) {
@@ -676,4 +708,93 @@ async function runKmRecalc() {
     startBtn.textContent = 'Recalculer';
     startBtn.disabled = false;
     document.querySelectorAll('.km-period').forEach(b => { b.disabled = false; });
+}
+
+
+// --- Nouveau mot de passe choisi par l'admin (Cloud Function adminSetPassword) --------
+// Pour un employé qui a oublié son mot de passe ou n'a pas de vraie adresse e-mail.
+
+// Mot de passe facile à dicter : sans lettres ambiguës (l, I, O, 0, 1)
+function suggestPassword() {
+    const letters = 'abcdefghjkmnpqrstuvwxyz';
+    const pick = (chars) => chars[crypto.getRandomValues(new Uint32Array(1))[0] % chars.length];
+    const word = Array.from({ length: 5 }, () => pick(letters)).join('');
+    const digits = Array.from({ length: 4 }, () => pick('23456789')).join('');
+    return `${word[0].toUpperCase()}${word.slice(1)}-${digits}`;
+}
+
+const PASSWORD_ERRORS = {
+    'functions/permission-denied': null, // message du serveur
+    'functions/invalid-argument': null,
+    'functions/not-found': "Ce compte n'existe plus.",
+    'functions/unauthenticated': 'Reconnectez-vous puis réessayez.',
+    'functions/unavailable': 'Pas de connexion au serveur. Vérifiez le réseau et réessayez.',
+    'functions/internal': "La fonction « adminSetPassword » n'est pas encore installée sur Firebase (voir le guide), ou elle a rencontré une erreur.",
+};
+
+function openPasswordModal(user) {
+    const modal = document.getElementById('passwordModal');
+    const input = document.getElementById('newPasswordInput');
+    const error = document.getElementById('passwordError');
+    const saveBtn = document.getElementById('savePasswordBtn');
+    const closeBtn = document.getElementById('closePasswordBtn');
+    document.getElementById('passwordModalText').textContent = `Choisissez le nouveau mot de passe de ${user.displayName || 'cet employé'}. Utile s'il l'a oublié ou s'il n'a pas de vraie adresse e-mail.`;
+    document.getElementById('passwordFormFields').hidden = false;
+    document.getElementById('passwordDone').hidden = true;
+    error.hidden = true;
+    input.value = suggestPassword();
+    saveBtn.hidden = false;
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Enregistrer';
+    closeBtn.textContent = 'Annuler';
+    modal.classList.remove('hidden');
+    input.focus();
+    input.select();
+
+    const close = () => modal.classList.add('hidden');
+    closeBtn.onclick = close;
+    document.getElementById('generatePasswordBtn').onclick = () => { input.value = suggestPassword(); error.hidden = true; input.focus(); };
+    document.getElementById('copyPasswordBtn').onclick = async () => {
+        const value = document.getElementById('passwordDoneValue').textContent;
+        try { await navigator.clipboard.writeText(value); showToast('Mot de passe copié'); }
+        catch (e) { window.getSelection()?.selectAllChildren(document.getElementById('passwordDoneValue')); }
+    };
+
+    document.getElementById('passwordForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const password = input.value.trim();
+        if (password.length < 6) {
+            error.textContent = 'Le mot de passe doit faire au moins 6 caractères.';
+            error.hidden = false;
+            return;
+        }
+        if (!navigator.onLine) {
+            error.textContent = 'Pas de connexion : impossible de changer le mot de passe.';
+            error.hidden = false;
+            return;
+        }
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Enregistrement…';
+        error.hidden = true;
+        try {
+            const [{ getApp }, { getFunctions, httpsCallable }] = await Promise.all([
+                import("https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js"),
+                import("https://www.gstatic.com/firebasejs/10.5.0/firebase-functions.js"),
+            ]);
+            await httpsCallable(getFunctions(getApp(), 'us-central1'), 'adminSetPassword')({ uid: user.id, password });
+            document.getElementById('passwordFormFields').hidden = true;
+            document.getElementById('passwordDoneName').textContent = user.displayName || 'cet employé';
+            document.getElementById('passwordDoneValue').textContent = password;
+            document.getElementById('passwordDone').hidden = false;
+            saveBtn.hidden = true;
+            closeBtn.textContent = 'Fermer';
+        } catch (err) {
+            console.error("Changement de mot de passe:", err);
+            const known = Object.prototype.hasOwnProperty.call(PASSWORD_ERRORS, err?.code) ? PASSWORD_ERRORS[err.code] : undefined;
+            error.textContent = known || (known === null && err?.message) || "Le mot de passe n'a pas pu être changé. Réessayez.";
+            error.hidden = false;
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Enregistrer';
+        }
+    };
 }
