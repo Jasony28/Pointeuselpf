@@ -65,8 +65,20 @@ export const ADDRESS_FIXES = [
     { name: 'Ockenove', from: 'Chem. des Bouleaux 25', to: 'Chemin des Bouleaux 25, Barvaux, 6940 Durbuy', why: 'feuille : à Barvaux (la carte le mettait à Rochefort)' },
     { name: 'Bockenove', from: 'Chem. des Bouleaux 29', to: 'Chemin des Bouleaux 29, Barvaux, 6940 Durbuy', why: 'feuille : à Barvaux' },
     { name: 'COMMUN MARCHE', from: 'PLACE AUX FOIRE', to: 'Rue Victor Libert 5, 6900 Marche-en-Famenne', why: 'feuille : rue Victor Libert (numéro de la liste du 03/02)' },
-];
-const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    // Quatrième passage : export PDF du 03/11/2026 comparé aux feuilles écrites à la main
+    { name: 'wiemes', from: "Rue de l'Abreuvoir 14, Beauraing", to: "Rue de l'Abreuvoir 14, Wiesme, 5571 Beauraing", why: 'feuille : code postal 5571 (Wiesme)' },
+    { name: 'BAR A VIN', from: 'RUE PORTE HAUTE MARCHE', to: 'Rue Porte Haute 3, 6900 Marche-en-Famenne', why: 'feuille : numéro 3' },
+    { name: 'Bleuet', from: 'rue rompre 2 6980 la roche en ardennes', to: 'Rue Rompré 2, 6980 La Roche-en-Ardenne', why: 'orthographe : Rompré' },
+    { name: 'Camping bure', from: 'CHEMIN DE LA CLUSURE 30 BURE', to: 'Chemin de la Clusure 30, Bure, 6927 Tellin', why: 'feuille : code postal 6927 (Bure fait partie de Tellin)' },
+    { name: 'Lux', from: "Avenue de la toison d'or 27 Marche", to: "Avenue de la Toison d'Or 27, 6900 Marche-en-Famenne", why: 'feuille : code postal' },
+    { name: 'Netcom', from: 'Rte de Bastogne 13a tenneville', to: 'Route de Bastogne 13a, 6970 Tenneville', why: 'feuille : code postal' },
+    { name: 'Rochefort gauche / droite', from: 'Rue de la croix 3 Rochefort', to: 'Rue de la Croix 3, 5580 Rochefort', why: 'feuille : code postal' },
+    { name: 'Soyeur marche', from: 'Avenue du monument 3 Marche', to: 'Avenue du Monument 3, 6900 Marche-en-Famenne', why: 'feuille : code postal' },
+    { name: 'River vieuw', from: "Lion de l'ourthe 40 beffe", to: "Lion de l'Ourthe 40, Beffe, 6987 Rendeux", why: 'feuille : code postal 6987 (Beffe fait partie de Rendeux)' },
+    { name: 'BEFFE', from: 'Rue des Bouleaux 6987/1, 6987 Rendeux', to: 'Rue des Bouleaux 8, Beffe, 6987 Rendeux', why: 'feuille : numéro 8 (« 6987/1 » n\'est pas un numéro)' },
+    { name: 'Evercare', from: 'Rue borchamps 10 Marche', to: 'Rue Borchamps 10, 6900 Marche-en-Famenne', why: 'code postal' },
+    { name: 'Chimisco', from: 'Rue du parc industriel 2 Achêne', to: 'Rue du Parc Industriel 2, Achêne, 5590 Ciney', why: 'Achêne fait partie de Ciney' },
+];const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
 
 /** Corrections encore à faire : le chantier existe et porte toujours l'ancienne adresse. */
 export function pendingAddressFixes(chantiers) {
