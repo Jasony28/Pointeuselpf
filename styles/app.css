@@ -3637,3 +3637,16 @@ html.cat .toast > svg { display: none; }
 .pw-done { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.875rem 1rem; border-radius: var(--radius-lg); background: color-mix(in srgb, var(--color-success) 10%, transparent); border: 1px solid color-mix(in srgb, var(--color-success) 30%, transparent); }
 .pw-done p { margin: 0; font-size: 0.9375rem; }
 .pw-value { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 1.125rem; font-weight: 600; letter-spacing: 0.04em; padding: 0.5rem 0.75rem; border-radius: var(--radius); background: var(--color-surface); border: 1px solid var(--color-border); overflow-wrap: anywhere; user-select: all; }
+
+/* Chantiers : corrections d'adresses proposées */
+.fixes-card { display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem; border-radius: var(--radius-lg); border: 1px solid color-mix(in srgb, var(--color-warning) 40%, var(--color-border)); background: color-mix(in srgb, var(--color-warning) 7%, var(--color-surface)); }
+.fixes-title { margin: 0; font-size: 1rem; font-weight: 700; }
+.fixes-text { margin: 0.25rem 0 0; font-size: 0.8125rem; color: var(--color-text-muted); }
+.fixes-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.5rem; max-height: 420px; overflow-y: auto; }
+.fixes-item { display: flex; gap: 0.625rem; align-items: flex-start; padding: 0.625rem 0.75rem; border-radius: var(--radius); background: var(--color-surface); border: 1px solid var(--color-border); cursor: pointer; }
+.fixes-item input { margin-top: 0.2rem; width: 18px; height: 18px; flex-shrink: 0; accent-color: var(--color-primary); }
+.fixes-item > span { display: flex; flex-direction: column; gap: 0.125rem; font-size: 0.875rem; }
+.fixes-from { color: var(--color-text-muted); text-decoration: line-through; overflow-wrap: anywhere; }
+.fixes-to { font-weight: 600; color: var(--color-success); overflow-wrap: anywhere; }
+.fixes-why { font-size: 0.75rem; color: var(--color-text-subtle); }
+.fixes-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }

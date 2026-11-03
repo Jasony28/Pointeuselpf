@@ -4,6 +4,7 @@ import { getGoogleMapsUrl } from "./utils.js";
 import { getActiveChantiers } from "./data-service.js";
 import { clearTripCaches, findDaysUsingAddress, rebuildDayTrips, geocodeDetails, crowDistanceKm, DEPOT_ADDRESS } from "./trips.js";
 import { isValidEmail, mailButtonHTML } from "./mail.js";
+import { pendingAddressFixes } from "./address-fixes.js";
 import { THEMES, NEED_PRESETS, DEFAULT_TEAM_SIZE, needRowHTML } from "./work-profile.js";
 
 
@@ -67,6 +68,7 @@ export async function render() {
                 </div>
             </div>
 
+            <div id="addressFixes"></div>
             <div id="chantiersGrid" class="site-grid"></div>
         </div>
 
@@ -246,6 +248,7 @@ async function loadChantiers() {
         const snapshot = await getDocs(q);
         chantiersCache = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
         displayChantiers();
+        renderAddressFixes();
         locateMissingGps();
     } catch (error) {
         console.error("Erreur chargement:", error);
@@ -582,6 +585,90 @@ async function offerTripsRecalculation(oldAddress) {
     showInfoModal(failed ? "Recalcul terminé avec des erreurs" : "Kilomètres recalculés",
         failed ? `${done} journée(s) recalculée(s), ${failed} en échec (vérifiez les adresses des autres chantiers de ces journées).`
                : `${done === 1 ? 'La journée a été recalculée' : `Les ${done} journées ont été recalculées`} avec la nouvelle adresse.`);
+}
+
+// --- Corrections d'adresses proposées (modules/address-fixes.js) -----------------
+function renderAddressFixes() {
+    const box = document.getElementById('addressFixes');
+    if (!box) return;
+    const fixes = pendingAddressFixes(chantiersCache);
+    if (!fixes.length) { box.innerHTML = ''; return; }
+    box.innerHTML = `
+        <section class="fixes-card">
+            <div class="fixes-head">
+                <div>
+                    <h3 class="fixes-title">Corrections d'adresses proposées · ${fixes.length}</h3>
+                    <p class="fixes-text">Fautes de frappe et communes manquantes repérées dans la liste des chantiers. Décochez ce que vous ne voulez pas, puis appliquez : les kilomètres des journées concernées sont recalculés.</p>
+                </div>
+            </div>
+            <ul class="fixes-list">
+                ${fixes.map((f, i) => `
+                <li>
+                    <label class="fixes-item">
+                        <input type="checkbox" data-fix="${i}" checked>
+                        <span class="min-w-0">
+                            <b>${escapeHTML(f.name)}</b>${f.status !== 'active' ? ' <span class="cchip">Archivé</span>' : ''}
+                            <span class="fixes-from">${escapeHTML(f.address)}</span>
+                            <span class="fixes-to">→ ${escapeHTML(f.to)}</span>
+                            <span class="fixes-why">${escapeHTML(f.why)}</span>
+                        </span>
+                    </label>
+                </li>`).join('')}
+            </ul>
+            <div class="fixes-actions">
+                <p id="fixesStatus" class="fixes-text" aria-live="polite"></p>
+                <button type="button" id="applyFixesBtn" class="btn btn-primary">Appliquer les corrections cochées</button>
+            </div>
+        </section>`;
+    document.getElementById('applyFixesBtn').onclick = () => applyAddressFixes(fixes);
+}
+
+async function applyAddressFixes(fixes) {
+    const chosen = fixes.filter((f, i) => document.querySelector(`[data-fix="${i}"]`)?.checked);
+    if (!chosen.length) { showInfoModal("Rien à faire", "Aucune correction n'est cochée."); return; }
+    if (!navigator.onLine) { showInfoModal("Hors ligne", "Pas de connexion : les adresses n'ont pas été modifiées."); return; }
+    const ok = await showConfirmationModal("Appliquer les corrections ?",
+        `${chosen.length} adresse${chosen.length > 1 ? 's' : ''} de chantier ${chosen.length > 1 ? 'vont être modifiées' : 'va être modifiée'}, puis les kilomètres des journées concernées seront recalculés.`);
+    if (!ok) return;
+
+    const btn = document.getElementById('applyFixesBtn');
+    const status = document.getElementById('fixesStatus');
+    btn.disabled = true;
+    let updated = 0, failed = 0;
+    for (const f of chosen) {
+        status.textContent = `Adresses : ${updated + failed + 1} / ${chosen.length}…`;
+        try {
+            const coordinates = await geocodeAddress(f.to);
+            await updateDoc(doc(db, "chantiers", f.id), { address: f.to, coordinates: coordinates || null });
+            const c = chantiersCache.find(x => x.id === f.id);
+            if (c) Object.assign(c, { address: f.to, coordinates: coordinates || null });
+            updated++;
+        } catch (error) {
+            console.error("Correction d'adresse:", f.name, error);
+            failed++;
+        }
+    }
+    clearTripCaches();
+    await getActiveChantiers(true);
+
+    // Kilomètres : chaque journée dont un trajet utilise une des anciennes adresses
+    const days = new Map();
+    for (const f of chosen) {
+        try { (await findDaysUsingAddress(f.address)).forEach(d => days.set(`${d.uid}|${d.dayKey}`, d)); }
+        catch (error) { console.error("Recherche des trajets:", error); }
+    }
+    let rebuilt = 0, rebuildFailed = 0;
+    for (const { uid, dayKey } of days.values()) {
+        status.textContent = `Kilomètres : ${rebuilt + rebuildFailed + 1} / ${days.size} journées…`;
+        if (await rebuildDayTrips(uid, dayKey)) rebuilt++; else rebuildFailed++;
+    }
+
+    displayChantiers();
+    renderAddressFixes();
+    showInfoModal(failed || rebuildFailed ? "Corrections terminées avec des erreurs" : "Adresses corrigées",
+        `${updated} adresse${updated > 1 ? 's' : ''} corrigée${updated > 1 ? 's' : ''}${failed ? `, ${failed} en échec` : ''}. `
+        + (days.size ? `${rebuilt} journée${rebuilt > 1 ? 's' : ''} de trajets recalculée${rebuilt > 1 ? 's' : ''}${rebuildFailed ? `, ${rebuildFailed} en échec` : ''}.` : 'Aucun trajet enregistré ne les utilisait.')
+        + ' Lancez ensuite « Vérifier les adresses » pour contrôler le reste.');
 }
 
 // Seuils du contrôle des adresses
