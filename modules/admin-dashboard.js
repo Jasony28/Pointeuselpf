@@ -419,6 +419,18 @@ async function loadStaticStats() {
     } catch (error) {
         console.error("Erreur de chargement des stats statiques:", error);
         projectsCard.textContent = "Erreur";
+        // Cause lisible sous « Erreur » (sert au dépannage à partir d'une simple capture d'écran)
+        const code = String(error?.code || error?.name || 'inconnue').replace(/^firestore\//, '');
+        const hint = {
+            'resource-exhausted': "Limite gratuite de Firebase atteinte pour aujourd'hui.",
+            'permission-denied': "Accès refusé par Firebase (compte ou règles).",
+            'unavailable': "Firebase injoignable (réseau).",
+            'failed-precondition': "Mémoire de l'appli à réinitialiser.",
+        }[code] || '';
+        const detail = document.createElement('p');
+        detail.style.cssText = 'font-size: 0.75rem; margin-top: 0.25rem; color: var(--color-text-muted);';
+        detail.textContent = `${hint} (code : ${code})`.trim();
+        projectsCard.after(detail);
     }
 }
 
