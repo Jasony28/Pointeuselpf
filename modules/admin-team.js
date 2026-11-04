@@ -75,6 +75,7 @@ export async function render() {
                         <button type="button" data-period="lastWeek" class="km-period">Sem. dernière</button>
                         <button type="button" data-period="month" class="km-period">Ce mois-ci</button>
                         <button type="button" data-period="lastMonth" class="km-period">Mois dernier</button>
+                        <button type="button" data-period="all" class="km-period km-period-all">Depuis le début</button>
                     </div>
                     <p id="kmRecalcSummary" class="text-sm" style="color: var(--color-text-muted);"></p>
                     <div id="kmRecalcProgress" class="km-progress hidden" aria-live="polite">
@@ -588,7 +589,14 @@ function createColleagueElement(id, name) {
 // --- Recalcul des kilomètres de toute l'équipe ---------------------------------
 
 const KM_WORKERS = 3; // journées recalculées en parallèle
-let kmRecalc = { days: [], range: null, running: false, cancelled: false };
+let kmRecalc = { days: [], range: null, period: 'week', running: false, cancelled: false };
+// « Depuis le début » peut durer longtemps : la journée où reprendre est gardée sur cet appareil
+// si le recalcul est arrêté (fenêtre fermée, téléphone en veille, connexion perdue…).
+const KM_RESUME_KEY = 'lpf.kmRecalcAll.resumeFrom';
+const KM_HISTORY_START = new Date(2020, 0, 1);
+const readResume = () => { try { return localStorage.getItem(KM_RESUME_KEY) || null; } catch { return null; } };
+const writeResume = (dayKey) => { try { dayKey ? localStorage.setItem(KM_RESUME_KEY, dayKey) : localStorage.removeItem(KM_RESUME_KEY); } catch { /* stockage indisponible */ } };
+const dayLabel = (dayKey) => new Date(`${dayKey}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 
 function kmPeriodRange(period) {
     const now = new Date();
@@ -598,6 +606,7 @@ function kmPeriodRange(period) {
     switch (period) {
         case 'lastWeek': { const start = new Date(monday); start.setDate(monday.getDate() - 7); const end = new Date(monday); end.setDate(monday.getDate() - 1); return { start, end: endOfDay(end) }; }
         case 'month': return { start: new Date(today.getFullYear(), today.getMonth(), 1), end: endOfDay(today) };
+        case 'all': return { start: KM_HISTORY_START, end: endOfDay(today) };
         case 'lastMonth': return { start: new Date(today.getFullYear(), today.getMonth() - 1, 1), end: endOfDay(new Date(today.getFullYear(), today.getMonth(), 0)) };
         default: return { start: monday, end: endOfDay(today) };
     }
@@ -609,6 +618,7 @@ async function selectKmPeriod(period) {
     const startBtn = document.getElementById('kmRecalcStartBtn');
     startBtn.disabled = true;
     summary.textContent = 'Recherche des journées pointées…';
+    kmRecalc.period = period;
     const { start, end } = kmPeriodRange(period);
     kmRecalc.range = { start, end };
     try {
@@ -616,6 +626,25 @@ async function selectKmPeriod(period) {
     } catch (error) {
         console.error("Recherche des journées à recalculer:", error);
         summary.textContent = 'Impossible de lire les pointages. Vérifiez la connexion.';
+        return;
+    }
+    if (kmRecalc.period !== period) return; // une autre période a été choisie entre-temps
+    if (period === 'all') {
+        const resume = readResume();
+        const all = kmRecalc.days;
+        if (resume) {
+            kmRecalc.days = all.filter(d => d.dayKey >= resume);
+            kmRecalc.range = { start: new Date(`${resume}T00:00:00`), end };
+        }
+        const people = new Set(kmRecalc.days.map(d => d.uid)).size;
+        const minutes = Math.max(1, Math.round(kmRecalc.days.length * 0.6 / 60));
+        summary.textContent = !all.length
+            ? 'Aucune journée pointée.'
+            : resume && kmRecalc.days.length
+                ? `Reprise là où le recalcul s'était arrêté (${dayLabel(resume)}) : il reste ${kmRecalc.days.length} journée${kmRecalc.days.length > 1 ? 's' : ''} sur ${all.length}, ${people} personne${people > 1 ? 's' : ''}. Environ ${minutes} min.`
+                : `Depuis le premier pointage (${dayLabel(all[0].dayKey)}) : ${all.length} journée${all.length > 1 ? 's' : ''} pointée${all.length > 1 ? 's' : ''}, ${people} personne${people > 1 ? 's' : ''}. Environ ${minutes} min.`;
+        if (resume && !kmRecalc.days.length) { writeResume(null); kmRecalc.days = all; kmRecalc.range = { start, end }; }
+        startBtn.disabled = !kmRecalc.days.length;
         return;
     }
     const fmt = (d) => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
@@ -648,6 +677,12 @@ async function runKmRecalc() {
         showInfoModal("Hors ligne", "Pas de connexion : impossible de recalculer les kilomètres.");
         return;
     }
+    const isAll = kmRecalc.period === 'all';
+    if (isAll && !await showConfirmationModal("Recalculer tous les kilomètres",
+        `Les trajets des ${days.length} journées vont être refaits avec les adresses actuelles des chantiers. ` +
+        "Ça prend du temps : gardez l'appli ouverte et le téléphone branché. " +
+        "Si c'est interrompu, rouvrez « Depuis le début » : le recalcul reprendra là où il s'était arrêté.")) return;
+    document.getElementById('kmRecalcModal').classList.remove('hidden');
     const startBtn = document.getElementById('kmRecalcStartBtn');
     const bar = document.getElementById('kmRecalcBar');
     const status = document.getElementById('kmRecalcStatus');
@@ -658,8 +693,12 @@ async function runKmRecalc() {
     kmRecalc.running = true;
     kmRecalc.cancelled = false;
     clearTripCaches();
+    // Écran allumé pendant le recalcul (sinon le téléphone se met en veille et tout s'arrête)
+    let wakeLock = null;
+    try { wakeLock = await navigator.wakeLock?.request('screen'); } catch { /* pas disponible */ }
 
     let next = 0, done = 0, failed = 0;
+    const inFlight = new Set();
     const keptTrips = new Set();
     const failedDays = new Set();
     const update = () => {
@@ -669,9 +708,13 @@ async function runKmRecalc() {
     update();
     const worker = async () => {
         while (next < days.length && !kmRecalc.cancelled) {
-            const { uid, dayKey } = days[next++];
+            const index = next++;
+            const { uid, dayKey } = days[index];
+            inFlight.add(index);
             const kept = await rebuildDayTrips(uid, dayKey, { force: true });
+            inFlight.delete(index);
             if (kept) { done++; kept.forEach(id => keptTrips.add(id)); } else { failed++; failedDays.add(`${uid}|${dayKey}`); }
+            if (isAll) writeResume(days[Math.min(next, ...inFlight)]?.dayKey || null);
             update();
         }
     };
@@ -696,6 +739,7 @@ async function runKmRecalc() {
         }
     }
     kmRecalc.running = false;
+    try { await wakeLock?.release(); } catch { /* déjà relâché */ }
 
     const stopped = kmRecalc.cancelled && done + failed < days.length;
     if (!stopped) bar.style.width = '100%';
@@ -704,6 +748,8 @@ async function runKmRecalc() {
         : failed
             ? `Terminé : ${done} journée(s) recalculée(s), ${failed} en échec (adresse de chantier introuvable ? Utilisez « Vérifier les adresses » dans Chantiers).`
             : `Terminé : les ${done} journées ont été recalculées.`;
+    if (isAll && !stopped) writeResume(null);
+    if (isAll && stopped) status.textContent += " Rouvrez « Depuis le début » pour continuer.";
     if (orphans) status.textContent += ` ${orphans} trajet${orphans > 1 ? 's' : ''} sans pointage supprimé${orphans > 1 ? 's' : ''}.`;
     startBtn.textContent = 'Recalculer';
     startBtn.disabled = false;
