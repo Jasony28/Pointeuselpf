@@ -1,6 +1,7 @@
 import { collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, showInfoModal } from "../app.js";
-import { loadPdf, loadChart } from "./libs.js";
+import { loadChart } from "./libs.js";
+import { createPdf, pdfHeader, pdfStats, pdfTable, pdfTotal, pdfFinish, pdfText, fileStamp, safeName, C } from "./pdf-kit.js";
 import { getAllUsers, getAllChantiers } from "./data-service.js";
 import { getWeekDateRange } from "./utils.js";
 
@@ -296,38 +297,34 @@ async function exportToPDF() {
         showInfoModal("Information", "Aucune donnée à exporter pour la période sélectionnée.");
         return;
     }
-    const { jsPDF } = await loadPdf();
-    const doc = new jsPDF();
-    
     let periodText = "Période personnalisée";
     const activeFilter = document.querySelector('.filter-btn.bg-white');
     const startValue = document.getElementById('start-date-filter').value;
     const endValue = document.getElementById('end-date-filter').value;
-
     if (activeFilter) {
-        periodText = activeFilter.textContent;
+        periodText = activeFilter.textContent.trim();
     } else if (startValue && endValue) {
         periodText = `Du ${new Date(startValue).toLocaleDateString('fr-FR')} au ${new Date(endValue).toLocaleDateString('fr-FR')}`;
     }
-    
-    const totalHours = currentStats.totalHours.toFixed(1) + 'h';
-    const totalCost = currentStats.totalCost.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
-    
-    doc.setFontSize(18);
-    doc.text("Rapport d'Activité", 14, 22);
-    doc.setFontSize(11);
-    doc.setTextColor(100);
-    doc.text(`Période : ${periodText}`, 14, 30);
-    doc.text(`Heures Totales : ${totalHours}`, 14, 36);
-    doc.text(`Coût Total : ${totalCost}`, 14, 42);
-    const tableColumn = ["Employé", "Chantier", "Date", "Heures", "Coût (€)"];
-    const tableRows = pointagesCache.map(item => [item.user, item.chantier, item.date, item.heures, item.cout]);
-    doc.autoTable({
-        head: [tableColumn],
-        body: tableRows,
-        startY: 50,
-        theme: 'grid',
-        headStyles: { fillColor: [79, 70, 229] }
+
+    const euros = (v) => Number(v || 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+    const people = new Set(pointagesCache.map(item => item.user)).size;
+    const sites = new Set(pointagesCache.map(item => item.chantier)).size;
+
+    const doc = await createPdf('portrait');
+    let y = pdfHeader(doc, { title: "Rapport d'activité", right: [periodText, `${pointagesCache.length} pointages`] });
+    y = pdfStats(doc, y, [
+        ['Heures totales', `${currentStats.totalHours.toFixed(1).replace('.', ',')} h`],
+        ['Coût total', euros(currentStats.totalCost)],
+        ['Employés', String(people), C.DARK],
+        ['Chantiers', String(sites), C.DARK],
+    ]);
+    y = pdfTable(doc, {
+        startY: y + 1,
+        head: [['Employé', 'Chantier', 'Date', 'Heures', 'Coût']],
+        body: pointagesCache.map(item => [pdfText(item.user), pdfText(item.chantier), pdfText(item.date), `${String(item.heures).replace('.', ',')} h`, euros(item.cout)]),
+        columnStyles: { 0: { cellWidth: 40, fontStyle: 'bold', textColor: C.DARK }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 26 }, 3: { cellWidth: 20, halign: 'right' }, 4: { cellWidth: 26, halign: 'right' } },
     });
-    doc.save(`rapport_activite_${periodText.toLowerCase().replace(/\s/g, '_')}.pdf`);
+    pdfTotal(doc, y + 8, `Total : ${currentStats.totalHours.toFixed(1).replace('.', ',')} h`, euros(currentStats.totalCost));
+    pdfFinish(doc, `Rapport d'activité · ${periodText}`, `Rapport_activite_${safeName(periodText)}_${fileStamp()}.pdf`);
 }

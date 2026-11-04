@@ -2,7 +2,7 @@ import { pageContent, currentUser, showInfoModal, showToast, db, themes, applyTh
 import { getAuth, signOut, sendPasswordResetEmail, updateEmail, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { doc, updateDoc, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { updatesLog } from "./updates-data.js";
-import { loadPdf } from "./libs.js";
+import { createPdf, pdfHeader, pdfStats, pdfTable, pdfTotal, pdfFinish, pdfText, groupRow, fileStamp, safeName, C } from "./pdf-kit.js";
 import { getPushState, getPrefs, savePrefs, enablePush, disablePush, forgetDeviceOnLogout, showTestNotification } from "./push.js";
 
 const auth = getAuth();
@@ -614,116 +614,41 @@ async function fetchAndGroupPointages() {
  */
 async function exportUserHistoryToPDF() {
     const exportData = await fetchAndGroupPointages();
-    if (!exportData) return; 
+    if (!exportData) return;
 
     const { groupedData, totalExportMs } = exportData;
-    const { jsPDF } = await loadPdf();
-    const doc = new jsPDF('p', 'mm', 'a4');
-    let startY = 20; 
+    const days = [...groupedData.values()];
+    const entries = days.reduce((n, d) => n + d.entries.length, 0);
+    const keys = [...groupedData.keys()];
+    const fmtKey = (key) => new Date(`${key}T12:00:00`).toLocaleDateString('fr-FR');
+    const name = currentUser.displayName || '';
 
-    // --- 1. TITRE GÉNÉRAL ---
-    doc.setFontSize(18);
-    doc.setFont(undefined, 'bold');
-    doc.text("Mon Historique de Pointages", 14, startY);
-    startY += 8;
+    const doc = await createPdf('portrait');
+    let y = pdfHeader(doc, { title: 'Mon historique de pointages', right: [name, `Du ${fmtKey(keys[0])} au ${fmtKey(keys[keys.length - 1])}`] });
+    y = pdfStats(doc, y, [
+        ['Total des heures', formatMsToHHm(totalExportMs)],
+        ['Jours travaillés', String(days.length)],
+        ['Pointages', String(entries)],
+        ['Moyenne par jour', formatMsToHHm(days.length ? totalExportMs / days.length : 0)],
+    ]);
 
-    doc.setFontSize(11);
-    doc.setFont(undefined, 'normal');
-    doc.text(`Export pour : ${currentUser.displayName}`, 14, startY);
-    startY += 5;
-    doc.text(`Date de l'export : ${new Date().toLocaleDateString('fr-FR')}`, 14, startY);
-    startY += 5;
-    doc.setFont(undefined, 'bold');
-    doc.text(`Total des heures exportées : ${formatMsToHHm(totalExportMs)}`, 14, startY);
-    startY += 12; 
-
-    // --- 2. DÉFINITION DES COLONNES DU TABLEAU ---
-    const tableHeaders = ["Chantier", "Début", "Fin", "Durée", "Collègues", "Notes"];
-    
-    // --- 3. BOUCLE SUR CHAQUE JOURNÉE ---
-    for (const [dateKey, dayData] of groupedData.entries()) {
-        
-        if (startY > 240) { 
-            doc.addPage();
-            startY = 20; 
-        }
-
-        // --- Titre du Jour ---
-        doc.setFontSize(14);
-        doc.setFont(undefined, 'bold');
-        doc.text(dayData.dateDisplay, 14, startY);
-        startY += 8;
-
-        // --- Préparation des données du tableau ---
-        const tableBody = dayData.entries.map(e => [
-            e.chantier,
-            e.startTime,
-            e.endTime,
-            e.duration,
-            e.colleagues,
-            e.notes
-        ]);
-        
-        // --- Génération du Tableau ---
-        doc.autoTable({
-            head: [tableHeaders],
-            body: tableBody,
-            startY: startY,
-            theme: 'striped',
-            headStyles: { fillColor: [41, 128, 185] }, 
-            styles: { fontSize: 8 },
-            columnStyles: {
-                0: { cellWidth: 35 }, 
-                1: { cellWidth: 15 }, 
-                2: { cellWidth: 15 }, 
-                3: { cellWidth: 18 }, 
-                4: { cellWidth: 35 }, 
-                5: { cellWidth: 'auto'} 
-            },
-            
-            didDrawPage: (data) => {
-                const pageNum = doc.internal.getNumberOfPages();
-                const pageHeight = doc.internal.pageSize.getHeight();
-                
-                doc.setFontSize(10);
-                doc.setFont(undefined, 'normal');
-                
-                doc.text(
-                    `Page ${pageNum}`, 
-                    105, 
-                    pageHeight - 10, 
-                    { align: 'center' } 
-                );
-            }
-        });
-
-        if (doc.autoTable.previous) {
-            startY = doc.autoTable.previous.finalY;
-        } else {
-            startY += 10; 
-        }
-
-        // --- Total de la Journée ---
-        doc.setFontSize(10);
-        doc.setFont(undefined, 'bold');
-        
-        let totalY = startY + 10;
-        
-        if (totalY > 280) {
-            doc.addPage();
-            totalY = 20;
-        }
-
-        doc.text(
-            `Total Journée : ${formatMsToHHm(dayData.totalDayMs)}`,
-            196, 
-            totalY, 
-            { align: 'right' }
-        );
-        
-        startY = totalY + 10; 
-    }
-
-    // --- 4. SAUVEGARDE DU FICHIER ---
-    doc.save(`Historique_Pointages_${currentUser.displayName}.pdf`);
+    const body = [];
+    days.forEach(day => {
+        const label = day.dateDisplay.charAt(0).toUpperCase() + day.dateDisplay.slice(1);
+        body.push(groupRow(label, formatMsToHHm(day.totalDayMs), 4));
+        day.entries.forEach(e => body.push([
+            `${e.startTime} - ${e.endTime}`,
+            pdfText(e.notes ? `${e.chantier}\n${e.notes}` : e.chantier),
+            pdfText(e.colleagues) || '-',
+            { content: e.duration, styles: { halign: 'right', fontStyle: 'bold' } },
+        ]));
+    });
+    y = pdfTable(doc, {
+        startY: y + 1,
+        head: [['Horaires', 'Chantier', 'Collègues', 'Durée']],
+        body,
+        columnStyles: { 0: { cellWidth: 26 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 50, textColor: C.MUTED }, 3: { cellWidth: 22, halign: 'right' } },
+    });
+    pdfTotal(doc, y + 8, 'Total des heures exportées', formatMsToHHm(totalExportMs));
+    pdfFinish(doc, `${name} · Historique de pointages`, `Historique_Pointages_${safeName(name)}_${fileStamp()}.pdf`);
 }

@@ -4,7 +4,7 @@ const { precaching, routing, strategies, core } = workbox;
 core.setCacheNameDetails({ prefix: 'pointeuse-lpf-cache' });
 
 // Version synchronisée avec app.js
-const APP_VERSION = 'v4.12.12'; // <--- CHANGEMENT ICI
+const APP_VERSION = 'v4.12.13'; // <--- CHANGEMENT ICI
 
 precaching.precacheAndRoute([
     { url: './', revision: APP_VERSION },
@@ -20,6 +20,7 @@ precaching.precacheAndRoute([
     { url: 'modules/data-service.js', revision: APP_VERSION },
     { url: 'modules/fast-data.js', revision: APP_VERSION },
     { url: 'modules/libs.js', revision: APP_VERSION },
+    { url: 'modules/pdf-kit.js', revision: APP_VERSION },
     { url: 'modules/updates-data.js', revision: APP_VERSION },
     { url: 'modules/native-files.js', revision: APP_VERSION },
     { url: 'modules/settings.js', revision: APP_VERSION },

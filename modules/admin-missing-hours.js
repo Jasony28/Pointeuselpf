@@ -1,9 +1,8 @@
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, currentUser, showInfoModal } from "../app.js";
-import { loadPdf } from "./libs.js";
+import { createPdf, pdfHeader, pdfStats, pdfSection, pdfTable, pdfTotal, pdfSignatures, pdfFinish, pdfText, fileStamp, C } from "./pdf-kit.js";
 import { getAllChantiers } from "./data-service.js";
 
-const LOGO_BASE64 = ""; // Colle ici ton code base64
 
 let chantiersCache = [];
 let currentReportData = [];
@@ -387,49 +386,38 @@ function setupEventListeners() {
             return;
         }
 
-        const { jsPDF } = await loadPdf();
-        const doc = new jsPDF('p', 'mm', 'a4');
-        
-        if (LOGO_BASE64.startsWith('data:image')) {
-            try { doc.addImage(LOGO_BASE64, 'PNG', 14, 10, 20, 20); } catch (e) {}
-        }
-        
         const periodText = document.getElementById('currentPeriodLabel').textContent;
-        
-        doc.setFontSize(16);
-        doc.setFont(undefined, 'bold');
-        doc.text("RAPPORT D'AUDIT : ÉCARTS D'HEURES", 40, 20);
-        doc.setFontSize(10);
-        doc.setFont(undefined, 'normal');
-        doc.text(`Période analysée : ${periodText}`, 40, 26);
-        
-        doc.setFontSize(12);
-        doc.setTextColor(220, 38, 38); 
-        doc.text(`TOTAL HEURES PERDUES : ${document.getElementById('totalMissingDisplay').textContent}`, 14, 45);
-        doc.setTextColor(0, 0, 0);
-        
-        const tableRows = currentReportData.map(item => [
-            item.chantierName,
-            formatTime(item.plannedMin),
-            formatTime(item.realizedMin),
-            `-${formatTime(item.missingMin)}`
+        const totalText = (id) => document.getElementById(id)?.textContent || '';
+        const rows = [...currentReportData].sort((a, b) => b.missingMin - a.missingMin);
+        const doc = await createPdf('portrait');
+        let y = pdfHeader(doc, { title: "Écarts d'heures", right: [periodText, `${rows.length} chantier${rows.length > 1 ? 's' : ''} en dessous du prévu`] });
+        y = pdfStats(doc, y, [
+            ['Heures manquantes', totalText('totalMissingDisplay'), C.DANGER],
+            ['Prévu', totalText('totalPlannedDisplay'), C.DARK],
+            ['Réalisé', totalText('totalRealizedDisplay'), C.DARK],
+            ['Chantiers concernés', String(rows.length), C.DARK],
         ]);
-
-        doc.autoTable({ 
-            startY: 55, 
-            head: [['CHANTIER', 'PRÉVU', 'RÉALISÉ', 'ÉCART']], 
-            body: tableRows,
-            theme: 'striped',
-            headStyles: { fillColor: [41, 51, 92] },
-            columnStyles: { 3: { textColor: [220, 38, 38], fontStyle: 'bold' } }
+        y = pdfSection(doc, y + 2, 'Chantiers où le temps passé est inférieur au temps prévu', 'Prévu = passages × durée par passage');
+        y = pdfTable(doc, {
+            startY: y + 1,
+            head: [['Chantier', 'Prévu', 'Réalisé', 'Réalisé %', 'Écart']],
+            body: rows.map(item => [
+                pdfText(item.chantierName),
+                formatTime(item.plannedMin),
+                formatTime(item.realizedMin),
+                `${Math.round(item.percentage)} %`,
+                `-${formatTime(item.missingMin)}`,
+            ]),
+            columnStyles: {
+                0: { cellWidth: 'auto', fontStyle: 'bold', textColor: C.DARK },
+                1: { cellWidth: 24, halign: 'right' },
+                2: { cellWidth: 24, halign: 'right' },
+                3: { cellWidth: 22, halign: 'right', textColor: C.MUTED },
+                4: { cellWidth: 24, halign: 'right', fontStyle: 'bold', textColor: C.DANGER },
+            },
         });
-        
-        const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 20 : 100;
-        doc.text("Signature du responsable :", 140, finalY);
-        doc.line(140, finalY + 10, 195, finalY + 10);
-        
-        const now = new Date();
-        const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-        doc.save(`Rapport_Ecarts_${dateStr}.pdf`);
+        y = pdfTotal(doc, y + 8, 'Total des heures manquantes', totalText('totalMissingDisplay'));
+        pdfSignatures(doc, y + 4, ['Vérifié par', 'Signature du responsable']);
+        pdfFinish(doc, `Écarts d'heures · ${periodText}`, `Rapport_Ecarts_${fileStamp()}.pdf`);
     };
 }

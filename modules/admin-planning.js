@@ -1,7 +1,7 @@
 import { collection, query, where, getDocs, addDoc, deleteDoc, doc, orderBy, serverTimestamp, updateDoc, setDoc, getDoc, writeBatch, arrayUnion } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, currentUser, showConfirmationModal, showInfoModal } from "../app.js";
 import { getWeekDateRange } from "./utils.js";
-import { loadPdf } from "./libs.js";
+import { createPdf, pdfHeader, pdfStats, pdfTable, pdfFinish, pdfText, C } from "./pdf-kit.js";
 import { getActiveChantiers, getTeamMembers, getUsers } from "./data-service.js";
 import { planWeek, visitsFromPointages, visitsFromDaySummaries, durationsFromVisits, historyFromVisits, teamHabitsFromVisits, DEFAULT_WEIGHTS, WEIGHT_LABELS } from "./auto-planner.js";
 import { escapeHTML, missingProfileParts } from "./work-profile.js";
@@ -144,54 +144,47 @@ async function generatePlanningPDF() {
         return;
     }
     
-    const { jsPDF } = await loadPdf();
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
-    
-    doc.setFontSize(16);
-    doc.setFont(undefined, 'bold');
-    doc.text("Planning de la Semaine", 40, 40);
+    const fmtDay = (d, opts) => d.toLocaleDateString('fr-FR', { timeZone: 'UTC', ...opts });
+    const dayNames = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+    const dates = dayNames.map((_, i) => { const d = new Date(startOfWeek); d.setUTCDate(startOfWeek.getUTCDate() + i); return d; });
+    const dateKeys = dates.map(d => d.toISOString().split('T')[0]);
+    const byStart = (a, b) => String(a.startTime || '99:99').localeCompare(String(b.startTime || '99:99')) || (a.order ?? 0) - (b.order ?? 0);
+    const taskLine = (t) => `${t.startTime ? `${t.startTime}  ` : ''}${pdfText(t.chantierName)}${t.duration ? ` (${String(t.duration).replace('.', ',')} h)` : ''}`;
 
-    doc.setFontSize(10);
-    doc.setFont(undefined, 'normal');
-    doc.text(`Semaine du ${startOfWeek.toLocaleDateString('fr-FR')} au ${endOfWeek.toLocaleDateString('fr-FR')}`, 40, 55);
-
-    const head = [['Employé', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche', 'Total']];
-    const body = [];
-
-    employeesInWeek.forEach(name => {
-        const rowData = [name];
-        let weeklyTaskCount = 0;
-        for (let i = 0; i < 7; i++) {
-            const dayDate = new Date(startOfWeek);
-            dayDate.setUTCDate(startOfWeek.getUTCDate() + i);
-            const dateString = dayDate.toISOString().split('T')[0];
-
-            const tasksForDay = planningData
-                .filter(p => p.date === dateString && p.teamNames && p.teamNames.includes(name))
-                .map(t => `${t.chantierName}${t.startTime ? ` (${t.startTime})` : ''}`);
-            
-            rowData.push(tasksForDay.join('\n'));
-            weeklyTaskCount += tasksForDay.length;
-        }
-        rowData.push(weeklyTaskCount > 0 ? weeklyTaskCount.toString() : '');
-        body.push(rowData);
+    const body = employeesInWeek.map(name => {
+        let count = 0;
+        const cells = dateKeys.map(key => {
+            const tasks = planningData.filter(p => p.date === key && (p.teamNames || []).includes(name)).sort(byStart);
+            count += tasks.length;
+            return tasks.map(taskLine).join('\n');
+        });
+        return [pdfText(name), ...cells, count ? String(count) : ''];
     });
+    const visits = planningData.filter(p => (p.teamNames || []).length).length;
+    const sites = new Set(planningData.map(p => p.chantierName)).size;
+    const busiest = dateKeys.map((key, i) => [dayNames[i], planningData.filter(p => p.date === key).length]).sort((a, b) => b[1] - a[1])[0];
 
-    doc.autoTable({
-        startY: 70,
-        head: head,
-        body: body,
+    const doc = await createPdf('landscape');
+    const period = `Du ${fmtDay(startOfWeek, { day: 'numeric', month: 'long' })} au ${fmtDay(endOfWeek, { day: 'numeric', month: 'long', year: 'numeric' })}`;
+    let y = pdfHeader(doc, { title: 'Planning de la semaine', right: [period, `${employeesInWeek.length} personne${employeesInWeek.length > 1 ? 's' : ''} · ${visits} passage${visits > 1 ? 's' : ''}`] });
+    y = pdfStats(doc, y, [
+        ['Passages planifiés', String(visits)],
+        ['Chantiers différents', String(sites)],
+        ['Personnes', String(employeesInWeek.length)],
+        ['Jour le plus chargé', busiest && busiest[1] ? `${busiest[0]} (${busiest[1]})` : '-'],
+    ]);
+    pdfTable(doc, {
+        startY: y + 1,
+        head: [['Employé', ...dates.map((d, i) => `${dayNames[i]} ${fmtDay(d, { day: 'numeric', month: 'numeric' })}`), 'Total']],
+        body,
+        styles: { fontSize: 7.5, cellPadding: 1.8, lineWidth: 0.2 },
         theme: 'grid',
-        styles: { fontSize: 8, cellPadding: 3, overflow: 'linebreak' },
-        headStyles: { fillColor: [44, 62, 80], halign: 'center', valign: 'middle' },
-        columnStyles: {
-            0: { fontStyle: 'bold', cellWidth: 90 },
-            8: { halign: 'center', cellWidth: 35 }
-        }
+        headStyles: { halign: 'center', fontSize: 8 },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 30, textColor: C.DARK }, 8: { halign: 'center', cellWidth: 13, fontStyle: 'bold', textColor: C.PRIMARY } },
     });
 
-    const fileName = `Planning_Semaine_${startOfWeek.toISOString().split('T')[0]}.pdf`;
-    doc.save(fileName);
+    pdfFinish(doc, `Planning · ${period}`, `Planning_Semaine_${startOfWeek.toISOString().split('T')[0]}.pdf`);
 }
 
 async function cacheData() { state.chantiers = await getActiveChantiers(); state.teamMembers = await getTeamMembers(); }

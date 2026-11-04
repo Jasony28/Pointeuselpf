@@ -1,6 +1,6 @@
 import { collection, query, orderBy, limit, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, showConfirmationModal, showToast, showInfoModal } from "../app.js";
-import { loadPdf } from "./libs.js";
+import { createPdf, pdfHeader, pdfStats, pdfSection, pdfTable, pdfFinish, pdfText, fileStamp, C } from "./pdf-kit.js";
 
 // Suivi des erreurs : erreurs remontées automatiquement par l'application chez les utilisateurs
 // (collection "errorLogs", voir reportError dans app.js), regroupées par message.
@@ -70,25 +70,22 @@ async function exportErrorsPdf() {
     const btn = document.getElementById('exportErrorsPdfBtn');
     btn.disabled = true;
     try {
-        const { jsPDF } = await loadPdf();
-        const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
-        const pageW = pdf.internal.pageSize.getWidth();
-        const pageH = pdf.internal.pageSize.getHeight();
-        const margin = 12;
-        const clean = (v) => String(v ?? '').replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\u00FF\u2013\u2014\u2018\u2019\u201C\u201D\u2026\u20AC]/g, '?');
+        const doc = await createPdf('portrait');
         const groups = groupLogs();
         const dayAgo = Date.now() - 86400000;
         const recent = logs.filter(l => (l.createdAt?.toDate ? l.createdAt.toDate() : new Date(l.clientTime)) > dayAgo).length;
-        const now = new Date();
+        const users = new Set(logs.map(l => l.uid)).size;
 
-        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(17); pdf.setTextColor(30, 41, 59);
-        pdf.text("Suivi des erreurs", margin, 18);
-        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9.5); pdf.setTextColor(100, 116, 139);
-        pdf.text(`Pointeuse LPF · export du ${now.toLocaleString('fr-FR')}`, margin, 24);
-        pdf.text(`${logs.length} erreurs · ${recent} ces dernières 24 h · ${groups.length} problèmes différents · ${new Set(logs.map(l => l.uid)).size} utilisateurs touchés`, margin, 29);
-
-        pdf.autoTable({
-            startY: 34,
+        let y = pdfHeader(doc, { title: 'Suivi des erreurs', right: [`${groups.length} problème${groups.length > 1 ? 's' : ''}`, `${logs.length} erreur${logs.length > 1 ? 's' : ''} enregistrée${logs.length > 1 ? 's' : ''}`] });
+        y = pdfStats(doc, y, [
+            ['Erreurs', String(logs.length)],
+            ['Dernières 24 h', String(recent), recent ? C.DANGER : C.OK],
+            ['Problèmes différents', String(groups.length)],
+            ['Utilisateurs touchés', String(users)],
+        ]);
+        y = pdfSection(doc, y + 2, 'Problèmes, du plus fréquent au plus rare');
+        pdfTable(doc, {
+            startY: y + 1,
             head: [['Nb', 'Problème', 'Qui, où, quand']],
             body: groups.map(group => {
                 const last = group.items[0];
@@ -98,26 +95,14 @@ async function exportErrorsPdf() {
                 const stack = String(last.stack || '').split('\n').slice(0, 6).map(l => l.trim()).join('\n');
                 return [
                     `${group.items.length}×`,
-                    clean(`${group.message}${group.context ? `\n[${group.context}]` : ''}${stack ? `\n\n${stack}` : ''}`),
-                    clean(`Dernière fois : ${when(last)}\nUtilisateurs : ${people}${pages ? `\nPage : ${pages}` : ''}\nAppareil / version : ${devices}${group.items.some(i => i.online === false) ? '\n(parfois hors ligne)' : ''}`),
+                    pdfText(`${group.message}${group.context ? `\n[${group.context}]` : ''}${stack ? `\n\n${stack}` : ''}`),
+                    pdfText(`Dernière fois : ${when(last)}\nUtilisateurs : ${people}${pages ? `\nPage : ${pages}` : ''}\nAppareil / version : ${devices}${group.items.some(i => i.online === false) ? '\n(parfois hors ligne)' : ''}`),
                 ];
             }),
-            theme: 'grid',
-            rowPageBreak: 'avoid',
-            margin: { left: margin, right: margin, top: 14, bottom: 14 },
-            styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 2, overflow: 'linebreak', valign: 'top', lineColor: [226, 232, 240], lineWidth: 0.2 },
-            headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold' },
-            alternateRowStyles: { fillColor: [248, 250, 252] },
-            columnStyles: { 0: { cellWidth: 11, halign: 'center', fontStyle: 'bold', textColor: [185, 28, 28] }, 1: { cellWidth: 112 }, 2: { cellWidth: 'auto' } },
+            styles: { fontSize: 7.5 },
+            columnStyles: { 0: { cellWidth: 11, halign: 'center', fontStyle: 'bold', textColor: C.DANGER }, 1: { cellWidth: 108 }, 2: { cellWidth: 'auto', textColor: C.MUTED } },
         });
-
-        const pages = pdf.getNumberOfPages();
-        for (let i = 1; i <= pages; i++) {
-            pdf.setPage(i); pdf.setFontSize(8); pdf.setTextColor(100, 116, 139);
-            pdf.text('Suivi des erreurs · Pointeuse LPF', margin, pageH - 6);
-            pdf.text(`Page ${i} / ${pages}`, pageW - margin, pageH - 6, { align: 'right' });
-        }
-        pdf.save(`Erreurs_${localStamp(now)}.pdf`);
+        pdfFinish(doc, 'Suivi des erreurs', `Erreurs_${fileStamp()}.pdf`);
     } catch (error) {
         console.warn("Export PDF des erreurs impossible :", error);
         showInfoModal("Erreur", "Le PDF n'a pas pu être créé. Vérifiez la connexion internet et réessayez.");
@@ -125,7 +110,6 @@ async function exportErrorsPdf() {
         btn.disabled = false;
     }
 }
-const localStamp = (d) => `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}_${String(d.getHours()).padStart(2, '0')}h${String(d.getMinutes()).padStart(2, '0')}`;
 
 function renderErrors() {
     const list = document.getElementById('errorsList');
