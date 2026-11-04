@@ -4,7 +4,7 @@ import { collection, query, getDocs, doc, updateDoc, deleteDoc, orderBy, where, 
 import { db, pageContent, navigateTo, currentUser, showConfirmationModal, showInfoModal, showToast, isStealthMode } from "../app.js";
 import { getUsers, getColleagues, transferOrDuplicateUserData } from "./data-service.js";
 import { formatMilliseconds } from "./utils.js";
-import { clearTripCaches, findWorkedDays, rebuildDayTrips, localDateKey } from "./trips.js";
+import { clearTripCaches, findWorkedDays, rebuildTripsBulk } from "./trips.js";
 
 /**
  * Point d'entrée principal : Rend l'interface de gestion de l'équipe
@@ -588,7 +588,6 @@ function createColleagueElement(id, name) {
 
 // --- Recalcul des kilomètres de toute l'équipe ---------------------------------
 
-const KM_WORKERS = 3; // journées recalculées en parallèle
 let kmRecalc = { days: [], range: null, period: 'week', running: false, cancelled: false };
 // « Depuis le début » peut durer longtemps : la journée où reprendre est gardée sur cet appareil
 // si le recalcul est arrêté (fenêtre fermée, téléphone en veille, connexion perdue…).
@@ -697,60 +696,37 @@ async function runKmRecalc() {
     let wakeLock = null;
     try { wakeLock = await navigator.wakeLock?.request('screen'); } catch { /* pas disponible */ }
 
-    let next = 0, done = 0, failed = 0;
-    const inFlight = new Set();
-    const keptTrips = new Set();
-    const failedDays = new Set();
-    const update = () => {
+    const update = ({ done, failed }) => {
         bar.style.width = `${Math.round((done + failed) / days.length * 100)}%`;
         status.textContent = `${done + failed} / ${days.length} journées${failed ? ` · ${failed} en échec` : ''}. Gardez cette fenêtre ouverte.`;
     };
-    update();
-    const worker = async () => {
-        while (next < days.length && !kmRecalc.cancelled) {
-            const index = next++;
-            const { uid, dayKey } = days[index];
-            inFlight.add(index);
-            const kept = await rebuildDayTrips(uid, dayKey, { force: true });
-            inFlight.delete(index);
-            if (kept) { done++; kept.forEach(id => keptTrips.add(id)); } else { failed++; failedDays.add(`${uid}|${dayKey}`); }
-            if (isAll) writeResume(days[Math.min(next, ...inFlight)]?.dayKey || null);
-            update();
-        }
-    };
-    await Promise.all(Array.from({ length: Math.min(KM_WORKERS, days.length) }, worker));
-
-    // Trajets orphelins de la période : plus aucun pointage ce jour-là (pointage supprimé, déplacé,
-    // régularisation…). Ils gonflaient le rapport des trajets sans apparaître dans l'historique.
-    let orphans = 0;
-    if (!kmRecalc.cancelled && kmRecalc.range) {
-        try {
-            const snap = await getDocs(query(collection(db, "trajets"),
-                where("date_creation", ">=", kmRecalc.range.start), where("date_creation", "<=", kmRecalc.range.end)));
-            for (const d of snap.docs) {
-                const t = d.data();
-                if (keptTrips.has(d.id) || !t.id_utilisateur || !t.date_creation?.toDate) continue;
-                if (failedDays.has(`${t.id_utilisateur}|${localDateKey(t.date_creation.toDate())}`)) continue;
-                await deleteDoc(d.ref);
-                orphans++;
-            }
-        } catch (error) {
-            console.error("Nettoyage des trajets orphelins:", error);
-        }
+    update({ done: 0, failed: 0 });
+    let result = null;
+    try {
+        result = await rebuildTripsBulk(days, kmRecalc.range, {
+            onProgress: update,
+            onChunkDone: (nextDayKey) => { if (isAll) writeResume(nextDayKey); },
+            isCancelled: () => kmRecalc.cancelled,
+        });
+    } catch (error) {
+        console.error("Recalcul des kilomètres :", error);
     }
     kmRecalc.running = false;
     try { await wakeLock?.release(); } catch { /* déjà relâché */ }
 
-    const stopped = kmRecalc.cancelled && done + failed < days.length;
-    if (!stopped) bar.style.width = '100%';
-    status.textContent = stopped
-        ? `Arrêté : ${done} journée(s) recalculée(s) sur ${days.length}.`
-        : failed
-            ? `Terminé : ${done} journée(s) recalculée(s), ${failed} en échec (adresse de chantier introuvable ? Utilisez « Vérifier les adresses » dans Chantiers).`
-            : `Terminé : les ${done} journées ont été recalculées.`;
-    if (isAll && !stopped) writeResume(null);
-    if (isAll && stopped) status.textContent += " Rouvrez « Depuis le début » pour continuer.";
-    if (orphans) status.textContent += ` ${orphans} trajet${orphans > 1 ? 's' : ''} sans pointage supprimé${orphans > 1 ? 's' : ''}.`;
+    const n = (count, word) => `${count.toLocaleString('fr-FR')} ${word}${count > 1 ? 's' : ''}`;
+    if (!result) {
+        status.textContent = "Erreur : impossible de lire ou d'enregistrer les trajets. Vérifiez la connexion et relancez" + (isAll ? " (le recalcul reprendra là où il s'était arrêté)." : ".");
+    } else {
+        const { done, failed, written, deleted, unchanged } = result;
+        const stopped = done + failed < days.length;
+        if (!stopped) bar.style.width = '100%';
+        status.textContent = stopped
+            ? `Arrêté : ${n(done, 'journée')} recalculée${done > 1 ? 's' : ''} sur ${days.length}.${isAll ? ' Rouvrez « Depuis le début » pour continuer.' : ''}`
+            : `Terminé : ${n(done, 'journée')} recalculée${done > 1 ? 's' : ''}${failed ? `, ${failed} en échec (adresse de chantier introuvable ? Utilisez « Vérifier les adresses » dans Chantiers)` : ''}.`;
+        status.textContent += ` Trajets : ${n(written, 'modifié')}, ${n(unchanged, 'déjà juste')}${deleted ? `, ${n(deleted, 'supprimé')} (sans pointage)` : ''}.`;
+        if (isAll && !stopped) writeResume(null);
+    }
     startBtn.textContent = 'Recalculer';
     startBtn.disabled = false;
     document.querySelectorAll('.km-period').forEach(b => { b.disabled = false; });

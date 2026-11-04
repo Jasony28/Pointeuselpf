@@ -2,7 +2,7 @@
 //
 // Un trajet « aller » relie le point de départ (dépôt ou chantier précédent du jour) au chantier
 // d'un pointage. Un trajet « retour » relie le dernier chantier de la journée au dépôt.
-import { collection, query, where, getDocs, doc, setDoc, deleteDoc, Timestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { collection, query, where, getDocs, doc, setDoc, deleteDoc, writeBatch, Timestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db } from "../app.js";
 
 export const MAPBOX_ACCESS_TOKEN = "pk.eyJ1IjoiamFzb255MjgiLCJhIjoiY21lMDcyYWhzMDIyODJsczl0cmM0aTVjciJ9.V14cJXdBNoq3yAQTDeUg-A";
@@ -151,6 +151,36 @@ async function addressOf(pointage) {
 }
 
 /**
+ * Trajets qu'une journée devrait contenir (sans les km) : un aller vers chaque chantier qui change,
+ * puis le retour au dépôt (seulement à partir du 26/10/2026, quand la journée est finie).
+ * `pointages` : ceux de la journée, hors régularisations, triés par heure.
+ * `existingIdFor(p)` : identifiant du trajet déjà enregistré vers ce pointage, s'il existe.
+ */
+async function plannedDayTrips(uid, dayKey, pointages, existingIdFor) {
+    const oldRules = dayKey < NEW_KM_RULES_SINCE;
+    const wanted = new Map();
+    let from = DEPOT_ADDRESS;
+    for (const p of pointages) {
+        const to = await addressOf(p);
+        if (!to) continue;
+        if (to !== from) {
+            const key = existingIdFor(p) || doc(collection(db, "trajets")).id;
+            wanted.set(key, { id_utilisateur: uid, id_pointage_arrivee: p.id, adresse_depart: from, adresse_arrivee: to, date_creation: Timestamp.fromDate(new Date(p.timestamp)) });
+        }
+        from = to;
+    }
+    const last = pointages[pointages.length - 1];
+    const allEnded = pointages.length > 0 && pointages.every(p => p.endTime);
+    if (!oldRules && last && allEnded && isDayOver(dayKey) && from !== DEPOT_ADDRESS) {
+        wanted.set(returnTripId(uid, dayKey), {
+            id_utilisateur: uid, id_pointage_depart: last.id, type: 'retour', depart: last.chantier, arrivee: 'Dépôt',
+            adresse_depart: from, adresse_arrivee: DEPOT_ADDRESS, date_creation: Timestamp.fromDate(new Date(last.endTime))
+        });
+    }
+    return wanted;
+}
+
+/**
  * Recalcule tous les trajets d'une journée pour un employé, à partir de ses pointages.
  * Appelé quand un pointage est ajouté, modifié, déplacé ou supprimé depuis l'Historique.
  * Les trajets inchangés (mêmes adresses) sont gardés tels quels, sans nouvel appel à Mapbox,
@@ -174,26 +204,8 @@ export async function rebuildDayTrips(uid, dayKey, { force = false } = {}) {
         const existing = new Map(tripsSnap.docs.map(d => [d.id, d.data()]));
 
         // Ce que la journée devrait contenir
-        const oldRules = dayKey < NEW_KM_RULES_SINCE;
-        const wanted = new Map();
-        let from = DEPOT_ADDRESS;
-        for (const p of pointages) {
-            const to = await addressOf(p);
-            if (!to) continue;
-            if (to !== from) {
-                const key = [...existing].find(([, t]) => t.type !== 'retour' && t.id_pointage_arrivee === p.id)?.[0] || doc(collection(db, "trajets")).id;
-                wanted.set(key, { id_utilisateur: uid, id_pointage_arrivee: p.id, adresse_depart: from, adresse_arrivee: to, date_creation: Timestamp.fromDate(new Date(p.timestamp)) });
-            }
-            from = to;
-        }
-        const last = pointages[pointages.length - 1];
-        const allEnded = pointages.length > 0 && pointages.every(p => p.endTime);
-        if (!oldRules && last && allEnded && isDayOver(dayKey) && from !== DEPOT_ADDRESS) {
-            wanted.set(returnTripId(uid, dayKey), {
-                id_utilisateur: uid, id_pointage_depart: last.id, type: 'retour', depart: last.chantier, arrivee: 'Dépôt',
-                adresse_depart: from, adresse_arrivee: DEPOT_ADDRESS, date_creation: Timestamp.fromDate(new Date(last.endTime))
-            });
-        }
+        const wanted = await plannedDayTrips(uid, dayKey, pointages,
+            (p) => [...existing].find(([, t]) => t.type !== 'retour' && t.id_pointage_arrivee === p.id)?.[0]);
 
         // Écriture : on garde ce qui n'a pas changé, on recalcule le reste, on supprime l'obsolète
         for (const [id, t] of wanted) {
@@ -216,19 +228,110 @@ export async function rebuildDayTrips(uid, dayKey, { force = false } = {}) {
 }
 
 /**
- * Journées (employé + jour) pointées entre deux dates : sert au recalcul des km de toute l'équipe.
+ * Journées (employé + jour) pointées entre deux dates, avec leurs pointages (hors régularisations,
+ * triés par heure) : sert au recalcul des km de toute l'équipe. Une seule lecture des pointages.
  */
 export async function findWorkedDays(start, end) {
     const snap = await getDocs(query(collection(db, "pointages"),
         where("timestamp", ">=", start.toISOString()), where("timestamp", "<=", end.toISOString())));
     const days = new Map();
     snap.forEach(d => {
-        const p = d.data();
+        const p = { id: d.id, ...d.data() };
         if (!p.uid || !p.timestamp || isRegularisation(p)) return;
         const dayKey = localDateKey(p.timestamp);
-        days.set(`${p.uid}|${dayKey}`, { uid: p.uid, dayKey });
+        const key = `${p.uid}|${dayKey}`;
+        if (!days.has(key)) days.set(key, { uid: p.uid, dayKey, pointages: [] });
+        days.get(key).pointages.push(p);
     });
-    return [...days.values()].sort((a, b) => a.dayKey.localeCompare(b.dayKey));
+    const list = [...days.values()].sort((a, b) => a.dayKey.localeCompare(b.dayKey) || a.uid.localeCompare(b.uid));
+    list.forEach(d => d.pointages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)));
+    return list;
+}
+
+const timeOf = (v) => (v?.toDate ? v.toDate().getTime() : null);
+const sameValue = (a, b) => (timeOf(a) !== null || timeOf(b) !== null) ? timeOf(a) === timeOf(b) : a === b;
+const BATCH_LIMIT = 450; // Firestore : 500 écritures maximum par lot
+
+/**
+ * Recalcul des km de toute l'équipe, économe en Firebase :
+ *  - les pointages viennent de findWorkedDays (déjà lus une fois) et les trajets de la période sont lus
+ *    en une seule requête (au lieu de deux lectures par journée) ;
+ *  - chaque trajet est recalculé avec la carte (un même itinéraire n'est demandé qu'une fois), mais n'est
+ *    réécrit que si quelque chose a changé ; les trajets sans pointage sont supprimés ;
+ *  - les écritures partent par lots, par paquets de journées : `onChunkDone(nextDayKey)` est appelé quand
+ *    un paquet est enregistré (sert à reprendre plus tard un recalcul interrompu).
+ * Renvoie { done, failed, written, deleted, unchanged }.
+ */
+export async function rebuildTripsBulk(days, range, { onProgress, onChunkDone, isCancelled = () => false, workers = 3, chunkSize = 40 } = {}) {
+    const stats = { done: 0, failed: 0, written: 0, deleted: 0, unchanged: 0 };
+    const snap = await getDocs(query(collection(db, "trajets"),
+        where("date_creation", ">=", range.start), where("date_creation", "<=", range.end)));
+    const existing = new Map(snap.docs.map(d => [d.id, d.data()]));
+    const tripByArrival = new Map();
+    existing.forEach((t, id) => { if (t.type !== 'retour' && t.id_pointage_arrivee) tripByArrival.set(t.id_pointage_arrivee, id); });
+    const tripDayKey = (t) => t.date_creation?.toDate ? localDateKey(t.date_creation.toDate()) : null;
+    const wantedIds = new Set();
+    const failedDays = new Set();
+    const rangeEndKey = localDateKey(range.end);
+
+    for (let i = 0; i < days.length && !isCancelled(); i += chunkSize) {
+        const chunk = days.slice(i, i + chunkSize);
+        const writes = [];
+        let next = 0, finished = 0;
+        const worker = async () => {
+            while (next < chunk.length && !isCancelled()) {
+                const { uid, dayKey, pointages } = chunk[next++];
+                try {
+                    const wanted = await plannedDayTrips(uid, dayKey, pointages, (p) => tripByArrival.get(p.id));
+                    for (const t of wanted.values()) {
+                        const route = await getDrivingRoute(t.adresse_depart, t.adresse_arrivee);
+                        t.distance_km = route.distanceKm;
+                        t.duree_min = route.durationMin;
+                    }
+                    for (const [id, t] of wanted) {
+                        wantedIds.add(id);
+                        const old = existing.get(id);
+                        if (old && Object.keys(t).every(k => sameValue(old[k], t[k]))) stats.unchanged++;
+                        else writes.push([id, t]);
+                    }
+                    stats.done++;
+                } catch (error) {
+                    console.error(`Recalcul des trajets du ${dayKey} :`, error);
+                    stats.failed++;
+                    failedDays.add(`${uid}|${dayKey}`);
+                }
+                finished++;
+                onProgress?.(stats);
+            }
+        };
+        await Promise.all(Array.from({ length: Math.min(workers, chunk.length) }, worker));
+
+        // Trajets sans pointage (pointage supprimé, déplacé, régularisation…) jusqu'au dernier jour du paquet
+        const complete = finished === chunk.length;
+        const isLastChunk = i + chunkSize >= days.length;
+        const deletes = [];
+        if (complete) {
+            const lastKey = isLastChunk ? rangeEndKey : chunk[chunk.length - 1].dayKey;
+            existing.forEach((t, id) => {
+                const dk = tripDayKey(t);
+                if (wantedIds.has(id) || !dk || dk > lastKey || failedDays.has(`${t.id_utilisateur}|${dk}`)) return;
+                deletes.push(id);
+            });
+        }
+
+        const ops = [...writes.map(([id, t]) => b => b.set(doc(db, "trajets", id), t)), ...deletes.map(id => b => b.delete(doc(db, "trajets", id)))];
+        for (let j = 0; j < ops.length; j += BATCH_LIMIT) {
+            const batch = writeBatch(db);
+            ops.slice(j, j + BATCH_LIMIT).forEach(op => op(batch));
+            await batch.commit();
+        }
+        writes.forEach(([id, t]) => existing.set(id, t));
+        deletes.forEach(id => existing.delete(id));
+        stats.written += writes.length;
+        stats.deleted += deletes.length;
+        if (complete) onChunkDone?.(isLastChunk ? null : days[i + chunkSize].dayKey);
+    }
+    return stats;
 }
 
 /**
