@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 import { installNativeFileSaving } from './modules/native-files.js';
 
-const APP_VERSION = 'v4.12.13';
+const APP_VERSION = 'v4.12.14';
 
 // Appli Android / iPhone : PDF et CSV proposés dans le menu « Partager » du téléphone
 installNativeFileSaving();
