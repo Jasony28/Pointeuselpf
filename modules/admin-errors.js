@@ -1,5 +1,6 @@
 import { collection, query, orderBy, limit, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, pageContent, showConfirmationModal, showToast } from "../app.js";
+import { db, pageContent, showConfirmationModal, showToast, showInfoModal } from "../app.js";
+import { loadPdf } from "./libs.js";
 
 // Suivi des erreurs : erreurs remontées automatiquement par l'application chez les utilisateurs
 // (collection "errorLogs", voir reportError dans app.js), regroupées par message.
@@ -22,8 +23,9 @@ export async function render() {
                     <h2 class="text-2xl font-bold">Suivi des erreurs</h2>
                     <p class="mt-1 text-sm" style="color: var(--color-text-muted);">Problèmes rencontrés par les utilisateurs, remontés automatiquement par l'application.</p>
                 </div>
-                <div class="flex gap-2">
+                <div class="flex flex-wrap gap-2">
                     <button id="refreshErrorsBtn" class="btn btn-secondary">Actualiser</button>
+                    <button id="exportErrorsPdfBtn" class="btn btn-secondary">Exporter en PDF</button>
                     <button id="clearErrorsBtn" class="btn btn-secondary" style="color: var(--color-danger);">Tout effacer</button>
                 </div>
             </div>
@@ -32,6 +34,7 @@ export async function render() {
         </div>
     `;
     document.getElementById('refreshErrorsBtn').onclick = loadErrors;
+    document.getElementById('exportErrorsPdfBtn').onclick = exportErrorsPdf;
     document.getElementById('clearErrorsBtn').onclick = clearErrors;
     await loadErrors();
 }
@@ -49,18 +52,86 @@ async function loadErrors() {
     }
 }
 
-function renderErrors() {
-    const list = document.getElementById('errorsList');
-    const summary = document.getElementById('errorsSummary');
-
-    // Regroupement par message : une ligne par problème, avec le nombre d'occurrences
+// Regroupement par message : une ligne par problème, avec le nombre d'occurrences
+function groupLogs() {
     const groups = new Map();
     logs.forEach(log => {
         const key = `${log.context}|${log.message}`;
         if (!groups.has(key)) groups.set(key, { message: log.message, context: log.context, items: [] });
         groups.get(key).items.push(log);
     });
-    const sorted = [...groups.values()].sort((a, b) => b.items.length - a.items.length);
+    return [...groups.values()].sort((a, b) => b.items.length - a.items.length);
+}
+
+// PDF du suivi des erreurs (à envoyer pour dépannage) : un bloc par problème, du plus fréquent au plus rare,
+// avec les personnes, appareils, versions et le détail technique de la dernière occurrence.
+async function exportErrorsPdf() {
+    if (!logs.length) { showInfoModal("Information", "Aucune erreur à exporter."); return; }
+    const btn = document.getElementById('exportErrorsPdfBtn');
+    btn.disabled = true;
+    try {
+        const { jsPDF } = await loadPdf();
+        const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+        const pageW = pdf.internal.pageSize.getWidth();
+        const pageH = pdf.internal.pageSize.getHeight();
+        const margin = 12;
+        const clean = (v) => String(v ?? '').replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\u00FF\u2013\u2014\u2018\u2019\u201C\u201D\u2026\u20AC]/g, '?');
+        const groups = groupLogs();
+        const dayAgo = Date.now() - 86400000;
+        const recent = logs.filter(l => (l.createdAt?.toDate ? l.createdAt.toDate() : new Date(l.clientTime)) > dayAgo).length;
+        const now = new Date();
+
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(17); pdf.setTextColor(30, 41, 59);
+        pdf.text("Suivi des erreurs", margin, 18);
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9.5); pdf.setTextColor(100, 116, 139);
+        pdf.text(`Pointeuse LPF · export du ${now.toLocaleString('fr-FR')}`, margin, 24);
+        pdf.text(`${logs.length} erreurs · ${recent} ces dernières 24 h · ${groups.length} problèmes différents · ${new Set(logs.map(l => l.uid)).size} utilisateurs touchés`, margin, 29);
+
+        pdf.autoTable({
+            startY: 34,
+            head: [['Nb', 'Problème', 'Qui, où, quand']],
+            body: groups.map(group => {
+                const last = group.items[0];
+                const people = [...new Set(group.items.map(i => i.userName).filter(Boolean))].join(', ') || 'inconnu';
+                const pages = [...new Set(group.items.map(i => i.page).filter(Boolean))].join(', ');
+                const devices = [...new Set(group.items.map(i => `${device(i.userAgent)} ${i.appVersion || ''}`.trim()))].join(', ');
+                const stack = String(last.stack || '').split('\n').slice(0, 6).map(l => l.trim()).join('\n');
+                return [
+                    `${group.items.length}×`,
+                    clean(`${group.message}${group.context ? `\n[${group.context}]` : ''}${stack ? `\n\n${stack}` : ''}`),
+                    clean(`Dernière fois : ${when(last)}\nUtilisateurs : ${people}${pages ? `\nPage : ${pages}` : ''}\nAppareil / version : ${devices}${group.items.some(i => i.online === false) ? '\n(parfois hors ligne)' : ''}`),
+                ];
+            }),
+            theme: 'grid',
+            rowPageBreak: 'avoid',
+            margin: { left: margin, right: margin, top: 14, bottom: 14 },
+            styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 2, overflow: 'linebreak', valign: 'top', lineColor: [226, 232, 240], lineWidth: 0.2 },
+            headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold' },
+            alternateRowStyles: { fillColor: [248, 250, 252] },
+            columnStyles: { 0: { cellWidth: 11, halign: 'center', fontStyle: 'bold', textColor: [185, 28, 28] }, 1: { cellWidth: 112 }, 2: { cellWidth: 'auto' } },
+        });
+
+        const pages = pdf.getNumberOfPages();
+        for (let i = 1; i <= pages; i++) {
+            pdf.setPage(i); pdf.setFontSize(8); pdf.setTextColor(100, 116, 139);
+            pdf.text('Suivi des erreurs · Pointeuse LPF', margin, pageH - 6);
+            pdf.text(`Page ${i} / ${pages}`, pageW - margin, pageH - 6, { align: 'right' });
+        }
+        pdf.save(`Erreurs_${localStamp(now)}.pdf`);
+    } catch (error) {
+        console.warn("Export PDF des erreurs impossible :", error);
+        showInfoModal("Erreur", "Le PDF n'a pas pu être créé. Vérifiez la connexion internet et réessayez.");
+    } finally {
+        btn.disabled = false;
+    }
+}
+const localStamp = (d) => `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}_${String(d.getHours()).padStart(2, '0')}h${String(d.getMinutes()).padStart(2, '0')}`;
+
+function renderErrors() {
+    const list = document.getElementById('errorsList');
+    const summary = document.getElementById('errorsSummary');
+
+    const sorted = groupLogs();
 
     const dayAgo = Date.now() - 86400000;
     const recent = logs.filter(l => (l.createdAt?.toDate ? l.createdAt.toDate() : new Date(l.clientTime)) > dayAgo).length;
