@@ -160,6 +160,8 @@ export async function render(params = {}) {
                     <button type="button" data-period="lastweek">Semaine dernière</button>
                     <button type="button" data-period="month">Ce mois</button>
                     <button type="button" data-period="lastmonth">Mois dernier</button>
+                    <button type="button" data-period="year">Cette année</button>
+                    <button type="button" data-period="lastyear">Année dernière</button>
                 </div>
                 <div id="activeFilterBanner" class="filter-banner hidden"></div>
                 <div class="rounded-lg shadow-sm p-4 mb-4" id="weekly-nav" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
@@ -622,6 +624,7 @@ async function displayHistoryList(startDate, endDate, chantierFilter = null) {
 
     historyList.innerHTML = "";
     let totalMs = 0, totalKm = 0, totalMin = 0, daysWorked = 0;
+    const longRange = new Date(endDate) - new Date(startDate) > 40 * 86400000;
 
     const daysOfWeek = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
@@ -632,6 +635,7 @@ async function displayHistoryList(startDate, endDate, chantierFilter = null) {
         totalMin += dayData.dailyTotalMin;
 
         if(chantierFilter && dayData.entries.length === 0) return;
+        if (longRange && dayData.entries.length === 0) return; // sur plusieurs mois, les jours vides ne sont pas listés
         if (dayData.entries.length > 0) daysWorked++;
 
         const dayWrapper = document.createElement('div');
@@ -752,6 +756,14 @@ function setupEventListeners() {
             const period = btn.dataset.period;
             if (period === 'week') { resetFilters(); return; }
             if (period === 'lastweek') { resetFilters(); currentWeekOffset = -1; loadHistoryForWeek(); setActivePeriod('lastweek'); return; }
+            if (period === 'year' || period === 'lastyear') {
+                // Année entière (jusqu'à aujourd'hui pour l'année en cours) : sert au relevé d'heures annuel en PDF
+                const year = now.getFullYear() - (period === 'lastyear' ? 1 : 0);
+                const start = new Date(year, 0, 1);
+                const end = period === 'year' ? new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999) : new Date(year, 11, 31, 23, 59, 59, 999);
+                showRange(start, end, `Année ${year}`, null, period);
+                return;
+            }
             const offset = period === 'lastmonth' ? -1 : 0;
             const start = new Date(now.getFullYear(), now.getMonth() + offset, 1);
             const end = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0, 23, 59, 59, 999);
@@ -1349,6 +1361,41 @@ async function generateHistoryPDF() {
         doc.setFont(undefined, 'normal');
     });
 
+    // --- Récapitulatif par mois (relevé sur plusieurs mois, par ex. l'année) ---
+    let tableStart = 180;
+    const monthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const monthLabel = (d) => { const l = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }); return l.charAt(0).toUpperCase() + l.slice(1); };
+    const months = [];
+    days.forEach(day => {
+        const key = monthKey(day.date);
+        let m = months[months.length - 1];
+        if (!m || m.key !== key) { m = { key, label: monthLabel(day.date), days: 0, entries: 0, totalMs: 0 }; months.push(m); }
+        m.days++; m.entries += day.entries.length; m.totalMs += day.totalMs;
+    });
+    if (months.length > 1) {
+        doc.setFont(undefined, 'bold'); doc.setFontSize(12); doc.setTextColor(...DARK);
+        doc.text('Récapitulatif par mois', margin, 190);
+        doc.autoTable({
+            startY: 198,
+            margin: { left: margin, right: margin, bottom: 50 },
+            head: [['Mois', 'Jours travaillés', 'Pointages', 'Travail effectif']],
+            body: [
+                ...months.map(m => [m.label, String(m.days), String(m.entries), { content: formatMilliseconds(m.totalMs), styles: { halign: 'right', fontStyle: 'bold', textColor: PRIMARY } }]),
+                [{ content: 'Total', styles: { fontStyle: 'bold' } }, { content: String(days.length), styles: { fontStyle: 'bold' } }, { content: String(dataForPdf.length), styles: { fontStyle: 'bold' } }, { content: formatMilliseconds(totalEffectiveMs), styles: { halign: 'right', fontStyle: 'bold', textColor: DARK } }],
+            ],
+            theme: 'plain',
+            headStyles: { fillColor: DARK, textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
+            styles: { fontSize: 8.5, cellPadding: 5, textColor: [30, 41, 59], lineColor: [226, 232, 240], lineWidth: { bottom: 0.5 } },
+            columnStyles: { 0: { cellWidth: 'auto', fontStyle: 'bold' }, 1: { cellWidth: 90, halign: 'center' }, 2: { cellWidth: 80, halign: 'center' }, 3: { cellWidth: 100, halign: 'right' } },
+            didParseCell: (data) => { if (data.section === 'head' && data.column.index > 0) data.cell.styles.halign = data.column.index === 3 ? 'right' : 'center'; },
+        });
+        doc.addPage();
+        doc.setFont(undefined, 'bold'); doc.setFontSize(12); doc.setTextColor(...DARK);
+        doc.text('Détail jour par jour', margin, 50);
+        doc.setFont(undefined, 'normal');
+        tableStart = 60;
+    }
+
     // --- Tableau ---
     const body = [];
     days.forEach((day, index) => {
@@ -1375,10 +1422,18 @@ async function generateHistoryPDF() {
                 { content: formatMilliseconds(weekMs), styles: { fontStyle: 'bold', halign: 'right', textColor: DARK } },
             ]);
         }
+        // Total du mois quand le relevé couvre plusieurs mois
+        if (months.length > 1 && (!next || monthKey(next.date) !== monthKey(day.date))) {
+            const m = months.find(x => x.key === monthKey(day.date));
+            body.push([
+                { content: `Total ${m.label}`, colSpan: 3, styles: { fontStyle: 'bold', halign: 'right', textColor: PRIMARY, fillColor: [238, 242, 255] } },
+                { content: formatMilliseconds(m.totalMs), styles: { fontStyle: 'bold', halign: 'right', textColor: PRIMARY, fillColor: [238, 242, 255] } },
+            ]);
+        }
     });
 
     doc.autoTable({
-        startY: 180,
+        startY: tableStart,
         margin: { left: margin, right: margin, bottom: 50 },
         head: [['Horaires', 'Chantier', 'Pause', 'Effectif']],
         body,
