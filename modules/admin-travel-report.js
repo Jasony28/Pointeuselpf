@@ -22,45 +22,33 @@ export async function render() {
         <div class="max-w-5xl mx-auto">
             <div class="flex flex-wrap items-end justify-between gap-3 mb-4">
                 <h2 class="text-2xl font-bold">Rapport des Trajets</h2>
-                <div class="flex flex-wrap gap-2">
-                    <button id="exportTravelPdfBtn" class="btn btn-primary">
+                <div class="grid grid-cols-2 gap-2 w-full sm:w-auto">
+                    <button id="exportTravelPdfBtn" class="btn btn-primary justify-center">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events: none;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 12v6M9 15l3 3 3-3"/></svg>
-                        Rapport km en PDF
+                        PDF
                     </button>
-                    <button id="exportTravelDetailBtn" class="btn btn-secondary">
+                    <button id="exportTravelDetailBtn" class="btn btn-secondary justify-center">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="pointer-events: none;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
-                        Détail (tableur)
+                        Tableur
                     </button>
                 </div>
             </div>
-            <div class="p-4 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
-                    <div id="filter-buttons" class="flex items-center justify-center gap-2 p-1 rounded-lg" style="background-color: var(--color-background);">
+            <div class="p-3 sm:p-4 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 mb-4">
+                    <div id="filter-buttons" class="grid grid-cols-3 gap-1 p-1 rounded-lg" style="background-color: var(--color-background);">
                         <button data-filter="week" class="filter-btn px-4 py-2 text-sm rounded-md">Semaine</button>
                         <button data-filter="month" class="filter-btn px-4 py-2 text-sm rounded-md">Mois</button>
                         <button data-filter="year" class="filter-btn px-4 py-2 text-sm rounded-md">Année</button>
                     </div>
-                    <div id="nav-controls" class="flex items-center gap-2">
+                    <div id="nav-controls" class="flex items-center justify-between gap-2">
                         <button id="prevBtn" class="nav-arrow" aria-label="Précédent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
-                        <div id="currentPeriodDisplay" class="text-center font-semibold text-lg min-w-[250px]"></div>
+                        <div id="currentPeriodDisplay" class="text-center font-semibold text-base sm:text-lg flex-1 sm:min-w-[250px]"></div>
                         <button id="nextBtn" class="nav-arrow" aria-label="Suivant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
                     </div>
                 </div>
                 <div id="fuel-summary" class="mb-4"></div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left">
-                        <thead>
-                            <tr class="border-b" style="border-color: var(--color-border);">
-                                <th class="p-2">Employé</th>
-                                <th id="km-header" class="p-2">Total Kilomètres</th>
-                                <th id="time-header" class="p-2">Temps de Trajet total</th>
-                                <th class="p-2" title="Carburant des voitures conduites (mis sur une personne qui a le permis)">Carburant</th>
-                            </tr>
-                        </thead>
-                        <tbody id="report-body">
-                            <tr><td colspan="4" class="p-4 text-center">Chargement...</td></tr>
-                        </tbody>
-                    </table>
+                <div id="report-body" class="flex flex-col gap-2">
+                    <p class="p-4 text-center">Chargement...</p>
                 </div>
             </div>
         </div>
@@ -83,8 +71,6 @@ export async function render() {
 
 async function loadTravelReportForPeriod() {
     const reportBody = document.getElementById('report-body');
-    const kmHeader = document.getElementById('km-header');
-    const timeHeader = document.getElementById('time-header');
     const currentPeriodDisplay = document.getElementById('currentPeriodDisplay');
     
     document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -92,7 +78,7 @@ async function loadTravelReportForPeriod() {
         btn.classList.toggle('shadow', btn.dataset.filter === currentFilter);
     });
 
-    reportBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center">Chargement...</td></tr>`;
+    reportBody.innerHTML = `<p class="p-4 text-center">Chargement...</p>`;
 
     const now = new Date();
     let startDate, endDate, periodText;
@@ -121,8 +107,6 @@ async function loadTravelReportForPeriod() {
 
     currentPeriodDisplay.textContent = periodText;
     lastRange = { startDate, endDate, periodText };
-    kmHeader.textContent = `Total Kilomètres (${periodText})`;
-    timeHeader.textContent = `Temps de Trajet total (${periodText})`;
 
     try {
         const users = await getAllUsers();
@@ -144,30 +128,43 @@ async function loadTravelReportForPeriod() {
         });
 
         const fuel = computeFuelCost(fuelTrips(trajetsSnapshot), fuelUsers(users), prices);
-        renderFuelSummary(fuel);
+        const rows = users.map(user => ({
+            name: user.displayName || '?',
+            ...(travelByUser[user.uid] || travelByUser[user.id] || { km: 0, min: 0 }),
+            fuel: fuel.byDriver.get(user.id || user.uid) || null,
+        })).sort((a, b) => b.km - a.km || a.name.localeCompare(b.name, 'fr'));
+        renderFuelSummary(fuel, rows);
 
         if (users.length === 0) {
-            reportBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-500">Aucun utilisateur trouvé.</td></tr>`;
+            reportBody.innerHTML = `<p class="p-4 text-center opacity-70">Aucun utilisateur trouvé.</p>`;
             return;
         }
 
-        reportBody.innerHTML = '';
-        users.forEach(user => {
-            const travelData = travelByUser[user.uid] || { km: 0, min: 0 };
-            const userFuel = fuel.byDriver.get(user.id || user.uid);
-            const row = document.createElement('tr');
-            row.className = 'border-b';
-            row.innerHTML = `
-                <td class="p-2">${user.displayName}</td>
-                <td class="p-2 font-semibold">${travelData.km.toFixed(2)} km</td>
-                <td class="p-2 font-semibold">${formatMinutes(travelData.min)}</td>
-                <td class="p-2 font-semibold">${userFuel ? euros(userFuel.cost) : '<span class="opacity-50">—</span>'}</td>
-            `;
-            reportBody.appendChild(row);
-        });
+        // Une carte par employé (lisible sur téléphone) : ceux qui ont roulé d'abord, les autres regroupés en bas
+        const active = rows.filter(r => r.km > 0 || r.fuel);
+        const idle = rows.filter(r => !(r.km > 0 || r.fuel));
+        const maxKm = Math.max(1, ...active.map(r => r.km));
+        const esc = (v) => String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        reportBody.innerHTML = (active.length ? active.map(r => `
+            <div class="p-3 rounded-lg" style="background-color: var(--color-background); border: 1px solid var(--color-border);">
+                <div class="flex items-baseline justify-between gap-3">
+                    <span class="font-semibold truncate">${esc(r.name)}</span>
+                    <span class="font-bold text-lg whitespace-nowrap">${r.km.toFixed(1).replace('.', ',')} km</span>
+                </div>
+                <div class="h-1.5 rounded-full my-2 overflow-hidden" style="background-color: var(--color-border);">
+                    <div class="h-full rounded-full" style="width: ${Math.round(r.km / maxKm * 100)}%; background-color: var(--color-primary);"></div>
+                </div>
+                <div class="flex items-center justify-between gap-3 text-sm">
+                    <span class="opacity-80">Route : ${formatMinutes(r.min)}</span>
+                    ${r.fuel
+                        ? `<span class="font-semibold whitespace-nowrap">Carburant : ${euros(r.fuel.cost)}</span>`
+                        : `<span class="opacity-50 whitespace-nowrap">Passager</span>`}
+                </div>
+            </div>`).join('') : `<p class="p-4 text-center opacity-70">Aucun trajet sur cette période.</p>`)
+            + (idle.length ? `<p class="text-xs opacity-60 mt-2 px-1">Sans trajet : ${idle.map(r => esc(r.name)).join(', ')}</p>` : '');
     } catch (error) {
         console.error("Erreur de chargement du rapport de trajets:", error);
-        reportBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Erreur de chargement.</td></tr>`;
+        reportBody.innerHTML = `<p class="p-4 text-center text-red-500">Erreur de chargement.</p>`;
     }
 }
 
@@ -187,25 +184,31 @@ const fuelUsers = (users) => users.map(u => ({ uid: u.id || u.uid, name: u.displ
 const priceText = (v) => v ? `${v.toFixed(2).replace('.', ',')} €/L` : '—';
 const litresText = (v) => `${Math.round(v || 0)} L`;
 
-function renderFuelSummary(fuel) {
+function renderFuelSummary(fuel, rows = []) {
     const box = document.getElementById('fuel-summary');
     if (!box) return;
-    if (!fuel.cars.length) { box.innerHTML = ''; return; }
+    const totalMin = rows.reduce((s, r) => s + r.min, 0);
     const noDriver = fuel.byDriver.get(NO_DRIVER);
-    const card = (label, value) => `<div class="p-3 rounded-lg" style="background-color: var(--color-background);"><div class="text-xs opacity-70">${label}</div><div class="text-lg font-bold">${value}</div></div>`;
+    const card = (label, value) => `<div class="p-3 rounded-lg" style="background-color: var(--color-background); border: 1px solid var(--color-border);"><div class="text-xs opacity-70">${label}</div><div class="text-base font-bold whitespace-nowrap">${value}</div></div>`;
     box.innerHTML = `
+        <div class="p-4 rounded-lg mb-2 text-center" style="background-color: var(--color-background); border: 2px solid var(--color-primary);">
+            <div class="text-sm opacity-80">Coût carburant</div>
+            <div class="text-3xl font-bold" style="color: var(--color-primary);">${euros(fuel.cost)}</div>
+            <div class="text-xs opacity-70 mt-1">${fuel.cars.length} trajet${fuel.cars.length > 1 ? 's' : ''} en voiture · ${fuel.conso} L/100 km</div>
+        </div>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            ${card('Coût carburant', euros(fuel.cost))}
             ${card('Km des voitures', `${fuel.km.toFixed(0)} km`)}
             ${card('Litres estimés', litresText(fuel.litres))}
-            ${card('Prix moyen', priceText(fuel.avgPrice))}
+            ${card('Prix moyen du litre', priceText(fuel.avgPrice))}
+            ${card('Temps de route (équipe)', formatMinutes(totalMin))}
         </div>
-        <p class="text-xs opacity-70 mt-2">
-            ${fuel.cars.length} trajet${fuel.cars.length > 1 ? 's' : ''} en voiture (les employés qui font le même trajet le même jour comptent pour 1 voiture),
-            ${fuel.conso} L/100 km, prix moyen diesel + essence en Belgique de la semaine du trajet.
-            ${fuel.estimated ? '<strong>Certains prix sont estimés (relevé de la semaine pas encore disponible).</strong>' : ''}
-            ${noDriver ? `<br><strong>${euros(noDriver.cost)}</strong> sur des trajets où personne n'a le permis indiqué (« Sans conducteur connu »).` : ''}
-        </p>`;
+        <details class="text-xs opacity-80 mt-2">
+            <summary class="cursor-pointer py-1">Comment c'est calculé ?</summary>
+            <p class="mt-1">Les employés qui font le même trajet le même jour comptent pour 1 voiture. Le carburant est mis sur une personne
+            de la voiture qui a le permis. Prix : moyenne diesel + essence en Belgique de la semaine du trajet (Bulletin pétrolier européen).</p>
+        </details>
+        ${fuel.estimated ? '<p class="text-xs mt-1"><strong>Certains prix sont estimés (relevé de la semaine pas encore disponible).</strong></p>' : ''}
+        ${noDriver ? `<p class="text-xs mt-1"><strong>${euros(noDriver.cost)}</strong> sur des trajets où personne n'a le permis indiqué (« Sans conducteur connu »).</p>` : ''}`;
 }
 
 // Détail de chaque trajet et de chaque pointage de la période, en CSV (tableur), pour vérifier les km
