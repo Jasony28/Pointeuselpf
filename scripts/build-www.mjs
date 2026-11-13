@@ -21,6 +21,7 @@ const entries = [
     'modules',
     'icons',
     'themes',
+    'data',      // prix du carburant (relevés chaque semaine par le workflow « Prix carburant »)
 ];
 
 rmSync(out, { recursive: true, force: true });

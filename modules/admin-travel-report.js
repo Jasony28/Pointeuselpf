@@ -3,6 +3,7 @@ import { db, pageContent, showInfoModal } from "../app.js";
 import { getAllUsers, getAllChantiers } from "./data-service.js";
 import { getWeekDateRange } from "./utils.js";
 import { localDateKey, isRegularisation, NEW_KM_RULES_SINCE, DEPOT_ADDRESS } from "./trips.js";
+import { loadFuelPrices, computeFuelCost, euros, NO_DRIVER } from "./fuel-cost.js";
 import { createPdf, pdfHeader, pdfStats, pdfSection, pdfTable, pdfTotal, pdfSignatures, pdfFinish, pdfText, groupRow, fileStamp, safeName, C } from "./pdf-kit.js";
 
 let currentFilter = 'month'; // 'week', 'month', or 'year'
@@ -45,6 +46,7 @@ export async function render() {
                         <button id="nextBtn" class="nav-arrow" aria-label="Suivant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
                     </div>
                 </div>
+                <div id="fuel-summary" class="mb-4"></div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left">
                         <thead>
@@ -52,10 +54,11 @@ export async function render() {
                                 <th class="p-2">Employé</th>
                                 <th id="km-header" class="p-2">Total Kilomètres</th>
                                 <th id="time-header" class="p-2">Temps de Trajet total</th>
+                                <th class="p-2" title="Carburant des voitures conduites (mis sur une personne qui a le permis)">Carburant</th>
                             </tr>
                         </thead>
                         <tbody id="report-body">
-                            <tr><td colspan="3" class="p-4 text-center">Chargement...</td></tr>
+                            <tr><td colspan="4" class="p-4 text-center">Chargement...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -89,7 +92,7 @@ async function loadTravelReportForPeriod() {
         btn.classList.toggle('shadow', btn.dataset.filter === currentFilter);
     });
 
-    reportBody.innerHTML = `<tr><td colspan="3" class="p-4 text-center">Chargement...</td></tr>`;
+    reportBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center">Chargement...</td></tr>`;
 
     const now = new Date();
     let startDate, endDate, periodText;
@@ -128,7 +131,7 @@ async function loadTravelReportForPeriod() {
             where("date_creation", ">=", startDate),
             where("date_creation", "<=", endDate)
         );
-        const trajetsSnapshot = await getDocs(trajetsQuery);
+        const [trajetsSnapshot, prices] = await Promise.all([getDocs(trajetsQuery), loadFuelPrices()]);
 
         const travelByUser = {};
         trajetsSnapshot.forEach(doc => {
@@ -140,29 +143,70 @@ async function loadTravelReportForPeriod() {
             travelByUser[trajet.id_utilisateur].min += trajet.duree_min || 0;
         });
 
+        const fuel = computeFuelCost(fuelTrips(trajetsSnapshot), fuelUsers(users), prices);
+        renderFuelSummary(fuel);
+
         if (users.length === 0) {
-            reportBody.innerHTML = `<tr><td colspan="3" class="p-4 text-center text-gray-500">Aucun utilisateur trouvé.</td></tr>`;
+            reportBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-500">Aucun utilisateur trouvé.</td></tr>`;
             return;
         }
 
         reportBody.innerHTML = '';
         users.forEach(user => {
             const travelData = travelByUser[user.uid] || { km: 0, min: 0 };
+            const userFuel = fuel.byDriver.get(user.id || user.uid);
             const row = document.createElement('tr');
             row.className = 'border-b';
             row.innerHTML = `
                 <td class="p-2">${user.displayName}</td>
                 <td class="p-2 font-semibold">${travelData.km.toFixed(2)} km</td>
                 <td class="p-2 font-semibold">${formatMinutes(travelData.min)}</td>
+                <td class="p-2 font-semibold">${userFuel ? euros(userFuel.cost) : '<span class="opacity-50">—</span>'}</td>
             `;
             reportBody.appendChild(row);
         });
     } catch (error) {
         console.error("Erreur de chargement du rapport de trajets:", error);
-        reportBody.innerHTML = `<tr><td colspan="3" class="p-4 text-center text-red-500">Erreur de chargement.</td></tr>`;
+        reportBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Erreur de chargement.</td></tr>`;
     }
 }
 
+// --- Coût carburant ------------------------------------------------------------------
+// Trajets Firestore -> trajets pour le calcul du carburant (un par employé)
+function fuelTrips(tripsSnap) {
+    const list = [];
+    tripsSnap.forEach(d => {
+        const t = d.data();
+        const date = t.date_creation?.toDate ? t.date_creation.toDate() : null;
+        if (!date || !t.id_utilisateur) return;
+        list.push({ uid: t.id_utilisateur, dayKey: localDateKey(date), from: t.adresse_depart || '', to: t.adresse_arrivee || '', isReturn: t.type === 'retour', km: t.distance_km || 0 });
+    });
+    return list;
+}
+const fuelUsers = (users) => users.map(u => ({ uid: u.id || u.uid, name: u.displayName || '', isDriver: u.isDriver === true }));
+const priceText = (v) => v ? `${v.toFixed(2).replace('.', ',')} €/L` : '—';
+const litresText = (v) => `${Math.round(v || 0)} L`;
+
+function renderFuelSummary(fuel) {
+    const box = document.getElementById('fuel-summary');
+    if (!box) return;
+    if (!fuel.cars.length) { box.innerHTML = ''; return; }
+    const noDriver = fuel.byDriver.get(NO_DRIVER);
+    const card = (label, value) => `<div class="p-3 rounded-lg" style="background-color: var(--color-background);"><div class="text-xs opacity-70">${label}</div><div class="text-lg font-bold">${value}</div></div>`;
+    box.innerHTML = `
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            ${card('Coût carburant', euros(fuel.cost))}
+            ${card('Km des voitures', `${fuel.km.toFixed(0)} km`)}
+            ${card('Litres estimés', litresText(fuel.litres))}
+            ${card('Prix moyen', priceText(fuel.avgPrice))}
+        </div>
+        <p class="text-xs opacity-70 mt-2">
+            ${fuel.cars.length} trajet${fuel.cars.length > 1 ? 's' : ''} en voiture (les employés qui font le même trajet le même jour comptent pour 1 voiture),
+            ${fuel.conso} L/100 km, prix moyen diesel + essence en Belgique de la semaine du trajet.
+            ${fuel.estimated ? '<strong>Certains prix sont estimés (relevé de la semaine pas encore disponible).</strong>' : ''}
+            ${noDriver ? `<br><strong>${euros(noDriver.cost)}</strong> sur des trajets où personne n'a le permis indiqué (« Sans conducteur connu »).` : ''}
+        </p>`;
+}
 
 // Détail de chaque trajet et de chaque pointage de la période, en CSV (tableur), pour vérifier les km
 async function exportTravelDetail() {
@@ -241,14 +285,17 @@ async function exportTravelPdf() {
     btn.disabled = true;
     try {
         const { startDate, endDate, periodText } = lastRange;
-        const [users, chantiers, pointagesSnap, tripsSnap] = await Promise.all([
+        const [users, chantiers, pointagesSnap, tripsSnap, prices] = await Promise.all([
             getAllUsers(),
             getAllChantiers(),
             getDocs(query(collection(db, "pointages"), where("timestamp", ">=", startDate.toISOString()), where("timestamp", "<=", endDate.toISOString()))),
             getDocs(query(collection(db, "trajets"), where("date_creation", ">=", startDate), where("date_creation", "<=", endDate))),
+            loadFuelPrices(),
         ]);
         const names = new Map(users.map(u => [u.id, u.displayName || u.id]));
         const pointages = new Map(pointagesSnap.docs.map(d => [d.id, d.data()]));
+        const fuel = computeFuelCost(fuelTrips(tripsSnap), fuelUsers(users), prices);
+        const fuelOf = (uid) => fuel.byDriver.get(uid);
         const siteByAddress = new Map(chantiers.filter(c => c.address).map(c => [c.address, c.name]));
         const place = (address, fallback) => address === DEPOT_ADDRESS ? 'Dépôt' : (fallback || siteByAddress.get(address) || address || '?');
         const km = (v) => `${(v || 0).toFixed(1).replace('.', ',')} km`;
@@ -268,7 +315,7 @@ async function exportTravelPdf() {
                 to: isReturn ? 'Dépôt' : place(t.adresse_arrivee, arrival?.chantier),
                 km: t.distance_km || 0, min: t.duree_min || 0,
             };
-            if (!byUser.has(t.id_utilisateur)) byUser.set(t.id_utilisateur, { name: names.get(t.id_utilisateur) || '?', trips: [] });
+            if (!byUser.has(t.id_utilisateur)) byUser.set(t.id_utilisateur, { uid: t.id_utilisateur, name: names.get(t.id_utilisateur) || '?', trips: [] });
             byUser.get(t.id_utilisateur).trips.push(trip);
         });
         if (!byUser.size) {
@@ -294,23 +341,61 @@ async function exportTravelPdf() {
             ['Kilomètres', km(totalKm)],
             ['Temps de route', formatMinutes(totalMin), C.DARK],
             ['Trajets', String(totalTrips), C.DARK],
-            ['Moyenne / employé', km(totalKm / people.length), C.DARK],
+            ['Carburant', euros(fuel.cost)],
         ]);
 
         // Synthèse
         y = pdfSection(doc, y + 2, 'Synthèse par employé', rulesNote);
         y = pdfTable(doc, {
             startY: y + 1,
-            head: [['Employé', 'Jours', 'Trajets', 'Km', 'Temps de route', 'Km / jour']],
-            body: people.map(u => [pdfText(u.name), String(u.days), String(u.trips.length), km(u.km), formatMinutes(u.min), km(u.km / u.days)]),
+            head: [['Employé', 'Jours', 'Trajets', 'Km', 'Temps de route', 'Km / jour', 'Carburant']],
+            body: people.map(u => [pdfText(u.name), String(u.days), String(u.trips.length), km(u.km), formatMinutes(u.min), km(u.km / u.days), fuelOf(u.uid) ? euros(fuelOf(u.uid).cost) : '-']),
             columnStyles: {
                 0: { cellWidth: 'auto', fontStyle: 'bold', textColor: C.DARK },
-                1: { cellWidth: 16, halign: 'center' }, 2: { cellWidth: 18, halign: 'center' },
-                3: { cellWidth: 26, halign: 'right', fontStyle: 'bold', textColor: C.PRIMARY },
-                4: { cellWidth: 30, halign: 'right' }, 5: { cellWidth: 24, halign: 'right', textColor: C.MUTED },
+                1: { cellWidth: 14, halign: 'center' }, 2: { cellWidth: 16, halign: 'center' },
+                3: { cellWidth: 24, halign: 'right', fontStyle: 'bold', textColor: C.PRIMARY },
+                4: { cellWidth: 28, halign: 'right' }, 5: { cellWidth: 22, halign: 'right', textColor: C.MUTED },
+                6: { cellWidth: 24, halign: 'right', fontStyle: 'bold' },
             },
         });
         y = pdfTotal(doc, y + 6, `Total · ${formatMinutes(totalMin)} de route`, km(totalKm));
+
+        // Coût carburant (compté par voiture, mis sur une personne qui a le permis)
+        if (fuel.cars.length) {
+            y = pdfSection(doc, y + 4, 'Coût carburant', `${fuel.conso} L/100 km · prix moyen diesel + essence (Belgique)`);
+            y = pdfStats(doc, y + 2, [
+                ['Km des voitures', km(fuel.km)],
+                ['Litres estimés', litresText(fuel.litres), C.DARK],
+                ['Prix moyen', priceText(fuel.avgPrice), C.DARK],
+                ['Coût carburant', euros(fuel.cost)],
+            ]);
+            const drivers = [...fuel.byDriver.entries()]
+                .map(([uid, d]) => ({ name: uid === NO_DRIVER ? 'Sans conducteur connu' : (names.get(uid) || '?'), ...d }))
+                .sort((a, b) => b.cost - a.cost);
+            y = pdfTable(doc, {
+                startY: y + 1,
+                head: [['Conducteur (a le permis)', 'Trajets en voiture', 'Km', 'Litres', 'Carburant']],
+                body: drivers.map(d => [pdfText(d.name), String(d.cars), km(d.km), litresText(d.litres), euros(d.cost)]),
+                columnStyles: {
+                    0: { cellWidth: 'auto', fontStyle: 'bold', textColor: C.DARK },
+                    1: { cellWidth: 32, halign: 'center' }, 2: { cellWidth: 26, halign: 'right' },
+                    3: { cellWidth: 22, halign: 'right', textColor: C.MUTED }, 4: { cellWidth: 28, halign: 'right', fontStyle: 'bold', textColor: C.PRIMARY },
+                },
+            });
+            if (fuel.weeks.size > 1) {
+                const weekRows = [...fuel.weeks.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([w, p]) => [
+                    new Date(`${w}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }),
+                    priceText(p.diesel), priceText(p.essence), priceText((p.diesel + p.essence) / 2)]);
+                y = pdfSection(doc, y + 8, 'Prix utilisés (relevé du lundi de chaque semaine)', 'Bulletin pétrolier européen');
+                y = pdfTable(doc, {
+                    startY: y + 1,
+                    head: [['Semaine du', 'Diesel', 'Essence 95', 'Moyenne']],
+                    body: weekRows,
+                    columnStyles: { 0: { cellWidth: 'auto' }, 1: { cellWidth: 30, halign: 'right' }, 2: { cellWidth: 30, halign: 'right' }, 3: { cellWidth: 30, halign: 'right', fontStyle: 'bold' } },
+                });
+            }
+            y = pdfTotal(doc, y + 6, `Coût carburant · ${fuel.cars.length} trajets en voiture${fuel.estimated ? ' (prix en partie estimés)' : ''}`, euros(fuel.cost));
+        }
         pdfSignatures(doc, y + 2, ['Vérifié par', 'Signature du responsable']);
 
         // Détail par employé
@@ -340,7 +425,8 @@ async function exportTravelPdf() {
                 body,
                 columnStyles: { 0: { cellWidth: 16 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 16, textColor: C.MUTED }, 3: { cellWidth: 18, halign: 'right', textColor: C.MUTED }, 4: { cellWidth: 22, halign: 'right' } },
             });
-            pdfTotal(doc, yy + 6, `Total ${u.name}`, km(u.km));
+            yy = pdfTotal(doc, yy + 6, `Total ${u.name}`, km(u.km));
+            if (fuelOf(u.uid)) pdfTotal(doc, yy - 4, `Carburant payé comme conducteur (${fuelOf(u.uid).cars} trajets en voiture)`, euros(fuelOf(u.uid).cost));
         });
 
         pdfFinish(doc, `Rapport kilomètres · ${periodText}`, `Rapport_km_${safeName(periodText)}_${fileStamp()}.pdf`);

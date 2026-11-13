@@ -1,0 +1,30 @@
+# Relève chaque semaine le prix moyen du diesel et de l'essence en Belgique (Bulletin pétrolier européen)
+# et met à jour data/carburant.json, lu par « Rapport trajets » pour le coût carburant.
+name: Prix carburant
+
+on:
+  schedule:
+    - cron: '17 9 * * 2,4'   # mardi et jeudi matin (le bulletin du lundi est publié en milieu de semaine)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  prix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install openpyxl==3.1.5
+      - run: python3 scripts/fuel-prices.py
+      - name: Enregistrer si les prix ont changé
+        run: |
+          if git diff --quiet -I '"maj"' data/carburant.json; then echo "Prix à jour"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git add data/carburant.json
+          git commit -m "Prix carburant : relevé de la semaine"
+          git push
