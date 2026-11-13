@@ -11,27 +11,23 @@ export async function render() {
         <div class="max-w-4xl mx-auto">
             <h2 class="text-2xl font-bold mb-4">Rapport d'Heures Global</h2>
             
-            <div class="p-4 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
-                <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
-                    <div class="flex items-center gap-1 p-1 rounded-lg text-sm" style="background-color: var(--color-background);">
+            <div class="p-3 sm:p-4 rounded-lg shadow-sm" style="background-color: var(--color-surface); border: 1px solid var(--color-border);">
+                <div class="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 mb-4">
+                    <div class="grid grid-cols-3 gap-1 p-1 rounded-lg text-sm" style="background-color: var(--color-background);">
                         <button data-period="week" class="filter-btn px-4 py-2 rounded-md">Semaine</button>
                         <button data-period="month" class="filter-btn px-4 py-2 rounded-md">Mois</button>
                         <button data-period="year" class="filter-btn px-4 py-2 rounded-md">Année</button>
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center justify-between gap-2">
                         <button id="prev-btn" class="nav-arrow" aria-label="Précédent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
-                        <div id="period-display" class="text-center font-semibold text-lg min-w-[250px]"></div>
+                        <div id="period-display" class="text-center font-semibold text-base sm:text-lg flex-1 sm:min-w-[250px]"></div>
                         <button id="next-btn" class="nav-arrow" aria-label="Suivant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
                     </div>
                 </div>
 
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left">
-                        <thead id="report-header"></thead>
-                        <tbody id="report-body">
-                            <tr><td colspan="4" class="p-4 text-center">Chargement...</td></tr>
-                        </tbody>
-                    </table>
+                <div id="hours-summary" class="mb-4"></div>
+                <div id="report-body" class="flex flex-col gap-2">
+                    <p class="p-4 text-center">Chargement...</p>
                 </div>
             </div>
         </div>
@@ -91,9 +87,9 @@ async function loadReport() {
         btn.classList.toggle('shadow', isSelected);
     });
 
-    const reportHeader = document.getElementById('report-header');
     const reportBody = document.getElementById('report-body');
-    reportBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center">Chargement...</td></tr>`;
+    const summary = document.getElementById('hours-summary');
+    reportBody.innerHTML = `<p class="p-4 text-center">Chargement...</p>`;
 
     try {
         const allUsers = await getUsers();
@@ -115,84 +111,73 @@ async function loadReport() {
             }
         });
 
-        reportBody.innerHTML = '';
         if (approvedUsers.length === 0) {
-            reportBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-500">Aucun employé approuvé trouvé.</td></tr>`;
+            summary.innerHTML = '';
+            reportBody.innerHTML = `<p class="p-4 text-center opacity-70">Aucun employé approuvé trouvé.</p>`;
             return;
         }
 
-        if (isStealthMode()) {
-            reportHeader.innerHTML = `
-                <tr class="border-b">
-                    <th class="p-2">Employé</th>
-                    <th class="p-2">Heures Prestées (Réel)</th>
-                </tr>
-            `;
-            approvedUsers.forEach(user => {
-                const totalMs = hoursByUid.get(user.uid) || 0;
-                const row = document.createElement('tr');
-                row.className = 'border-b';
-                row.innerHTML = `
-                    <td class="p-2">${user.displayName}</td>
-                    <td class="p-2 font-semibold text-purple-700">${formatMilliseconds(totalMs)}</td>
-                `;
-                reportBody.appendChild(row);
-            });
-        } else {
-            reportHeader.innerHTML = `
-                <tr class="border-b">
-                    <th class="p-2">Employé</th>
-                    <th class="p-2 text-center">Heures Contrat</th>
-                    <th class="p-2 text-center">Heures Prestées</th>
-                    <th class="p-2 text-center">Solde (+/-)</th>
-                </tr>
-            `;
-            approvedUsers.forEach(user => {
-                const totalMs = hoursByUid.get(user.uid) || 0;
-                const weeklyContractHours = user.contractHours || 0;
-                
-                let periodContractMs = 0;
-                if (weeklyContractHours > 0) {
-                    switch (filter.period) {
-                        case 'month': periodContractMs = weeklyContractHours * 4.33 * 3600000; break;
-                        case 'year': periodContractMs = weeklyContractHours * 52 * 3600000; break;
-                        default: periodContractMs = weeklyContractHours * 3600000; break;
-                    }
+        // Une ligne de calcul par employé (mêmes règles qu'avant), puis une carte par employé (lisible sur téléphone)
+        const stealth = isStealthMode();
+        const rows = approvedUsers.map(user => {
+            const totalMs = hoursByUid.get(user.uid) || 0;
+            const weeklyContractHours = user.contractHours || 0;
+            let periodContractMs = 0;
+            if (weeklyContractHours > 0) {
+                switch (filter.period) {
+                    case 'month': periodContractMs = weeklyContractHours * 4.33 * 3600000; break;
+                    case 'year': periodContractMs = weeklyContractHours * 52 * 3600000; break;
+                    default: periodContractMs = weeklyContractHours * 3600000; break;
                 }
+            }
+            let balanceMs = totalMs - periodContractMs;
+            let displayedTotalMs = totalMs;
+            if (!stealth && weeklyContractHours === 12) {
+                displayedTotalMs = Math.min(totalMs, periodContractMs);
+                balanceMs = Math.min(0, balanceMs);
+            }
+            return { name: user.displayName || '?', totalMs: displayedTotalMs, contractMs: periodContractMs, balanceMs };
+        }).sort((a, b) => b.totalMs - a.totalMs || a.name.localeCompare(b.name, 'fr'));
 
-                let balanceMs = totalMs - periodContractMs;
-                let displayedTotalMs = totalMs;
+        const esc = (v) => String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        const signed = (ms) => ms > 0 ? `+${formatMilliseconds(ms)}` : ms < 0 ? `-${formatMilliseconds(Math.abs(ms))}` : '0h 0min';
+        const balanceClass = (ms) => ms > 0 ? 'text-green-600 font-bold' : ms < 0 ? 'text-red-600 font-semibold' : 'opacity-70';
+        const sum = (key) => rows.reduce((s, r) => s + r[key], 0);
+        const worked = rows.filter(r => r.totalMs > 0).length;
+        const card = (label, value, cls = '') => `<div class="p-3 rounded-lg" style="background-color: var(--color-background); border: 1px solid var(--color-border);"><div class="text-xs opacity-70">${label}</div><div class="text-base font-bold whitespace-nowrap ${cls}">${value}</div></div>`;
 
-                if (weeklyContractHours === 12) {
-                    displayedTotalMs = Math.min(totalMs, periodContractMs);
-                    balanceMs = Math.min(0, balanceMs);
-                }
+        summary.innerHTML = `
+            <div class="p-4 rounded-lg mb-2 text-center" style="background-color: var(--color-background); border: 2px solid var(--color-primary);">
+                <div class="text-sm opacity-80">Heures prestées${stealth ? ' (réel)' : ''}</div>
+                <div class="text-3xl font-bold" style="color: var(--color-primary);">${formatMilliseconds(sum('totalMs'))}</div>
+                <div class="text-xs opacity-70 mt-1">${worked} employé${worked > 1 ? 's' : ''} sur ${rows.length} ${worked > 1 ? 'ont' : 'a'} pointé</div>
+            </div>
+            ${stealth ? '' : `<div class="grid grid-cols-2 gap-2">
+                ${card('Heures contrat', formatMilliseconds(sum('contractMs')))}
+                ${card('Solde (+/-)', signed(sum('balanceMs')), balanceClass(sum('balanceMs')))}
+            </div>`}`;
 
-                let balanceClass = 'text-gray-700';
-                let balanceText = '0h 0min';
-
-                if (balanceMs > 0) {
-                    balanceClass = 'text-green-600 font-bold';
-                    balanceText = `+${formatMilliseconds(balanceMs)}`;
-                } else if (balanceMs < 0) {
-                    balanceClass = 'text-red-600';
-                    balanceText = `-${formatMilliseconds(Math.abs(balanceMs))}`;
-                }
-
-                const row = document.createElement('tr');
-                row.className = 'border-b';
-                row.innerHTML = `
-                    <td class="p-2 font-medium">${user.displayName}</td>
-                    <td class="p-2 text-center">${formatMilliseconds(periodContractMs)}</td>
-                    <td class="p-2 text-center font-semibold">${formatMilliseconds(displayedTotalMs)}</td>
-                    <td class="p-2 text-center ${balanceClass}">${balanceText}</td>
-                `;
-                reportBody.appendChild(row);
-            });
-        }
+        const active = rows.filter(r => r.totalMs > 0 || (!stealth && r.contractMs > 0));
+        const idle = rows.filter(r => !active.includes(r));
+        const maxMs = Math.max(1, ...active.map(r => Math.max(r.totalMs, stealth ? 0 : r.contractMs)));
+        reportBody.innerHTML = (active.length ? active.map(r => `
+            <div class="p-3 rounded-lg" style="background-color: var(--color-background); border: 1px solid var(--color-border);">
+                <div class="flex items-baseline justify-between gap-3">
+                    <span class="font-semibold truncate">${esc(r.name)}</span>
+                    <span class="font-bold text-lg whitespace-nowrap">${formatMilliseconds(r.totalMs)}</span>
+                </div>
+                <div class="h-1.5 rounded-full my-2 overflow-hidden" style="background-color: var(--color-border);">
+                    <div class="h-full rounded-full" style="width: ${Math.min(100, Math.round(r.totalMs / (!stealth && r.contractMs > 0 ? r.contractMs : maxMs) * 100))}%; background-color: var(--color-primary);"></div>
+                </div>
+                ${stealth ? '' : `<div class="flex items-center justify-between gap-3 text-sm">
+                    <span class="opacity-80">Contrat : ${r.contractMs > 0 ? formatMilliseconds(r.contractMs) : '—'}</span>
+                    <span class="whitespace-nowrap ${balanceClass(r.balanceMs)}">Solde : ${signed(r.balanceMs)}</span>
+                </div>`}
+            </div>`).join('') : `<p class="p-4 text-center opacity-70">Aucune heure sur cette période.</p>`)
+            + (idle.length ? `<p class="text-xs opacity-60 mt-2 px-1">Sans heure : ${idle.map(r => esc(r.name)).join(', ')}</p>` : '');
     } catch (error) {
         console.error("Erreur de chargement du rapport d'heures:", error);
-        reportBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Erreur de chargement du rapport.</td></tr>`;
+        reportBody.innerHTML = `<p class="p-4 text-center text-red-500">Erreur de chargement du rapport.</p>`;
     }
 }
 
