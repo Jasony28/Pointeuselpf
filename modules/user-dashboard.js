@@ -34,6 +34,10 @@ export async function render() {
             <div id="retours-clients-banner" hidden></div>
             <div id="profile-reminder" class="hidden"></div>
             <div id="live-tracker-container" class="p-6 rounded-lg shadow-lg" style="background-color: var(--color-surface); border: 1px solid var(--color-border);"></div>
+            <button type="button" id="fuelShortcut" class="fu-shortcut"${currentUser?.isDriver === true ? '' : ' hidden'}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 22h12M4 22V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v17M4 10h10M14 13h2a2 2 0 0 1 2 2v2.5a1.5 1.5 0 0 0 3 0V9l-3-3"/></svg>
+                <span><b>J'ai fait le plein</b><small>Noter les litres, le prix et la photo du ticket</small></span>
+            </button>
             <div id="missed-pointage-suggestions" class="space-y-4"></div>
             <div id="unread-messages-container" class="hidden transform transition-all duration-300 hover:scale-[1.01] cursor-pointer"></div>
             <div>
@@ -88,6 +92,7 @@ export async function render() {
             </form>
         </div>
     `;
+    document.getElementById('fuelShortcut').onclick = () => navigateTo('user-fuel');
 
     // ÉCOUTE DES CLICS AU NIVEAU PARENT POUR ÉVITER L'ERREUR "NULL"
     pageContent.onclick = (e) => {
@@ -978,6 +983,9 @@ async function loadProfileReminder() {
     try {
         const snap = await getDoc(doc(db, "users", currentUser.uid));
         const data = snap.exists() ? snap.data() : {};
+        // Raccourci « J'ai fait le plein » : seulement pour les conducteurs (fiche à jour, pas celle gardée au démarrage)
+        const fuelShortcut = document.getElementById('fuelShortcut');
+        if (fuelShortcut) fuelShortcut.hidden = data.isDriver !== true;
         if (data.superAdmin === true) return;
         const missing = missingProfileParts(data);
         if (!missing.length || !box.isConnected) return;

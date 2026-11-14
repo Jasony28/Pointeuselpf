@@ -3671,3 +3671,15 @@ html.cat .toast > svg { display: none; }
 .fu-stat b { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; }
 .fu-stat.is-total { border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border)); background: var(--color-primary-soft); }
 @media (max-width: 380px) { .fu-grid { grid-template-columns: 1fr; } }
+/* Accueil employé : raccourci « J'ai fait le plein » (conducteurs seulement) */
+#page-content .fu-shortcut {
+    display: flex; align-items: center; gap: 0.75rem; width: 100%; margin-top: 0.75rem !important; padding: 0.75rem 1rem; text-align: left;
+    background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
+    color: var(--color-text-base); font: inherit; cursor: pointer;
+}
+#page-content .fu-shortcut[hidden] { display: none; }
+#page-content .fu-shortcut:hover { border-color: var(--color-primary); }
+.fu-shortcut svg { width: 24px; height: 24px; flex: none; color: var(--color-primary); }
+.fu-shortcut span { display: flex; flex-direction: column; min-width: 0; }
+.fu-shortcut b { font-size: 0.9375rem; }
+.fu-shortcut small { font-size: 0.8125rem; color: var(--color-text-muted); }
