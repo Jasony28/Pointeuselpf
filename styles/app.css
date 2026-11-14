@@ -3652,7 +3652,7 @@ html.cat .toast > svg { display: none; }
 .fixes-why { font-size: 0.75rem; color: var(--color-text-subtle); }
 .fixes-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }
 
-/* Carburant : pleins notés par les conducteurs (modules/user-fuel.js, modules/admin-fuel.js) */
+/* Carburant : pleins notés par les conducteurs (modules/user-fuel.js, et « Rapport trajets » de l'admin) */
 .fu-form { display: flex; flex-direction: column; gap: 0.875rem; padding: 1rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
 .fu-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.875rem; }
 .fu-grid .input { width: 100%; min-width: 0; }

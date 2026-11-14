@@ -1,5 +1,5 @@
 // Employé → Carburant : noter un plein (litres, prix, plaque, photo de la pompe ou du ticket) et revoir les siens.
-// Sert aussi à la page admin (modules/admin-fuel.js) pour l'affichage d'un plein et l'ouverture de sa photo.
+// Sert aussi au « Rapport trajets » de l'admin (modules/admin-travel-report.js) pour l'affichage d'un plein et sa photo.
 import { collection, query, where, getDocs, getDoc, doc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, currentUser, pageContent, showConfirmationModal, showInfoModal, showToast } from "../app.js";
 import { escapeHTML } from './work-profile.js';

@@ -4,11 +4,15 @@ import { getAllUsers, getAllChantiers } from "./data-service.js";
 import { getWeekDateRange } from "./utils.js";
 import { localDateKey, isRegularisation, NEW_KM_RULES_SINCE, DEPOT_ADDRESS } from "./trips.js";
 import { loadFuelPrices, computeFuelCost, euros, NO_DRIVER } from "./fuel-cost.js";
+import { PLEINS, summarize, byNewest, litresLabel, eurosLabel, perLitreLabel } from "./pleins.js";
+import { toPlein, pleinRowHTML, openPleinPhoto, deletePlein } from "./user-fuel.js";
 import { createPdf, pdfHeader, pdfStats, pdfSection, pdfTable, pdfTotal, pdfSignatures, pdfFinish, pdfText, groupRow, fileStamp, safeName, C } from "./pdf-kit.js";
 
 let currentFilter = 'month'; // 'week', 'month', or 'year'
 let currentOffset = 0; // Pour la navigation par semaine/mois/année
 let lastRange = null;   // période affichée (pour l'export du détail)
+let pleins = [];        // pleins notés par les conducteurs sur la période affichée
+let pleinsLoad = 0;
 
 function formatMinutes(totalMinutes) {
     if (!totalMinutes || totalMinutes < 0) return "0h 0min";
@@ -50,6 +54,7 @@ export async function render() {
                 <div id="report-body" class="flex flex-col gap-2">
                     <p class="p-4 text-center">Chargement...</p>
                 </div>
+                <div id="fuel-pleins" class="rc-page mt-4"></div>
             </div>
         </div>
     `;
@@ -63,6 +68,7 @@ export async function render() {
         });
         document.getElementById('exportTravelDetailBtn').onclick = exportTravelDetail;
         document.getElementById('exportTravelPdfBtn').onclick = exportTravelPdf;
+        document.getElementById('fuel-pleins').onclick = handlePleinClick;
         document.getElementById("prevBtn").onclick = () => { currentOffset--; loadTravelReportForPeriod(); };
         document.getElementById("nextBtn").onclick = () => { currentOffset++; loadTravelReportForPeriod(); };
         loadTravelReportForPeriod();
@@ -107,6 +113,8 @@ async function loadTravelReportForPeriod() {
 
     currentPeriodDisplay.textContent = periodText;
     lastRange = { startDate, endDate, periodText };
+    const dayKey = (d) => d.toISOString().slice(0, 10); // les bornes de la période sont en UTC
+    loadPleins(dayKey(startDate), dayKey(endDate));
 
     try {
         const users = await getAllUsers();
@@ -165,6 +173,53 @@ async function loadTravelReportForPeriod() {
     } catch (error) {
         console.error("Erreur de chargement du rapport de trajets:", error);
         reportBody.innerHTML = `<p class="p-4 text-center text-red-500">Erreur de chargement.</p>`;
+    }
+}
+
+// --- Pleins notés par les conducteurs (page employé « Carburant ») ----------------------
+// Chargés à part : si la lecture échoue, le rapport des trajets s'affiche quand même.
+async function loadPleins(fromKey, toKey) {
+    const box = document.getElementById('fuel-pleins');
+    const current = ++pleinsLoad;
+    box.innerHTML = '';
+    try {
+        const snap = await getDocs(query(collection(db, PLEINS), where('date', '>=', fromKey), where('date', '<=', toKey)));
+        if (current !== pleinsLoad || !document.getElementById('fuel-pleins')) return;
+        pleins = snap.docs.map(toPlein).sort(byNewest);
+        renderPleins();
+    } catch (error) {
+        console.error("Erreur de chargement des pleins:", error);
+        if (current === pleinsLoad && document.getElementById('fuel-pleins')) box.innerHTML = pleinsHead() + '<p class="rc-empty">Impossible de charger les pleins.</p>';
+    }
+}
+
+const pleinsHead = () => `
+    <div>
+        <h3 class="fu-title">Pleins notés par les conducteurs</h3>
+        <p class="rc-help">Ce qui a vraiment été payé à la pompe, avec la photo de la pompe ou du ticket.</p>
+    </div>`;
+
+function renderPleins() {
+    const esc = (v) => String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const total = summarize(pleins);
+    const plural = (n) => `${n} plein${n > 1 ? 's' : ''}`;
+    document.getElementById('fuel-pleins').innerHTML = pleinsHead() + (total.count ? `
+        <div class="fu-summary">
+            <div class="fu-stat is-total"><span class="rc-eyebrow">Total payé</span><b>${eurosLabel(total.montant)}</b><span class="rc-help">${plural(total.count)} · ${litresLabel(total.litres)} · ${perLitreLabel(total)}</span></div>
+            ${total.plates.map(s => `<div class="fu-stat"><span class="fu-plate-tag">${esc(s.plaque)}</span><b>${eurosLabel(s.montant)}</b><span class="rc-help">${plural(s.count)} · ${litresLabel(s.litres)}</span></div>`).join('')}
+        </div>
+        <div class="rc-list">${pleins.map(p => pleinRowHTML(p, { who: true })).join('')}</div>`
+        : '<p class="rc-empty">Aucun plein noté sur cette période.</p>');
+}
+
+async function handlePleinClick(e) {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    if (btn.dataset.photo) { openPleinPhoto(btn.dataset.photo, btn); return; }
+    const p = pleins.find(x => x.id === btn.dataset.delete);
+    if (p && await deletePlein(p)) {
+        pleins = pleins.filter(x => x.id !== p.id);
+        if (document.getElementById('fuel-pleins')) renderPleins();
     }
 }
 

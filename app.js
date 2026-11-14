@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 import { installNativeFileSaving } from './modules/native-files.js';
 
-const APP_VERSION = 'v4.14.0';
+const APP_VERSION = 'v4.14.1';
 
 // Appli Android / iPhone : PDF et CSV proposés dans le menu « Partager » du téléphone
 installNativeFileSaving();
@@ -490,7 +490,6 @@ const adminTabs = [
     { id: 'admin-retours', name: 'Retours clients', icon: 'feedback' },
     { id: 'admin-leave', name: 'Congés', icon: 'sun' },
     { id: 'admin-travel-report', name: 'Rapport trajets', icon: 'route' },
-    { id: 'admin-fuel', name: 'Pleins carburant', icon: 'fuel' },
     { id: 'admin-hours-report', name: 'Rapport heures', icon: 'clock' },
     { id: 'admin-team', name: 'Équipe', short: 'Équipe', icon: 'users' },
     { id: 'admin-missing-hours', name: 'Écarts d\'heures', icon: 'alert' },
