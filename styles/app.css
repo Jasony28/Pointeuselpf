@@ -3651,3 +3651,23 @@ html.cat .toast > svg { display: none; }
 .fixes-to { font-weight: 600; color: var(--color-success); overflow-wrap: anywhere; }
 .fixes-why { font-size: 0.75rem; color: var(--color-text-subtle); }
 .fixes-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }
+
+/* Carburant : pleins notés par les conducteurs (modules/user-fuel.js, modules/admin-fuel.js) */
+.fu-form { display: flex; flex-direction: column; gap: 0.875rem; padding: 1rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+.fu-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.875rem; }
+.fu-grid .input { width: 100%; min-width: 0; }
+.fu-grid .input-suffix .input { padding-right: 2.25rem; }
+.fu-plate { text-transform: uppercase; font-family: var(--font-mono); letter-spacing: 0.04em; }
+.fu-plate::placeholder { letter-spacing: 0.04em; }
+.fu-form [hidden] { display: none; }
+.fu-form .pc-preview img { width: 96px; height: 96px; }
+.fu-title { margin: 0; font-size: 1.0625rem; font-weight: 700; }
+.fu-row { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.875rem 1rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); font-size: 0.875rem; }
+.fu-row-main { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem 0.75rem; flex-wrap: wrap; }
+.fu-plate-tag { align-self: flex-start; padding: 0.0625rem 0.5rem; border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 600; letter-spacing: 0.04em; white-space: nowrap; background: var(--color-surface-2); color: var(--color-text-base); }
+.fu-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 0.75rem; }
+.fu-summary:empty { display: none; }
+.fu-stat { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.875rem 1rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+.fu-stat b { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; }
+.fu-stat.is-total { border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-border)); background: var(--color-primary-soft); }
+@media (max-width: 380px) { .fu-grid { grid-template-columns: 1fr; } }

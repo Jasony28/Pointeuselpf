@@ -98,18 +98,18 @@ async function findTeammatePointages(pointage) {
 }
 
 /** Réduit une photo (JPEG, 1000 px au plus) pour qu'elle tienne dans le document Firestore. */
-export function compressImage(file) {
+export function compressImage(file, maxSide = PHOTO_MAX_SIDE, quality = 0.7) {
     return new Promise((resolve, reject) => {
         const url = URL.createObjectURL(file);
         const img = new Image();
         img.onload = () => {
-            const scale = Math.min(1, PHOTO_MAX_SIDE / Math.max(img.width, img.height));
+            const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
             const canvas = document.createElement('canvas');
             canvas.width = Math.round(img.width * scale);
             canvas.height = Math.round(img.height * scale);
             canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
             URL.revokeObjectURL(url);
-            resolve(canvas.toDataURL('image/jpeg', 0.7));
+            resolve(canvas.toDataURL('image/jpeg', quality));
         };
         img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image illisible')); };
         img.src = url;

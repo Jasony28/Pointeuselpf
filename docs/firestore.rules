@@ -1,6 +1,6 @@
 rules_version = '2';
 // Règles Firestore de la Pointeuse LPF = règles en production + ajouts pour la planification automatique
-// (règle 1 : lecture réservée aux comptes validés, « affinites », « chats » et « retoursClients » exclus de la lecture générale ; règle 2 : skillsAdmin et superAdmin protégés ; règle 9 : affinites ; règle 10 : retours clients ; règle 11 : résumés quotidiens ; règle 4 : pointages privés ; règle 12 : durées par chantier).
+// (règle 1 : lecture réservée aux comptes validés, « affinites », « chats » et « retoursClients » exclus de la lecture générale ; règle 2 : skillsAdmin et superAdmin protégés ; règle 9 : affinites ; règle 10 : retours clients ; règle 11 : résumés quotidiens ; règle 4 : pointages privés ; règle 12 : durées par chantier ; règle 13 : pleins de carburant).
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -18,10 +18,10 @@ service cloud.firestore {
     }
 
     // 1. LECTURE : comptes validés seulement. « affinites » (9), la messagerie (3), « users » (2), les pointages (4),
-    //    les retours clients (10) et les résumés (11) ont leurs propres règles :
+    //    les retours clients (10), les résumés (11) et les pleins de carburant (13) ont leurs propres règles :
     //    sinon cette règle générale (les règles s'additionnent) laisserait lire les messages ou les jetons des autres.
     match /{collection}/{document=**} {
-      allow read: if isApproved() && !(collection in ['affinites', 'chats', 'users', 'pointages', 'retoursClients', 'resumesJour']);
+      allow read: if isApproved() && !(collection in ['affinites', 'chats', 'users', 'pointages', 'retoursClients', 'resumesJour', 'pleins', 'pleinsPhotos']);
     }
 
     // 2. UTILISATEURS : impossible de changer soi-même son rôle, son statut, les notes de l'admin ou le statut super admin
@@ -180,6 +180,31 @@ service cloud.firestore {
                         && request.resource.data.reply.size() > 0
                         && request.resource.data.reply.size() <= 1000
                         && request.resource.data.replyAt == request.time)));
+    }
+
+    // 13. PLEINS DE CARBURANT : le conducteur note ses pleins (page « Carburant ») ; il lit et supprime seulement
+    //     les siens, l'admin lit et supprime tout. Un plein noté ne se modifie pas (on le supprime et on le refait).
+    //     La photo de la pompe ou du ticket est à part (pleinsPhotos, même identifiant) pour alléger les listes.
+    match /pleins/{pleinId} {
+      allow read: if isAdmin() || (isApproved() && resource.data.uid == request.auth.uid);
+      allow create: if isApproved()
+                    && request.resource.data.keys().hasOnly(['uid', 'userName', 'date', 'litres', 'montant', 'plaque', 'createdAt'])
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.date is string && request.resource.data.date.size() == 10
+                    && request.resource.data.litres is number && request.resource.data.litres > 0 && request.resource.data.litres <= 500
+                    && request.resource.data.montant is number && request.resource.data.montant > 0 && request.resource.data.montant <= 2000
+                    && request.resource.data.plaque is string && request.resource.data.plaque.size() >= 4 && request.resource.data.plaque.size() <= 12
+                    && request.resource.data.createdAt == request.time;
+      allow delete: if isAdmin() || (isApproved() && resource.data.uid == request.auth.uid);
+    }
+    match /pleinsPhotos/{pleinId} {
+      allow read: if isAdmin() || (isApproved() && resource.data.uid == request.auth.uid);
+      allow create: if isApproved()
+                    && request.resource.data.keys().hasOnly(['uid', 'photo', 'createdAt'])
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.photo is string
+                    && request.resource.data.photo.matches('^data:image/jpeg;base64,.*');
+      allow delete: if isAdmin() || (isApproved() && resource.data.uid == request.auth.uid);
     }
   }
 }
