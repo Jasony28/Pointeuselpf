@@ -1,5 +1,12 @@
 export const updatesLog = [
     {
+        version: 'v4.15.0',
+        date: '14 novembre 2026',
+        changes: [
+            "**Nouveau thème Motocross** : bleu Yamaha, damier et piste de terre. La pilote Laurine (n° 1) saute à travers l'écran sur sa moto bleue, passe en roue arrière en bas de l'écran, et son panneau de stand vient l'encourager. À choisir dans Paramètres → Thème.",
+        ]
+    },
+    {
         version: 'v4.12.2',
         date: '2 novembre 2026',
         changes: [

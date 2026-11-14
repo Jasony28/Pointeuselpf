@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 64">
+  <!-- Deux drapeaux à damier croisés qui s'agitent (thème Motocross) -->
+  <style>
+    .f { transform-box: view-box; animation: wave 1.1s ease-in-out infinite alternate; }
+    .f1 { transform-origin: 60px 60px; }
+    .f2 { transform-origin: 60px 60px; animation-direction: alternate-reverse; }
+    @keyframes wave { from { transform: rotate(-4deg); } to { transform: rotate(4deg); } }
+  </style>
+  <defs>
+    <pattern id="damier" width="12" height="12" patternUnits="userSpaceOnUse">
+      <rect width="12" height="12" fill="#fff"/>
+      <rect width="6" height="6" fill="#0b1230"/>
+      <rect x="6" y="6" width="6" height="6" fill="#0b1230"/>
+    </pattern>
+    <g id="flag">
+      <path d="M0 0V-56" stroke="#d7dbe6" stroke-width="3.2" stroke-linecap="round"/>
+      <path d="M1.500-55C12-60 22-50 37.500-55V-31C22-26 12-36 1.500-31Z" fill="url(#damier)" stroke="#2f6bff" stroke-width="1.6" stroke-linejoin="round"/>
+    </g>
+  </defs>
+  <g class="f f1"><use href="#flag" transform="translate(60 60) rotate(-34) scale(-1 1)"/></g>
+  <g class="f f2"><use href="#flag" transform="translate(60 60) rotate(34)"/></g>
+</svg>

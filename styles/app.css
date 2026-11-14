@@ -2237,6 +2237,81 @@ html[data-skin="hiver"] #live-tracker-container::before {
     pointer-events: none;
 }
 
+/* ---- Motocross : bleu Yamaha, damier d'arrivée, piste de terre. La pilote s'appelle Laurine ----
+   La moto qui saute, celle qui roule et le panneau de stand sont dans #theme-decor, posé par app.js */
+html[data-skin="motocross"] { --mx-blue: #2f6bff; --mx-sky: #7fb0ff; --mx-navy: #0b1230; }
+html[data-skin="motocross"] body {
+    background-image:
+        radial-gradient(900px 520px at 90% -10%, rgba(47, 107, 255, 0.34), transparent 65%),
+        radial-gradient(700px 420px at 0% 0%, rgba(127, 176, 255, 0.12), transparent 65%),
+        repeating-linear-gradient(-58deg, rgba(255, 255, 255, 0.022) 0 2px, transparent 2px 26px),
+        linear-gradient(180deg, #081033 0%, #050a1f 60%, #070d2a 100%);
+    background-attachment: fixed;
+}
+/* Piste de terre au pied de l'écran : buttes, table de saut, bottes de paille */
+html[data-skin="motocross"] body::after {
+    content: '';
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: var(--bottom-nav-height, 0px);
+    height: 120px;
+    z-index: -1;
+    pointer-events: none;
+    background: url("../themes/motocross/piste.svg") center bottom / auto 120px repeat-x;
+    opacity: 0.6;
+}
+/* Cartes avec un liseré bleu de course */
+html[data-skin="motocross"] #page-content [style*="background-color: var(--color-surface)"]:not(button):not(input):not(select):not(textarea),
+html[data-skin="motocross"] #page-content .settings-card {
+    box-shadow: inset 0 3px 0 var(--mx-blue), 0 16px 36px -18px rgba(0, 0, 0, 0.7);
+}
+/* Damier d'arrivée sous la barre du haut */
+html[data-skin="motocross"] .topbar { border-bottom-color: transparent; }
+html[data-skin="motocross"] .topbar::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -8px;
+    height: 8px;
+    background: conic-gradient(#fff 25%, var(--mx-navy) 0 50%, #fff 0 75%, var(--mx-navy) 0) 0 0 / 8px 8px;
+    opacity: 0.9;
+    pointer-events: none;
+}
+/* Boutons avec bandes de course */
+html[data-skin="motocross"] .btn-primary,
+html[data-skin="motocross"] .tracker-btn-start,
+html[data-skin="motocross"] #page-content button[style*="background-color: var(--color-primary)"] {
+    background-image: linear-gradient(115deg, transparent 0 64%, rgba(255, 255, 255, 0.24) 64% 70%, transparent 70% 74%, rgba(255, 255, 255, 0.24) 74% 77%, transparent 77%) !important;
+    box-shadow: 0 8px 20px -8px rgba(47, 107, 255, 0.8);
+}
+html[data-skin="motocross"] .tracker-timer { color: #fff; font-family: var(--font-display); text-shadow: 0 0 22px rgba(47, 107, 255, 0.8); }
+html[data-skin="motocross"] #page-content h1.text-2xl::after,
+html[data-skin="motocross"] #page-content h2.text-2xl::after { content: ' 🏁'; }
+html[data-skin="motocross"] #page-content .settings-section-title::before { content: '// '; color: var(--mx-blue); font-weight: 800; }
+/* Logo et avatar comme une plaque de course */
+html[data-skin="motocross"] .brand-mark,
+html[data-skin="motocross"] .avatar { background: linear-gradient(135deg, #3d7bff, #1535b8); box-shadow: 0 0 0 2px #fff; }
+html[data-skin="motocross"] .nav-link.nav-active { color: #fff; }
+html[data-skin="motocross"] .nav-link.nav-active::before { background: var(--mx-sky); box-shadow: 0 0 10px var(--mx-blue); }
+html[data-skin="motocross"] .nav-link.nav-active svg { color: var(--mx-sky); }
+html[data-skin="motocross"] ::selection { background: rgba(47, 107, 255, 0.5); }
+/* Drapeaux à damier croisés au-dessus du chrono */
+html[data-skin="motocross"] #live-tracker-container { overflow: visible; margin-top: 30px; }
+html[data-skin="motocross"] #live-tracker-container::before {
+    content: '';
+    position: absolute;
+    top: -34px;
+    left: 50%;
+    width: 96px;
+    height: 51px;
+    transform: translateX(-50%);
+    background: url("../themes/motocross/drapeau.svg") center / contain no-repeat;
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.4));
+    pointer-events: none;
+}
+
 /* Personnages animés : au-dessus des pages, du menu et de la barre du haut, sous les fenêtres et les messages */
 .theme-decor { position: fixed; inset: 0; z-index: 45; overflow: hidden; pointer-events: none; }
 .theme-decor > img,
@@ -2331,6 +2406,83 @@ html[data-skin="hiver"] #live-tracker-container::before {
     0%, 100% { transform: translateY(calc(100% + var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom) + 12px)); }
     4%, 15% { transform: translateY(6%); }
     19% { transform: translateY(calc(100% + var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom) + 12px)); }
+}
+
+/* Motocross : Laurine saute à travers l'écran (grande parabole), de temps en temps */
+.decor-mx-jump {
+    top: 32vh;
+    left: 0;
+    width: clamp(150px, 24vw, 280px);
+    translate: -110% 0;
+    filter: drop-shadow(0 0 12px rgba(127, 176, 255, 0.45));
+    animation: mx-cross 38s linear 4s infinite, mx-arc 38s linear 4s infinite;
+}
+/* Le trajet passe par « translate » et la parabole par « transform » : la rotation ne dévie pas le trajet */
+@keyframes mx-cross {
+    0% { translate: -110% 0; }
+    12%, 100% { translate: calc(100vw + 30%) 0; }
+}
+@keyframes mx-arc {
+    0% { transform: translateY(0) rotate(-26deg); animation-timing-function: ease-out; }
+    6% { transform: translateY(-22vh) rotate(-2deg); animation-timing-function: ease-in; }
+    12%, 100% { transform: translateY(0) rotate(24deg); }
+}
+/* Puis elle repasse en bas de l'écran et lève la roue avant */
+.decor-mx-ride {
+    left: 0;
+    bottom: calc(var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom) - 1px);
+    width: 92px;
+    translate: -120px 0;
+    transform-origin: 22% 78%;
+    animation: mx-ride 26s linear 17s infinite, mx-wheelie 26s ease-in-out 17s infinite;
+}
+@keyframes mx-ride {
+    0% { translate: -120px 0; }
+    24%, 100% { translate: calc(100vw + 30px) 0; }
+}
+@keyframes mx-wheelie {
+    0%, 5% { rotate: 0deg; }
+    9%, 16% { rotate: -34deg; }
+    20%, 100% { rotate: 0deg; }
+}
+/* Panneau de stand qui sort du bas à droite pour encourager Laurine */
+.decor-mx-board {
+    right: clamp(12px, 4vw, 40px);
+    bottom: calc(var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom));
+    padding-bottom: 44px;
+    transform: translateY(calc(100% + var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom) + 12px));
+    animation: mx-board 32s ease-in-out 10s infinite;
+}
+.decor-mx-board::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    z-index: -1;
+    width: 6px;
+    height: 52px;
+    margin-left: -3px;
+    border-radius: 3px;
+    background: #cdd3df;
+}
+.decor-mx-board-text {
+    display: block;
+    padding: 0.45rem 0.8rem;
+    border: 3px solid #fff;
+    border-radius: 6px;
+    background: var(--mx-navy, #0b1230);
+    color: #fff;
+    font-family: 'Russo One', var(--font-sans);
+    font-size: 0.9375rem;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    box-shadow: inset 0 0 0 2px var(--mx-blue, #2f6bff), 0 8px 18px -6px rgba(0, 0, 0, 0.6);
+    transform: rotate(-4deg);
+}
+@keyframes mx-board {
+    0%, 100% { transform: translateY(calc(100% + var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom) + 12px)); }
+    4%, 16% { transform: translateY(0); }
+    20% { transform: translateY(calc(100% + var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom) + 12px)); }
 }
 
 /* Animations de décor coupées si le téléphone demande moins de mouvement */

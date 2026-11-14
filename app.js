@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 import { installNativeFileSaving } from './modules/native-files.js';
 
-const APP_VERSION = 'v4.14.2';
+const APP_VERSION = 'v4.15.0';
 
 // Appli Android / iPhone : PDF et CSV proposés dans le menu « Partager » du téléphone
 installNativeFileSaving();
@@ -259,6 +259,32 @@ export const themes = {
             '--font-display': "'Fredoka', sans-serif",
             '--radius-scale': '1.2',
         }
+    },
+    // Thème « Motocross » : moto bleue de la pilote Laurine (illustrations dans themes/motocross), sauts et panneau de stand
+    motocross: {
+        name: 'Motocross',
+        tagline: 'Bleu Yamaha, pilote Laurine',
+        preview: '#2f6bff',
+        group: 'ambiance',
+        skin: 'motocross',
+        decor: 'motocross',
+        dark: true,
+        fonts: ['Russo+One'],
+        previewBackground: `url("${asset('./themes/motocross/moto.svg')}") 62% 34% / 74% no-repeat, url("${asset('./themes/motocross/piste.svg')}") bottom / 220% no-repeat, radial-gradient(90% 70% at 80% 0%, rgba(47, 107, 255, 0.55), transparent 70%), linear-gradient(180deg, #081033, #050a1f)`,
+        colors: {
+            '--color-primary': '#2f6bff',
+            '--color-primary-hover': '#5b8cff',
+            '--color-background': '#050a1f',
+            '--color-surface': '#0c1638',
+            '--color-text-base': '#eef3ff',
+            '--color-text-muted': '#93a4d1',
+            '--color-border': '#1c2b63',
+            '--sidebar-bg': '#040817',
+            '--sidebar-bg-2': '#132260',
+            '--sidebar-active-bg': 'rgba(47, 107, 255, 0.2)',
+            '--font-display': "'Russo One', sans-serif",
+            '--radius-scale': '0.7',
+        }
     }
 };
 
@@ -292,7 +318,16 @@ const decors = {
         <img class="decor-elf decor-elf-cane" src="${asset('./themes/noel/lutin-sucre-orge.svg')}" alt="">
         <img class="decor-banner" src="${asset('./themes/noel/lutins-banniere.svg')}" alt="">
         <div class="decor-santa-peek"><span class="decor-sign">${christmasCountdown()}</span><img src="${asset('./themes/noel/pere-noel-coucou.svg')}" alt=""></div>`,
+    motocross: () => `
+        <img class="decor-mx-jump" src="${asset('./themes/motocross/moto.svg')}" alt="">
+        <img class="decor-mx-ride" src="${asset('./themes/motocross/moto.svg')}" alt="">
+        <div class="decor-mx-board"><span class="decor-mx-board-text">${pitBoardMessage()}</span></div>`,
 };
+
+// Panneau de stand de Laurine : un nouveau message à chaque apparition
+const pitBoardMessages = ['GO LAURINE !', 'P1 · LAURINE', 'GAZ, LAURINE !', 'HOLESHOT !', 'LAURINE N° 1'];
+let pitBoardIndex = 0;
+const pitBoardMessage = () => pitBoardMessages[pitBoardIndex++ % pitBoardMessages.length];
 
 // Pancarte du Père Noël : « J-12 avant Noël », remise à jour à chaque apparition
 function christmasCountdown(now = new Date()) {
@@ -319,6 +354,9 @@ function applyDecor(name) {
     layer.innerHTML = decors[name]();
     layer.querySelector('.decor-santa-peek')?.addEventListener('animationiteration', () => {
         layer.querySelector('.decor-sign').textContent = christmasCountdown();
+    });
+    layer.querySelector('.decor-mx-board')?.addEventListener('animationiteration', () => {
+        layer.querySelector('.decor-mx-board-text').textContent = pitBoardMessage();
     });
     document.body.appendChild(layer);
 }

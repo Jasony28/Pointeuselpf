@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 120" preserveAspectRatio="none">
+  <!-- Piste de cross : buttes de terre, table de saut, bottes de paille, fanions (se répète à l'horizontale) -->
+  <path d="M0 62C60 44 100 38 150 54C200 70 240 46 300 40C360 34 400 62 450 56C500 50 550 54 600 62V120H0Z" fill="#5d3c21"/>
+  <path d="M0 72C70 60 120 58 170 68C230 80 280 62 330 60C390 58 430 76 480 72C530 68 570 68 600 72" fill="none" stroke="#6f4a2b" stroke-width="2" stroke-dasharray="10 8" opacity=".7"/>
+  <!-- fanions sur la butte du fond -->
+  <g stroke="#d7dbe6" stroke-width="1.6">
+    <path d="M300 40V20M450 56V38"/>
+  </g>
+  <path d="M300 20L316 25L300 30Z" fill="#2f6bff"/>
+  <path d="M450 38L464 42.500L450 47Z" fill="#fff"/>
+  <!-- piste au premier plan avec table de saut -->
+  <path d="M0 96C40 92 70 92 100 90L150 64L232 64L272 92C330 98 380 86 420 90C440 78 462 78 482 90C520 96 560 98 600 96V120H0Z" fill="#43290f"/>
+  <path d="M150 64L232 64" stroke="#7a5230" stroke-width="3" stroke-linecap="round"/>
+  <path d="M0 104C60 100 100 100 140 98M280 102C340 106 380 96 420 99M490 100C530 104 570 105 600 104" fill="none" stroke="#2c1a08" stroke-width="2.4" stroke-dasharray="14 7" opacity=".8"/>
+  <!-- bottes de paille -->
+  <g fill="#e2b84a" stroke="#b08a2a" stroke-width="1.4">
+    <rect x="312" y="84" width="24" height="13" rx="2"/>
+    <rect x="530" y="84" width="24" height="13" rx="2"/>
+  </g>
+  <path d="M320 84V97M328 84V97M538 84V97M546 84V97" stroke="#b08a2a" stroke-width="1.2"/>
+  <!-- rubalise bleue et blanche -->
+  <path d="M40 78V94M90 76V91" stroke="#d7dbe6" stroke-width="2"/>
+  <path d="M40 80L90 78" stroke="#2f6bff" stroke-width="3.5" stroke-dasharray="6 6"/>
+  <path d="M43 80L87 78.200" stroke="#fff" stroke-width="3.5" stroke-dasharray="6 6" stroke-dashoffset="6" opacity=".9"/>
+</svg>
