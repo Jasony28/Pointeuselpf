@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 204">
+  <!-- Pilote sur une Yamaha YZ450F bleue, plaque n° 1 (thème Motocross) -->
+  <style>
+    .wheel { transform-box: fill-box; transform-origin: center; animation: spin .5s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .roost circle { animation: roost .7s linear infinite; }
+    .roost circle:nth-child(2n) { animation-delay: -.25s; }
+    .roost circle:nth-child(3n) { animation-delay: -.45s; }
+    @keyframes roost { from { transform: translate(0, 0); opacity: 1; } to { transform: translate(-26px, -16px); opacity: 0; } }
+    .name { font: 900 8.2px 'Arial Black', Arial, Helvetica, sans-serif; letter-spacing: .4px; }
+    .brand { font: 900 5.6px 'Arial Black', Arial, Helvetica, sans-serif; letter-spacing: .2px; }
+    .model { font: 900 7px 'Arial Black', Arial, Helvetica, sans-serif; letter-spacing: .3px; }
+    .num { font: 900 17px 'Arial Black', Arial, Helvetica, sans-serif; }
+  </style>
+  <defs>
+    <g id="wheel">
+      <circle r="38" fill="none" stroke="#2b3245" stroke-width="5" stroke-dasharray="6 3.95"/>
+      <circle r="33.5" fill="none" stroke="#2b3245" stroke-width="7"/>
+      <circle r="28" fill="none" stroke="#2f6bff" stroke-width="3.2"/>
+      <path d="M0-27V27M-27 0H27M-19-19L19 19M-19 19L19-19" stroke="#c5ccda" stroke-width="1.1"/>
+      <circle r="6" fill="#8d95a6"/>
+      <circle r="2.4" fill="#2a2e3a"/>
+    </g>
+  </defs>
+
+  <!-- terre projetée par la roue arrière -->
+  <g class="roost" fill="#a8703c">
+    <circle cx="30" cy="170" r="3.2"/><circle cx="24" cy="160" r="2.4"/><circle cx="36" cy="182" r="2.6"/>
+    <circle cx="20" cy="176" r="2"/><circle cx="28" cy="150" r="1.8"/><circle cx="16" cy="166" r="2.6"/>
+  </g>
+
+  <!-- roues -->
+  <g transform="translate(66 158)"><g class="wheel"><use href="#wheel"/></g><circle r="11" fill="none" stroke="#d9a81e" stroke-width="2.4" stroke-dasharray="2.4 1.6"/></g>
+  <g transform="translate(238 158)"><g class="wheel"><use href="#wheel"/></g><circle r="10" fill="none" stroke="#aab2c2" stroke-width="1.6"/></g>
+
+  <!-- bras oscillant, chaîne, amortisseur -->
+  <path d="M66 158L134 140" stroke="#cdd3df" stroke-width="7.5" stroke-linecap="round"/>
+  <path d="M66 148L140 134M66 168L142 150" stroke="#5a6070" stroke-width="1.6" stroke-dasharray="3 1.6"/>
+  <path d="M120 106L128 138" stroke="#2f6bff" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- échappement -->
+  <path d="M172 124C192 120 194 142 174 146" fill="none" stroke="#dfe3ea" stroke-width="5" stroke-linecap="round"/>
+  <path d="M138 118L86 102" stroke="#e3e6ec" stroke-width="11" stroke-linecap="round"/>
+  <path d="M90 103L82 100.6" stroke="#3a3f4c" stroke-width="11" stroke-linecap="round"/>
+
+  <!-- cadre et moteur -->
+  <path d="M194 96L180 150L150 160L128 150" fill="none" stroke="#b9c0ce" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M130 120L170 114L178 148L152 158L132 152Z" fill="#4b5160"/>
+  <path d="M146 112L168 108L172 126L150 130Z" fill="#666d7e"/>
+  <circle cx="152" cy="141" r="10" fill="#7a8192"/><circle cx="152" cy="141" r="5.5" fill="#4b5160"/>
+  <path d="M138 152H158" stroke="#2a2e3a" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- garde-boue arrière, plaque latérale n° 1 -->
+  <path d="M150 98C122 94 92 86 40 64C42 72 44 76 48 80C72 94 96 106 118 120L150 118Z" fill="#2456e8"/>
+  <path d="M40 64C60 72 80 79 100 85L98 90C78 84 60 76 44 73Z" fill="#fff"/>
+  <path d="M100 97L136 101L133 119L114 117Z" fill="#fff"/>
+  <text class="model" fill="#fff" transform="translate(62 87.500) rotate(21)">YZ450F</text>
+
+  <!-- fourche, garde-boue avant, plaque avant -->
+  <path d="M201 66L238 158" stroke="#cdd3df" stroke-width="6.5" stroke-linecap="round"/>
+  <path d="M223 122L238 158" stroke="#2456e8" stroke-width="10" stroke-linecap="round"/>
+  <path d="M196 106C226 92 258 100 280 122L270 123C252 110 228 106 203 114Z" fill="#2456e8"/>
+  <path d="M214 100C234 97 252 103 266 113" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+  <path d="M193 58L213 62L218 94L200 92Z" fill="#fff" stroke="#2456e8" stroke-width="2" stroke-linejoin="round"/>
+  <text class="num" x="199.5" y="84" fill="#0d1a4a" transform="rotate(8 205 76)">1</text>
+
+  <!-- jambe et botte -->
+  <path d="M128 78L168 98" stroke="#132a86" stroke-width="20" stroke-linecap="round"/>
+  <path d="M168 98L146 124" stroke="#132a86" stroke-width="16" stroke-linecap="round"/>
+  <path d="M136 80L164 94" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+  <path d="M160 92L174 96L170 108L158 102Z" fill="#fff"/>
+  <path d="M135 120L156 118L156 142L168 147L168 154L133 154Z" fill="#fff"/>
+  <path d="M136 128H156M135 137H156" stroke="#2456e8" stroke-width="2.4"/>
+  <path d="M133 154H168" stroke="#10131c" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- selle, réservoir et ouïes -->
+  <path d="M90 86C112 92 142 94 172 84L178 92C148 104 114 102 90 94Z" fill="#0d1a4a"/>
+  <path d="M162 88L198 76L217 96L198 126L172 128L160 110Z" fill="#2456e8"/>
+  <path d="M171 99.500L206 87L212 97L179 110.500Z" fill="#fff"/>
+  <text class="brand" fill="#0d1a4a" transform="translate(178.500 106.300) rotate(-20)">YAMAHA</text>
+  <path d="M180 112L204 104L199 116L184 120Z" fill="#7fb0ff"/>
+
+  <!-- buste : maillot bleu, marque dans le dos -->
+  <path d="M126 76L166 44" stroke="#2f6bff" stroke-width="27" stroke-linecap="round"/>
+  <path d="M117 66L156 34" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".9"/>
+  <text class="name" fill="#fff" transform="translate(118.500 79.500) rotate(-38.6)">YAMAHA</text>
+
+  <!-- bras, gant, guidon -->
+  <path d="M201 66L190 55" stroke="#22252e" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="M166 46L180 68L193 58" fill="none" stroke="#2f6bff" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M169 51L181 69" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>
+  <circle cx="193" cy="57" r="6" fill="#fff"/>
+
+  <!-- casque, lunettes -->
+  <circle cx="180" cy="28" r="16" fill="#2456e8"/>
+  <path d="M165.500 22C172 12 186 9 195 18" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round"/>
+  <path d="M184 14L208 11L196 23Z" fill="#0d1a4a"/>
+  <path d="M184 34L201 36L195 46L180 44Z" fill="#fff"/>
+  <path d="M186 21L198 23L197 33L185 31Z" fill="#10131c"/>
+  <path d="M188.500 23.500L196 24.800L195.300 31L187.800 29.700Z" fill="#59d6ff"/>
+  <path d="M166 27L185 26" stroke="#10131c" stroke-width="3"/>
+</svg>
