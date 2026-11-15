@@ -4,7 +4,7 @@ const { precaching, routing, strategies, core } = workbox;
 core.setCacheNameDetails({ prefix: 'pointeuse-lpf-cache' });
 
 // Version synchronisée avec app.js
-const APP_VERSION = 'v4.15.0'; // <--- CHANGEMENT ICI
+const APP_VERSION = 'v4.15.1'; // <--- CHANGEMENT ICI
 
 precaching.precacheAndRoute([
     { url: './', revision: APP_VERSION },
@@ -96,6 +96,8 @@ precaching.precacheAndRoute([
     { url: 'themes/motocross/moto.svg', revision: APP_VERSION },
     { url: 'themes/motocross/piste.svg', revision: APP_VERSION },
     { url: 'themes/motocross/drapeau.svg', revision: APP_VERSION },
+    { url: 'themes/motocross/boue.svg', revision: APP_VERSION },
+    { url: 'themes/motocross/traces.svg', revision: APP_VERSION },
 ]);
 
 // Stratégie pour les pages HTML

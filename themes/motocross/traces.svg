@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 72">
+  <!-- Trace de pneu à crampons, se répète à la verticale (thème Motocross) -->
+  <g fill="#9db4ff" fill-opacity=".09">
+    <rect x="3" y="2" width="9" height="13" rx="1.5"/><rect x="19.500" y="2" width="9" height="9" rx="1.5"/><rect x="36" y="2" width="9" height="13" rx="1.5"/>
+    <rect x="11" y="20" width="9" height="9" rx="1.5"/><rect x="28" y="20" width="9" height="9" rx="1.5"/>
+    <rect x="3" y="38" width="9" height="13" rx="1.5"/><rect x="19.500" y="38" width="9" height="9" rx="1.5"/><rect x="36" y="38" width="9" height="13" rx="1.5"/>
+    <rect x="11" y="56" width="9" height="9" rx="1.5"/><rect x="28" y="56" width="9" height="9" rx="1.5"/>
+  </g>
+</svg>

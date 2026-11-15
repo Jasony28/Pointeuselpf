@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 import { installNativeFileSaving } from './modules/native-files.js';
 
-const APP_VERSION = 'v4.15.0';
+const APP_VERSION = 'v4.15.1';
 
 // Appli Android / iPhone : PDF et CSV proposés dans le menu « Partager » du téléphone
 installNativeFileSaving();
@@ -260,10 +260,10 @@ export const themes = {
             '--radius-scale': '1.2',
         }
     },
-    // Thème « Motocross » : moto bleue de la pilote Laurine (illustrations dans themes/motocross), sauts et panneau de stand
+    // Thème « Motocross Yamaha » : YZ450F bleue (illustrations dans themes/motocross), sauts, course et panneau de stand
     motocross: {
-        name: 'Motocross',
-        tagline: 'Bleu Yamaha, pilote Laurine',
+        name: 'Motocross Yamaha',
+        tagline: 'YZ450F, bleu racing, terre et damier',
         preview: '#2f6bff',
         group: 'ambiance',
         skin: 'motocross',
@@ -321,11 +321,12 @@ const decors = {
     motocross: () => `
         <img class="decor-mx-jump" src="${asset('./themes/motocross/moto.svg')}" alt="">
         <img class="decor-mx-ride" src="${asset('./themes/motocross/moto.svg')}" alt="">
+        <img class="decor-mx-ride decor-mx-rival" src="${asset('./themes/motocross/moto.svg')}" alt="">
         <div class="decor-mx-board"><span class="decor-mx-board-text">${pitBoardMessage()}</span></div>`,
 };
 
-// Panneau de stand de Laurine : un nouveau message à chaque apparition
-const pitBoardMessages = ['GO LAURINE !', 'P1 · LAURINE', 'GAZ, LAURINE !', 'HOLESHOT !', 'LAURINE N° 1'];
+// Panneau de stand : un nouveau message à chaque apparition
+const pitBoardMessages = ['P1 · YAMAHA', 'GAZ !', 'HOLESHOT !', '+2.4 s', 'YZ450F N° 1', 'DERNIER TOUR'];
 let pitBoardIndex = 0;
 const pitBoardMessage = () => pitBoardMessages[pitBoardIndex++ % pitBoardMessages.length];
 

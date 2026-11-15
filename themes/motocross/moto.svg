@@ -1,15 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 204">
-  <!-- Pilote « Laurine » sur sa moto de cross bleue, plaque n° 1 (thème Motocross) -->
+  <!-- Pilote sur une Yamaha YZ450F bleue, plaque n° 1 (thème Motocross) -->
   <style>
     .wheel { transform-box: fill-box; transform-origin: center; animation: spin .5s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .hair { transform-box: fill-box; transform-origin: 100% 40%; animation: flutter .32s ease-in-out infinite alternate; }
-    @keyframes flutter { from { transform: rotate(-7deg); } to { transform: rotate(9deg); } }
     .roost circle { animation: roost .7s linear infinite; }
     .roost circle:nth-child(2n) { animation-delay: -.25s; }
     .roost circle:nth-child(3n) { animation-delay: -.45s; }
     @keyframes roost { from { transform: translate(0, 0); opacity: 1; } to { transform: translate(-26px, -16px); opacity: 0; } }
     .name { font: 900 8.2px 'Arial Black', Arial, Helvetica, sans-serif; letter-spacing: .4px; }
+    .brand { font: 900 5.6px 'Arial Black', Arial, Helvetica, sans-serif; letter-spacing: .2px; }
+    .model { font: 900 7px 'Arial Black', Arial, Helvetica, sans-serif; letter-spacing: .3px; }
     .num { font: 900 17px 'Arial Black', Arial, Helvetica, sans-serif; }
   </style>
   <defs>
@@ -54,6 +54,7 @@
   <path d="M150 98C122 94 92 86 40 64C42 72 44 76 48 80C72 94 96 106 118 120L150 118Z" fill="#2456e8"/>
   <path d="M40 64C60 72 80 79 100 85L98 90C78 84 60 76 44 73Z" fill="#fff"/>
   <path d="M100 97L136 101L133 119L114 117Z" fill="#fff"/>
+  <text class="model" fill="#fff" transform="translate(62 87.500) rotate(21)">YZ450F</text>
 
   <!-- fourche, garde-boue avant, plaque avant -->
   <path d="M201 66L238 158" stroke="#cdd3df" stroke-width="6.5" stroke-linecap="round"/>
@@ -75,16 +76,14 @@
   <!-- selle, réservoir et ouïes -->
   <path d="M90 86C112 92 142 94 172 84L178 92C148 104 114 102 90 94Z" fill="#0d1a4a"/>
   <path d="M162 88L198 76L217 96L198 126L172 128L160 110Z" fill="#2456e8"/>
-  <path d="M176 98L205 88L211 97L183 109Z" fill="#fff"/>
+  <path d="M171 99.500L206 87L212 97L179 110.500Z" fill="#fff"/>
+  <text class="brand" fill="#0d1a4a" transform="translate(178.500 106.300) rotate(-20)">YAMAHA</text>
   <path d="M180 112L204 104L199 116L184 120Z" fill="#7fb0ff"/>
 
-  <!-- buste : maillot bleu, nom dans le dos -->
+  <!-- buste : maillot bleu, marque dans le dos -->
   <path d="M126 76L166 44" stroke="#2f6bff" stroke-width="27" stroke-linecap="round"/>
   <path d="M117 66L156 34" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".9"/>
-  <text class="name" fill="#fff" transform="translate(118.500 79.500) rotate(-38.6)">LAURINE</text>
-
-  <!-- queue de cheval au vent -->
-  <path class="hair" d="M168 34C154 28 146 40 124 34C134 44 138 50 120 54C142 58 160 52 170 44Z" fill="#8a5527"/>
+  <text class="name" fill="#fff" transform="translate(118.500 79.500) rotate(-38.6)">YAMAHA</text>
 
   <!-- bras, gant, guidon -->
   <path d="M201 66L190 55" stroke="#22252e" stroke-width="4.5" stroke-linecap="round"/>
