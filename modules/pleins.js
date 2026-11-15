@@ -4,6 +4,7 @@
 // La photo (image réduite, en data URL) est à part dans « pleinsPhotos/{même id} » : { uid, photo, createdAt },
 // pour que les listes restent légères ; elle n'est lue que quand on l'ouvre.
 // Les fonctions sans Firebase (parseAmount, normalizePlate, validatePlein, summarize) sont testées par tests/pleins.test.mjs.
+// Plaque inconnue : le conducteur choisit « Plaque non disponible », enregistré comme NO_PLATE (« NON-DISPO »).
 
 export const PLEINS = 'pleins';
 export const PLEINS_PHOTOS = 'pleinsPhotos';
@@ -12,6 +13,23 @@ export const LITRES_MAX = 500;
 export const MONTANT_MAX = 2000;
 // Un document Firestore fait 1 Mo au plus : la photo (en texte) doit rester nettement en dessous
 export const PHOTO_MAX_CHARS = 700000;
+
+// Voitures de l'équipe, proposées par défaut dans la liste du formulaire (plaque déjà au format de normalizePlate).
+export const DEFAULT_PLATES = [
+    { plaque: '2-FSZ-885', label: 'Julien (BMW)' },
+    { plaque: '2-JEG-688', label: 'Aline' },
+    { plaque: '2-JTX-792', label: 'Florian' },
+    { plaque: '1-UBE-231', label: 'Laura' },
+    { plaque: '2-HHF-723', label: 'Sandrine (Hyundai)' },
+    { plaque: '2-HTE-549', label: 'Sandrine (Clio blanche)' },
+    { plaque: '2-KEA-776', label: 'Sandrine (Renault)' },
+    { plaque: 'K-9718-BT', label: 'Sandrine (Fiat)' },
+];
+// Valeur enregistrée quand le conducteur ne connaît pas la plaque (respecte les règles : 4 à 12 caractères).
+export const NO_PLATE = 'NON-DISPO';
+
+/** Texte à afficher pour une plaque enregistrée. */
+export const plateLabel = (plaque) => (plaque === NO_PLATE ? 'Plaque non dispo' : (plaque || ''));
 
 /** « 45,3 » ou « 45.30 € » → 45.3 ; texte invalide → NaN. */
 export function parseAmount(text) {
@@ -29,7 +47,7 @@ export function normalizePlate(text) {
 export function validatePlein({ date, plaque, litres, montant, hasPhoto }, today) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return { error: "Indique la date du plein." };
     if (today && date > today) return { error: "La date du plein ne peut pas être dans le futur." };
-    const plate = normalizePlate(plaque);
+    const plate = plaque === NO_PLATE ? NO_PLATE : normalizePlate(plaque);
     if (plate.replace(/-/g, '').length < 4) return { error: "Indique la plaque de la voiture (ex. : 1-ABC-123)." };
     const l = parseAmount(litres);
     if (!(l > 0)) return { error: "Indique le nombre de litres (ex. : 42,5)." };

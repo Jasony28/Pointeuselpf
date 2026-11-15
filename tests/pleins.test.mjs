@@ -1,7 +1,7 @@
 // Pleins de carburant (modules/pleins.js) : lecture des nombres, plaque, contrôle de la saisie, totaux
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAmount, normalizePlate, validatePlein, summarize, pricePerLitre, byNewest } from '../modules/pleins.js';
+import { parseAmount, normalizePlate, validatePlein, summarize, pricePerLitre, byNewest, DEFAULT_PLATES, NO_PLATE, plateLabel } from '../modules/pleins.js';
 
 const ok = { date: '2026-11-10', plaque: '1-abc-123', litres: '42,5', montant: '78,40', hasPhoto: true };
 
@@ -37,6 +37,24 @@ test('chaque champ manquant ou faux est refusé', () => {
     refused({ montant: '5000' });
     refused({ hasPhoto: false });
 });
+
+test('plaques par défaut et « plaque non disponible »', () => {
+    DEFAULT_PLATES.forEach(p => {
+        assert.equal(normalizePlate(p.plaque), p.plaque, p.plaque);
+        assert.equal(validatePlein({ ...ok, plaque: p.plaque }, '2026-11-14').value.plaque, p.plaque);
+    });
+    assert.equal(new Set(DEFAULT_PLATES.map(p => p.plaque)).size, DEFAULT_PLATES.length);
+    const sansPlaque = validatePlein({ ...ok, plaque: NO_PLATE }, '2026-11-14').value.plaque;
+    assert.equal(sansPlaque, NO_PLATE);
+    assert.ok(sansPlaque.length >= 4 && sansPlaque.length <= 12); // règles Firestore
+    assert.equal(plateLabel(NO_PLATE), 'Plaque non dispo');
+    assert.equal(plateLabel('1-ABC-123'), '1-ABC-123');
+    refusedPlate('');
+});
+
+function refusedPlate(plaque) {
+    assert.ok(validatePlein({ ...ok, plaque }, '2026-11-14').error);
+}
 
 test('totaux et détail par plaque', () => {
     const s = summarize([

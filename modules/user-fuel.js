@@ -4,9 +4,10 @@ import { collection, query, where, getDocs, getDoc, doc, writeBatch, serverTimes
 import { db, currentUser, pageContent, showConfirmationModal, showInfoModal, showToast } from "../app.js";
 import { escapeHTML } from './work-profile.js';
 import { compressImage, openPhoto, dayLabel } from './retours-clients.js';
-import { PLEINS, PLEINS_PHOTOS, PLATE_MAX, PHOTO_MAX_CHARS, parseAmount, normalizePlate, validatePlein, summarize, byNewest, litresLabel, eurosLabel, perLitreLabel } from './pleins.js';
+import { PLEINS, PLEINS_PHOTOS, PLATE_MAX, PHOTO_MAX_CHARS, DEFAULT_PLATES, NO_PLATE, plateLabel, parseAmount, normalizePlate, validatePlein, summarize, byNewest, litresLabel, eurosLabel, perLitreLabel } from './pleins.js';
 
 const LAST_PLATE_KEY = 'lastFuelPlate';
+const OTHER_PLATE = '__autre';
 const CAMERA_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
 
 let pleins = [];
@@ -38,9 +39,9 @@ export async function render() {
                         <input id="fuDate" type="date" class="input" value="${todayKey()}" max="${todayKey()}" required>
                     </div>
                     <div class="field">
-                        <label class="field-label" for="fuPlate">Plaque de la voiture</label>
-                        <input id="fuPlate" type="text" class="input fu-plate" value="${escapeHTML(lastPlate)}" maxlength="${PLATE_MAX}" placeholder="1-ABC-123" autocapitalize="characters" autocomplete="off" spellcheck="false" list="fuPlates" required>
-                        <datalist id="fuPlates"></datalist>
+                        <label class="field-label" for="fuPlateSelect">Plaque de la voiture</label>
+                        <select id="fuPlateSelect" class="input" required></select>
+                        <input id="fuPlate" type="text" class="input fu-plate" maxlength="${PLATE_MAX}" placeholder="1-ABC-123" autocapitalize="characters" autocomplete="off" spellcheck="false" aria-label="Autre plaque" hidden>
                     </div>
                     <div class="field">
                         <label class="field-label" for="fuLitres">Litres</label>
@@ -74,6 +75,8 @@ export async function render() {
 
     const plate = document.getElementById('fuPlate');
     plate.onblur = () => { plate.value = normalizePlate(plate.value); };
+    fillPlateSelect(lastPlate);
+    document.getElementById('fuPlateSelect').onchange = updatePlateInput;
     ['fuLitres', 'fuMontant'].forEach(id => { document.getElementById(id).oninput = updatePerLitre; });
     document.getElementById('fuPhoto').onchange = (e) => setPhoto(e.target.files?.[0] || null);
     document.getElementById('fuPhotoRemove').onclick = () => { setPhoto(null); document.getElementById('fuPhoto').click(); };
@@ -110,6 +113,37 @@ function setPhoto(file) {
     document.getElementById('fuPick').hidden = !!file;
 }
 
+/** Liste des plaques : voitures de l'équipe, plaques déjà utilisées, « autre » à taper et « non disponible ». */
+function fillPlateSelect(selected) {
+    const select = document.getElementById('fuPlateSelect');
+    if (!select) return;
+    const known = new Set(DEFAULT_PLATES.map(p => p.plaque));
+    const used = [...new Set([selected, ...pleins.map(p => p.plaque)])]
+        .filter(p => p && p !== NO_PLATE && p !== OTHER_PLATE && !known.has(p));
+    const option = (value, text) => `<option value="${escapeHTML(value)}">${escapeHTML(text)}</option>`;
+    select.innerHTML = option('', 'Choisis la voiture…')
+        + DEFAULT_PLATES.map(p => option(p.plaque, `${p.plaque} · ${p.label}`)).join('')
+        + used.map(p => option(p, p)).join('')
+        + option(OTHER_PLATE, 'Autre plaque (à taper)…')
+        + option(NO_PLATE, 'Plaque non disponible');
+    select.value = selected || '';
+    if (select.value !== (selected || '')) select.value = '';
+    updatePlateInput();
+}
+
+function updatePlateInput(e) {
+    const other = document.getElementById('fuPlateSelect').value === OTHER_PLATE;
+    const input = document.getElementById('fuPlate');
+    input.hidden = !other;
+    input.required = other;
+    if (other && e) input.focus();
+}
+
+function selectedPlate() {
+    const value = document.getElementById('fuPlateSelect').value;
+    return value === OTHER_PLATE ? document.getElementById('fuPlate').value : value;
+}
+
 function updatePerLitre() {
     const litres = parseAmount(document.getElementById('fuLitres').value);
     const montant = parseAmount(document.getElementById('fuMontant').value);
@@ -129,7 +163,7 @@ async function save(e) {
     e.preventDefault();
     const checked = validatePlein({
         date: document.getElementById('fuDate').value,
-        plaque: document.getElementById('fuPlate').value,
+        plaque: selectedPlate(),
         litres: document.getElementById('fuLitres').value,
         montant: document.getElementById('fuMontant').value,
         hasPhoto: !!photoFile,
@@ -155,10 +189,10 @@ async function save(e) {
         if (!document.getElementById('fuForm')) return; // page quittée pendant l'envoi
         document.getElementById('fuLitres').value = '';
         document.getElementById('fuMontant').value = '';
-        document.getElementById('fuPlate').value = plein.plaque;
+        document.getElementById('fuPlate').value = '';
         setPhoto(null);
         updatePerLitre();
-        renderList();
+        renderList(plein.plaque);
     } catch (error) {
         console.error("Erreur d'enregistrement du plein:", error);
         const message = /illisible|trop lourde/i.test(String(error?.message))
@@ -170,9 +204,8 @@ async function save(e) {
     }
 }
 
-function renderList() {
-    const plates = [...new Set(pleins.map(p => p.plaque))];
-    document.getElementById('fuPlates').innerHTML = plates.map(p => `<option value="${escapeHTML(p)}"></option>`).join('');
+function renderList(selected = document.getElementById('fuPlateSelect').value) {
+    fillPlateSelect(selected);
 
     const year = String(new Date().getFullYear());
     const total = summarize(pleins.filter(p => (p.date || '').startsWith(year)));
@@ -190,7 +223,7 @@ export function pleinRowHTML(p, { who = false } = {}) {
         <article class="fu-row" data-id="${p.id}">
             <div class="fu-row-main">
                 <b>${escapeHTML(dayLabel(p.date))}${who ? ` · ${escapeHTML(p.userName || 'Employé')}` : ''}</b>
-                <span class="fu-plate-tag">${escapeHTML(p.plaque || '')}</span>
+                <span class="fu-plate-tag">${escapeHTML(plateLabel(p.plaque))}</span>
             </div>
             <div class="fu-row-main">
                 <span><b>${eurosLabel(p.montant)}</b> · ${litresLabel(p.litres)} <span class="rc-help">(${perLitreLabel(p)})</span></span>
@@ -219,7 +252,7 @@ export async function openPleinPhoto(id, btn) {
 
 /** Supprime un plein et sa photo, après confirmation ; renvoie true si c'est fait. */
 export async function deletePlein(p) {
-    const ok = await showConfirmationModal("Supprimer ce plein ?", `${dayLabel(p.date)} · ${p.plaque} · ${eurosLabel(p.montant)}. La photo sera supprimée aussi.`);
+    const ok = await showConfirmationModal("Supprimer ce plein ?", `${dayLabel(p.date)} · ${plateLabel(p.plaque)} · ${eurosLabel(p.montant)}. La photo sera supprimée aussi.`);
     if (!ok) return false;
     try {
         const batch = writeBatch(db);

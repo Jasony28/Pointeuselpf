@@ -4,7 +4,7 @@ import { getAllUsers, getAllChantiers } from "./data-service.js";
 import { getWeekDateRange } from "./utils.js";
 import { localDateKey, isRegularisation, NEW_KM_RULES_SINCE, DEPOT_ADDRESS } from "./trips.js";
 import { loadFuelPrices, computeFuelCost, euros, NO_DRIVER } from "./fuel-cost.js";
-import { PLEINS, summarize, byNewest, litresLabel, eurosLabel, perLitreLabel } from "./pleins.js";
+import { PLEINS, summarize, byNewest, litresLabel, eurosLabel, perLitreLabel, plateLabel } from "./pleins.js";
 import { toPlein, pleinRowHTML, openPleinPhoto, deletePlein } from "./user-fuel.js";
 import { createPdf, pdfHeader, pdfStats, pdfSection, pdfTable, pdfTotal, pdfSignatures, pdfFinish, pdfText, groupRow, fileStamp, safeName, C } from "./pdf-kit.js";
 
@@ -206,7 +206,7 @@ function renderPleins() {
     document.getElementById('fuel-pleins').innerHTML = pleinsHead() + (total.count ? `
         <div class="fu-summary">
             <div class="fu-stat is-total"><span class="rc-eyebrow">Total payé</span><b>${eurosLabel(total.montant)}</b><span class="rc-help">${plural(total.count)} · ${litresLabel(total.litres)} · ${perLitreLabel(total)}</span></div>
-            ${total.plates.map(s => `<div class="fu-stat"><span class="fu-plate-tag">${esc(s.plaque)}</span><b>${eurosLabel(s.montant)}</b><span class="rc-help">${plural(s.count)} · ${litresLabel(s.litres)}</span></div>`).join('')}
+            ${total.plates.map(s => `<div class="fu-stat"><span class="fu-plate-tag">${esc(plateLabel(s.plaque))}</span><b>${eurosLabel(s.montant)}</b><span class="rc-help">${plural(s.count)} · ${litresLabel(s.litres)}</span></div>`).join('')}
         </div>
         <div class="rc-list">${pleins.map(p => pleinRowHTML(p, { who: true })).join('')}</div>`
         : '<p class="rc-empty">Aucun plein noté sur cette période.</p>');
