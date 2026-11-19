@@ -1,6 +1,6 @@
 {
 "source": "Bulletin pétrolier hebdomadaire (Commission européenne) — Belgique, prix à la pompe TVA comprise",
-"maj": "2026-11-13",
+"maj": "2026-11-19",
 "semaines": {
 "2024-01-01": {
 "diesel": 1.717,
@@ -601,6 +601,10 @@
 "2026-11-09": {
 "diesel": 2.357,
 "essence": 1.844
+},
+"2026-11-16": {
+"diesel": 2.279,
+"essence": 1.784
 }
 }
 }
