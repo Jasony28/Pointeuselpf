@@ -1314,7 +1314,7 @@ body .fixed.inset-0.bg-black > div > h3:first-child {
 .ios-install-arrow {
     position: fixed;
     left: 50%;
-    bottom: calc(0.5rem + env(safe-area-inset-bottom));
+    bottom: calc(0.5rem + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)));
     width: 44px; height: 44px;
     margin-left: -22px;
     display: grid; place-items: center;
@@ -1537,12 +1537,12 @@ body .fixed.inset-0.bg-black > div > h3:first-child {
 /* Photo en grand : toujours au milieu de l'écran (la règle mobile des modales les colle en bas, d'où .modal.rc-photo-view) */
 .modal.rc-photo-view {
     flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem;
-    padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+    padding: max(1rem, max(env(safe-area-inset-top), var(--safe-top, 0px))) max(1rem, env(safe-area-inset-right)) max(1rem, max(env(safe-area-inset-bottom), var(--safe-bottom, 0px))) max(1rem, env(safe-area-inset-left));
     overflow: hidden;
 }
 .rc-photo-view img {
     display: block; width: auto; height: auto; max-width: 100%;
-    max-height: calc(100dvh - 6rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    max-height: calc(100dvh - 6rem - max(env(safe-area-inset-top), var(--safe-top, 0px)) - max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)));
     object-fit: contain; border-radius: var(--radius-lg); box-shadow: var(--shadow-xl);
 }
 .rc-photo-view .btn { flex: none; }
@@ -2359,7 +2359,7 @@ html[data-skin="motocross"] #live-tracker-container::before {
 /* Deux lutins qui défilent avec une banderole « Joyeux Noël ! » */
 .decor-banner {
     left: 0;
-    bottom: calc(var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom) + 2px);
+    bottom: calc(var(--bottom-nav-height, 0px) + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)) + 2px);
     width: clamp(200px, 22vw, 260px);
     transform: translateX(-110%);
     animation: noel-parade 46s linear 17s infinite;
@@ -2385,7 +2385,7 @@ html[data-skin="motocross"] #live-tracker-container::before {
 /* Deux lutins qui marchent en bas de l'écran, l'un derrière l'autre */
 .decor-elf {
     left: 0;
-    bottom: calc(var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom) + 2px);
+    bottom: calc(var(--bottom-nav-height, 0px) + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)) + 2px);
     width: 54px;
     transform: translateX(-80px);
     animation: noel-walk 28s linear 1s infinite;
@@ -2398,9 +2398,9 @@ html[data-skin="motocross"] #live-tracker-container::before {
 /* Le Père Noël sort du bas à droite, fait coucou, puis redescend */
 .decor-santa-peek {
     right: clamp(12px, 4vw, 40px);
-    bottom: calc(var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom));
+    bottom: calc(var(--bottom-nav-height, 0px) + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)));
     width: clamp(84px, 11vw, 116px);
-    transform: translateY(calc(100% + var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom) + 12px));
+    transform: translateY(calc(100% + var(--bottom-nav-height, 0px) + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)) + 12px));
     animation: noel-peek 34s ease-in-out 14s infinite;
 }
 /* Sa pancarte : compte à rebours jusqu'à Noël */
@@ -2421,9 +2421,9 @@ html[data-skin="motocross"] #live-tracker-container::before {
     transform: rotate(-6deg);
 }
 @keyframes noel-peek {
-    0%, 100% { transform: translateY(calc(100% + var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom) + 12px)); }
+    0%, 100% { transform: translateY(calc(100% + var(--bottom-nav-height, 0px) + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)) + 12px)); }
     4%, 15% { transform: translateY(6%); }
-    19% { transform: translateY(calc(100% + var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom) + 12px)); }
+    19% { transform: translateY(calc(100% + var(--bottom-nav-height, 0px) + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)) + 12px)); }
 }
 
 /* Motocross : la Yamaha saute à travers l'écran (grande parabole), de temps en temps */
@@ -2448,7 +2448,7 @@ html[data-skin="motocross"] #live-tracker-container::before {
 /* Puis elle repasse en bas de l'écran et lève la roue avant, un concurrent (vert) à ses trousses */
 .decor-mx-ride {
     left: 0;
-    bottom: calc(var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom) - 1px);
+    bottom: calc(var(--bottom-nav-height, 0px) + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)) - 1px);
     width: 92px;
     translate: -120px 0;
     transform-origin: 22% 78%;
@@ -2467,9 +2467,9 @@ html[data-skin="motocross"] #live-tracker-container::before {
 /* Panneau de stand qui sort du bas à droite : position, écart, encouragements */
 .decor-mx-board {
     right: clamp(12px, 4vw, 40px);
-    bottom: calc(var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom));
+    bottom: calc(var(--bottom-nav-height, 0px) + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)));
     padding-bottom: 44px;
-    transform: translateY(calc(100% + var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom) + 12px));
+    transform: translateY(calc(100% + var(--bottom-nav-height, 0px) + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)) + 12px));
     animation: mx-board 32s ease-in-out 10s infinite;
 }
 .decor-mx-board::after {
@@ -2499,9 +2499,9 @@ html[data-skin="motocross"] #live-tracker-container::before {
     transform: rotate(-4deg);
 }
 @keyframes mx-board {
-    0%, 100% { transform: translateY(calc(100% + var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom) + 12px)); }
+    0%, 100% { transform: translateY(calc(100% + var(--bottom-nav-height, 0px) + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)) + 12px)); }
     4%, 16% { transform: translateY(0); }
-    20% { transform: translateY(calc(100% + var(--bottom-nav-height, 0px) + env(safe-area-inset-bottom) + 12px)); }
+    20% { transform: translateY(calc(100% + var(--bottom-nav-height, 0px) + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)) + 12px)); }
 }
 
 /* Animations de décor coupées si le téléphone demande moins de mouvement */
@@ -2599,15 +2599,15 @@ html[data-skin="motocross"] #live-tracker-container::before {
     .app-main { margin-left: 0; }
 
     /* Le menu complet devient un tiroir ouvert par « Plus » */
-    .sidebar { transform: translateX(-100%); width: min(300px, 86vw); padding-top: env(safe-area-inset-top); }
+    .sidebar { transform: translateX(-100%); width: min(300px, 86vw); padding-top: max(env(safe-area-inset-top), var(--safe-top, 0px)); }
     .app-shell.nav-open .sidebar { transform: translateX(0); box-shadow: var(--shadow-xl); }
     .app-shell.nav-open .sidebar-backdrop { opacity: 1; pointer-events: auto; }
     .nav-link { min-height: 44px; font-size: 0.9375rem; }
-    .sidebar-footer { padding-bottom: calc(0.75rem + env(safe-area-inset-bottom)); }
+    .sidebar-footer { padding-bottom: calc(0.75rem + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px))); }
 
     .topbar {
-        height: calc(var(--topbar-height) + env(safe-area-inset-top));
-        padding: env(safe-area-inset-top) 1rem 0;
+        height: calc(var(--topbar-height) + max(env(safe-area-inset-top), var(--safe-top, 0px)));
+        padding: max(env(safe-area-inset-top), var(--safe-top, 0px)) 1rem 0;
         justify-content: center;
     }
     .breadcrumb { justify-content: center; }
@@ -2615,7 +2615,7 @@ html[data-skin="motocross"] #live-tracker-container::before {
     .topbar-right { display: none; }
 
     #page-content {
-        padding: 1rem max(1rem, env(safe-area-inset-right)) calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 1.5rem) max(1rem, env(safe-area-inset-left));
+        padding: 1rem max(1rem, env(safe-area-inset-right)) calc(var(--bottom-nav-height) + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)) + 1.5rem) max(1rem, env(safe-area-inset-left));
     }
 
     .bottom-nav {
@@ -2625,8 +2625,8 @@ html[data-skin="motocross"] #live-tracker-container::before {
         display: grid;
         grid-auto-flow: column;
         grid-auto-columns: 1fr;
-        height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
-        padding: 0 0.25rem env(safe-area-inset-bottom);
+        height: calc(var(--bottom-nav-height) + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)));
+        padding: 0 0.25rem max(env(safe-area-inset-bottom), var(--safe-bottom, 0px));
         background: color-mix(in srgb, var(--color-surface) 92%, transparent);
         border-top: 1px solid var(--color-border);
         backdrop-filter: saturate(180%) blur(16px);
@@ -2662,7 +2662,7 @@ html[data-skin="motocross"] #live-tracker-container::before {
     #toast-region {
         left: 1rem;
         right: 1rem;
-        bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 0.75rem);
+        bottom: calc(var(--bottom-nav-height) + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)) + 0.75rem);
         align-items: stretch;
     }
     .toast { max-width: none; }
@@ -2703,7 +2703,7 @@ html[data-skin="motocross"] #live-tracker-container::before {
         animation: sheet-up 0.28s var(--ease);
     }
     .modal-panel { max-height: 92dvh; overflow-y: auto; }
-    body .fixed.inset-0.bg-black > div { padding-bottom: calc(1.5rem + env(safe-area-inset-bottom)); }
+    body .fixed.inset-0.bg-black > div { padding-bottom: calc(1.5rem + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px))); }
     .modal-panel::before,
     body .fixed.inset-0.bg-black > div::before {
         content: '';
@@ -2714,7 +2714,7 @@ html[data-skin="motocross"] #live-tracker-container::before {
         background: var(--color-border-strong);
     }
     body .fixed.inset-0.bg-black > div::before { margin: -0.75rem auto 1rem; }
-    .modal-footer { border-radius: 0; padding-bottom: calc(1rem + env(safe-area-inset-bottom)); }
+    .modal-footer { border-radius: 0; padding-bottom: calc(1rem + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px))); }
 
     /* Grilles de cartes plus serrées */
     #page-content .space-y-8 > :not([hidden]) ~ :not([hidden]) { margin-top: 1.25rem; }
@@ -3240,7 +3240,7 @@ html[data-skin="motocross"] #live-tracker-container::before {
 .cpick-search:focus-within { border-color: var(--color-primary); box-shadow: 0 0 0 4px var(--color-primary-ring); }
 .cpick-search svg { width: 18px; height: 18px; flex-shrink: 0; }
 .cpick-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--color-text-base); font: inherit; font-size: 1rem; }
-.cpick-list { overflow-y: auto; overscroll-behavior: contain; padding: 0 0.75rem calc(0.75rem + env(safe-area-inset-bottom)); border-top: 1px solid var(--color-border); }
+.cpick-list { overflow-y: auto; overscroll-behavior: contain; padding: 0 0.75rem calc(0.75rem + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px))); border-top: 1px solid var(--color-border); }
 .cpick-group {
     position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between;
     padding: 0.875rem 0.5rem 0.375rem; background: var(--color-surface);
@@ -3335,11 +3335,11 @@ html.cat.dark body {
 @media (max-width: 1023px) {
     html.cat body, html.cat.dark body {
         background-size: auto min(30vh, 260px), auto min(9vh, 80px), 220px 220px, 100% 100%;
-        background-position: right 2vw bottom calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 6px), right calc(2vw + min(30vh, 260px) * 0.78) bottom calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 8px), 0 0, 0 0;
+        background-position: right 2vw bottom calc(var(--bottom-nav-height) + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)) + 6px), right calc(2vw + min(30vh, 260px) * 0.78) bottom calc(var(--bottom-nav-height) + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)) + 8px), 0 0, 0 0;
     }
     html.cat.dark body {
         background-size: auto min(30vh, 260px), auto min(9vh, 80px), 100% 100%, 100% 100%, 260px 260px, 220px 220px, 100% 100%;
-        background-position: right 2vw bottom calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 6px), right calc(2vw + min(30vh, 260px) * 0.78) bottom calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 8px), 0 0, 0 0, 0 0, 0 0, 0 0;
+        background-position: right 2vw bottom calc(var(--bottom-nav-height) + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)) + 6px), right calc(2vw + min(30vh, 260px) * 0.78) bottom calc(var(--bottom-nav-height) + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)) + 8px), 0 0, 0 0, 0 0, 0 0, 0 0;
     }
 }
 
@@ -3779,7 +3779,7 @@ html.cat .toast > svg { display: none; }
 .chat-member-act.is-danger { color: var(--color-danger); }
 
 @media (max-width: 1023px) {
-    .chat-shell { height: calc(100dvh - var(--topbar-height) - env(safe-area-inset-top) - var(--bottom-nav-height) - env(safe-area-inset-bottom) - 2.5rem); }
+    .chat-shell { height: calc(100dvh - var(--topbar-height) - max(env(safe-area-inset-top), var(--safe-top, 0px)) - var(--bottom-nav-height) - max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)) - 2.5rem); }
 }
 @media (max-width: 767px) {
     .chat-shell { grid-template-columns: minmax(0, 1fr); border-radius: var(--radius-lg); }
