@@ -14,8 +14,9 @@ const file = join(dirname(fileURLToPath(import.meta.url)), '..', 'capacitor.conf
 const config = JSON.parse(readFileSync(file, 'utf8'));
 
 config.server = { ...(config.server || {}), url: SITE_URL };
-// Android 15 affiche les applis « bord à bord » : on garde l'appli sous la barre d'état, pas derrière
-config.android = { ...(config.android || {}), adjustMarginsForEdgeToEdge: 'auto', backgroundColor: '#0f172a' };
+// Android 15+ affiche les applis « bord à bord » : le recadrage est fait dans MainActivity
+// (scripts/android-mainactivity.mjs), celui de Capacitor est coupé pour ne pas le faire deux fois
+config.android = { ...(config.android || {}), adjustMarginsForEdgeToEdge: 'disable', backgroundColor: '#0f172a' };
 
 writeFileSync(file, JSON.stringify(config, null, 2) + '\n');
 console.log('Configuration Android :', JSON.stringify(config, null, 2));
