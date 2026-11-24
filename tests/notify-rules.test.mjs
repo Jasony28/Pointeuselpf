@@ -33,6 +33,12 @@ test('sourdine : notifié quand même si on est @mentionné', () => {
     assert.deepEqual(uids(out), ['leo', 'patron']);
 });
 
+test('personne bloquée : pas de notification pour ses messages, même avec une @mention', () => {
+    const blocking = { ...users, leo: { ...users.leo, blockedUsers: ['bea'] }, patron: { ...users.patron, blockedUsers: ['bea'] } };
+    assert.deepEqual(rules.forMessage({ chatId: 'g1', chat: group, message: { text: '@Patron Test tu valides ?', senderId: 'bea' }, users: blocking }), []);
+    assert.deepEqual(uids(rules.forMessage({ chatId: 'g1', chat: group, message: { text: '@Patron Test ok', senderId: 'sam' }, users: blocking })), ['bea', 'leo', 'patron']);
+});
+
 test('rien pour un message système ou supprimé', () => {
     assert.deepEqual(rules.forMessage({ chatId: 'g1', chat: group, message: { type: 'system', text: 'Bea a ajouté Léo', senderId: 'bea' }, users }), []);
     assert.deepEqual(rules.forMessage({ chatId: 'g1', chat: group, message: { text: 'oups', deleted: true, senderId: 'bea' }, users }), []);

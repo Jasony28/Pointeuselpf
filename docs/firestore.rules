@@ -49,8 +49,15 @@ service cloud.firestore {
 
     // 3. MESSAGERIE : discussions à deux et groupes, réservées à leurs membres.
     //    Seuls les admins d'un groupe changent ses membres ; chacun peut le quitter.
+    //    Blocage : « blockedBy » = ceux qui ont bloqué l'autre ; chacun n'y ajoute ou n'en retire que lui-même,
+    //    et plus aucun message ne peut être envoyé dans une discussion bloquée.
     match /chats/{chatId} {
       function members() { return resource.data.participants; }
+      function blockOk() {
+        let before = resource.data.get('blockedBy', []).toSet();
+        let after = request.resource.data.get('blockedBy', []).toSet();
+        return after.difference(before).union(before.difference(after)).hasOnly([request.auth.uid]);
+      }
       function sameMembers() {
         return request.resource.data.participants == resource.data.participants
             && request.resource.data.get('admins', []) == resource.data.get('admins', [])
@@ -66,16 +73,20 @@ service cloud.firestore {
       }
       allow read: if isApproved() && request.auth.uid in members();
       allow create: if isApproved() && request.auth.uid in request.resource.data.participants
+                    && request.resource.data.get('blockedBy', []).toSet().hasOnly([request.auth.uid])
                     && (request.resource.data.get('type', 'direct') != 'group'
                         || (request.resource.data.createdBy == request.auth.uid && request.resource.data.admins == [request.auth.uid]));
-      allow update: if isApproved() && request.auth.uid in members() && (sameMembers() || groupAdmin() || leaving());
+      allow update: if isApproved() && request.auth.uid in members() && blockOk() && (sameMembers() || groupAdmin() || leaving());
 
       match /messages/{messageId} {
         function chatMember() {
           return request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
         }
+        function notBlocked() {
+          return get(/databases/$(database)/documents/chats/$(chatId)).data.get('blockedBy', []).size() == 0;
+        }
         allow read: if isApproved() && chatMember();
-        allow create: if isApproved() && chatMember() && request.resource.data.senderId == request.auth.uid;
+        allow create: if isApproved() && chatMember() && notBlocked() && request.resource.data.senderId == request.auth.uid;
         // Modifier ou supprimer : l'auteur seulement ; réagir (👍…) : tout membre
         allow update: if isApproved() && chatMember() && (
                          (resource.data.senderId == request.auth.uid && request.resource.data.senderId == request.auth.uid)

@@ -29,7 +29,7 @@ function memberName(chat, uid, users) {
     return users[uid]?.displayName || '';
 }
 
-/** Nouveau message : ni l'auteur, ni les messages système ; sourdine respectée sauf @mention. */
+/** Nouveau message : ni l'auteur, ni les messages système, ni ceux d'une personne bloquée ; sourdine respectée sauf @mention. */
 function forMessage({ chatId, chat, message, users }) {
     if (!chat || !message || message.type === 'system' || message.deleted || !message.text) return [];
     const senderName = memberName(chat, message.senderId, users) || 'Nouveau message';
@@ -38,6 +38,7 @@ function forMessage({ chatId, chat, message, users }) {
     return (chat.participants || [])
         .filter(uid => uid !== message.senderId)
         .filter(uid => wants(users[uid], 'messages'))
+        .filter(uid => !(users[uid]?.blockedUsers || []).includes(message.senderId))
         .filter(uid => {
             if (!(chat.mutedBy || []).includes(uid)) return true;
             const name = memberName(chat, uid, users);

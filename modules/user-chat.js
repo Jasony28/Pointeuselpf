@@ -1,9 +1,11 @@
-// Messagerie : conversations à deux et groupes, réponses, réactions, messages modifiables, « Vu », mentions @.
+// Messagerie : conversations à deux et groupes, réponses, réactions, messages modifiables, « Vu », mentions @, blocage.
+// Bloquer quelqu'un : la discussion à deux est fermée dans les deux sens (règles Firestore : « blockedBy »), ses messages
+// dans les groupes sont masqués et ses notifications coupées (liste « blockedUsers » de la fiche utilisateur).
 // Quota Firebase gratuit : seuls les 40 derniers messages sont écoutés en direct, les plus anciens à la demande.
 import { db, currentUser, showConfirmationModal, showInfoModal, showToast } from '../app.js';
 import {
     collection, query, where, orderBy, onSnapshot, serverTimestamp, getDocs, doc, updateDoc, setDoc,
-    increment, arrayUnion, arrayRemove, limitToLast, endBefore, writeBatch, deleteField
+    increment, arrayUnion, arrayRemove, limitToLast, endBefore, writeBatch, deleteField, getDoc
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { getUsers } from './data-service.js';
 import { escapeHTML } from './work-profile.js';
@@ -24,6 +26,7 @@ const state = {
     editing: null,
     search: '',
     users: [],
+    blocked: new Set(),   // personnes que j'ai bloquées (uid)
     redrawInfo: null,     // fenêtre « Infos » ouverte, redessinée à chaque changement de la conversation
 };
 let conversationsListener = null;
@@ -54,6 +57,10 @@ const colorFor = (key) => AVATAR_COLORS[[...String(key || '')].reduce((s, c) => 
 const toDate = (ts) => ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null);
 const isGroup = (chat) => chat?.type === 'group';
 const activeChat = () => state.chats.find(c => c.id === state.activeId) || null;
+/** Discussion à deux fermée : l'un des deux a bloqué l'autre */
+const isBlockedChat = (chat) => !isGroup(chat) && (chat?.blockedBy || []).length > 0;
+const otherOf = (chat) => (chat?.participants || []).find(id => id !== me());
+const directId = (uid) => [me(), uid].sort().join('_');
 const preview = (text, max = 80) => { const t = String(text || '').replace(/\s+/g, ' ').trim(); return t.length > max ? `${t.slice(0, max)}…` : t; };
 
 /** Nom d'un participant (nouveau format memberNames, ou ancien tableau participantNames aligné sur participants) */
@@ -149,11 +156,13 @@ export async function render(params = {}) {
                         </button>
                     </div>
                 </form>
+                <div id="chat-blocked" class="chat-blocked hidden"></div>
             </section>
         </div>
         <div id="chat-modal" class="modal hidden"></div>
     `;
     getUsers().then(users => { state.users = users.filter(u => u.status === 'approved'); }).catch(console.error);
+    loadBlocked();
     setupEventListeners();
     loadConversations();
     // Ouverte depuis une notification : directement sur la discussion
@@ -223,10 +232,13 @@ function renderConversations() {
         const unread = chat.unreadCounts?.[me()] || 0;
         const muted = (chat.mutedBy || []).includes(me());
         const pinned = (chat.pinnedBy || []).includes(me());
+        const blocked = isBlockedChat(chat);
         const title = chatTitle(chat);
-        const sender = chat.lastSenderId && chat.lastMessage
+        const hiddenLast = isGroup(chat) && state.blocked.has(chat.lastSenderId);
+        const sender = chat.lastSenderId && chat.lastMessage && !hiddenLast
             ? (chat.lastSenderId === me() ? 'Vous : ' : isGroup(chat) ? `${preview(nameOf(chat, chat.lastSenderId).split(' ')[0], 20)} : ` : '')
             : '';
+        const last = hiddenLast ? 'Message masqué' : (chat.lastMessage || (isGroup(chat) ? `${(chat.participants || []).length} membres` : 'Nouvelle discussion'));
         return `
             <button type="button" class="chat-conv${chat.id === state.activeId ? ' is-active' : ''}${unread ? ' is-unread' : ''}" data-chat="${escapeHTML(chat.id)}">
                 ${avatarHTML(title, chat.id, isGroup(chat))}
@@ -236,7 +248,8 @@ function renderConversations() {
                         <span class="chat-conv-time">${timeLabel(toDate(chat.lastMessageTime))}</span>
                     </span>
                     <span class="chat-conv-bottom">
-                        <span class="chat-conv-last">${escapeHTML(sender + preview(chat.lastMessage || (isGroup(chat) ? `${(chat.participants || []).length} membres` : 'Nouvelle discussion')))}</span>
+                        <span class="chat-conv-last">${escapeHTML(sender + preview(last))}</span>
+                        ${blocked ? '<span class="chat-flag" title="Bloquée">🚫</span>' : ''}
                         ${pinned ? '<span class="chat-flag" title="Épinglée">📌</span>' : ''}
                         ${muted ? '<span class="chat-flag" title="Sourdine">🔕</span>' : ''}
                         ${unread ? `<span class="chat-badge${muted ? ' is-muted' : ''}">${unread > 99 ? '99+' : unread}</span>` : ''}
@@ -285,7 +298,7 @@ function closeChat() {
     state.activeId = null;
     tellActiveChat(null);
     document.getElementById('chat-shell')?.classList.remove('has-active');
-    ['chat-header', 'messages-area', 'message-form'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+    ['chat-header', 'messages-area', 'message-form', 'chat-blocked'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
     document.getElementById('no-chat-selected')?.classList.remove('hidden');
     renderConversations();
 }
@@ -318,6 +331,25 @@ function renderHeader(chat) {
     header.querySelector('#back-to-list').onclick = closeChat;
     header.querySelector('#chat-info-btn').onclick = () => openInfoModal(chat.id);
     header.querySelector('#chat-settings-btn').onclick = () => openInfoModal(chat.id);
+    renderBlockedBar(chat);
+}
+
+/** Discussion bloquée : plus de zone de saisie, un bandeau à la place (avec « Débloquer » pour celui qui a bloqué) */
+function renderBlockedBar(chat) {
+    const form = document.getElementById('message-form');
+    const bar = document.getElementById('chat-blocked');
+    if (!form || !bar) return;
+    const blocked = isBlockedChat(chat);
+    form.classList.toggle('hidden', blocked);
+    bar.classList.toggle('hidden', !blocked);
+    if (!blocked) { bar.innerHTML = ''; return; }
+    clearComposerContext();
+    const other = otherOf(chat);
+    const mine = (chat.blockedBy || []).includes(me());
+    bar.innerHTML = mine
+        ? `<span>🚫 Vous avez bloqué ${escapeHTML(nameOf(chat, other))}. Vous ne recevez plus ses messages.</span><button type="button" class="btn btn-secondary" id="unblock-btn">Débloquer</button>`
+        : '<span>🚫 Vous ne pouvez plus envoyer de messages dans cette discussion.</span>';
+    bar.querySelector('#unblock-btn')?.addEventListener('click', () => toggleBlock(other, nameOf(chat, other)));
 }
 
 function renderMessages(fromSnapshot) {
@@ -339,6 +371,10 @@ function renderMessages(fromSnapshot) {
         if (day !== prevDay) { html += `<div class="chat-day"><span>${escapeHTML(dayLabel(date))}</span></div>`; prevDay = day; prev = null; }
         if (m.type === 'system') { html += `<div class="chat-system">${escapeHTML(m.text)}</div>`; prev = null; continue; }
         const mine = m.senderId === me();
+        if (!mine && isGroup(chat) && state.blocked.has(m.senderId)) {
+            html += `<div class="chat-row"><div class="chat-bubble-wrap"><div class="chat-bubble is-deleted">Message masqué : vous avez bloqué ${escapeHTML(nameOf(chat, m.senderId))}</div></div></div>`;
+            prev = null; continue;
+        }
         const grouped = prev && prev.senderId === m.senderId && date - (toDate(prev.createdAt) || date) < 5 * 60000;
         html += messageHTML(m, chat, mine, grouped, date, m === lastMine);
         prev = m;
@@ -512,7 +548,7 @@ async function submitMessage() {
     const input = document.getElementById('message-input');
     const text = input.value.trim().slice(0, MAX_LENGTH);
     const chat = activeChat();
-    if (!text || !chat) return;
+    if (!text || !chat || isBlockedChat(chat)) return;
     document.getElementById('mention-list').classList.add('hidden');
 
     if (state.editing) {
@@ -612,7 +648,7 @@ async function openNewChatModal(mode = 'direct') {
         list.innerHTML = people.length ? people.map(u => `
             <button type="button" class="chat-person${selected.has(u.id) ? ' is-selected' : ''}" data-uid="${escapeHTML(u.id)}">
                 ${avatarHTML(u.displayName, u.id)}
-                <span>${escapeHTML(u.displayName || u.email)}</span>
+                <span>${escapeHTML(u.displayName || u.email)}${state.blocked.has(u.id) ? ' <small class="chat-blocked-tag">bloqué</small>' : ''}</span>
                 <span class="chat-check" aria-hidden="true">✓</span>
             </button>`).join('') : '<p class="chat-empty">Personne trouvé.</p>';
         list.querySelectorAll('[data-uid]').forEach(b => {
@@ -702,6 +738,7 @@ function openInfoModal(chatId) {
         const amAdmin = group && (chat.admins || []).includes(me());
         const muted = (chat.mutedBy || []).includes(me());
         const pinned = (chat.pinnedBy || []).includes(me());
+        const other = group ? null : otherOf(chat);
         const admins = chat.admins || [];
         const members = [...chat.participants].sort((a, b) => Number(admins.includes(b)) - Number(admins.includes(a)) || nameOf(chat, a).localeCompare(nameOf(chat, b), 'fr'));
         modal.innerHTML = `
@@ -721,6 +758,7 @@ function openInfoModal(chatId) {
                     <div class="chat-toggles">
                         <button type="button" id="toggle-pin">${pinned ? '📌 Désépingler' : '📌 Épingler en haut'}</button>
                         <button type="button" id="toggle-mute">${muted ? '🔔 Réactiver les alertes' : '🔕 Mettre en sourdine'}</button>
+                        ${other ? `<button type="button" id="toggle-block" class="is-wide${state.blocked.has(other) ? '' : ' is-danger'}">${state.blocked.has(other) ? `✅ Débloquer ${escapeHTML(nameOf(chat, other))}` : `🚫 Bloquer ${escapeHTML(nameOf(chat, other))}`}</button>` : ''}
                     </div>
                     ${group ? `
                         <div class="chat-section-title"><span>Membres</span>${amAdmin ? '<button type="button" id="add-members">+ Ajouter</button>' : ''}</div>
@@ -729,6 +767,7 @@ function openInfoModal(chatId) {
                                 ${avatarHTML(nameOf(chat, uid), uid, false, 'is-sm')}
                                 <span>${escapeHTML(nameOf(chat, uid))}${uid === me() ? ' (vous)' : ''}</span>
                                 ${admins.includes(uid) ? '<em>admin</em>' : ''}
+                                ${uid !== me() ? `<button type="button" class="chat-member-act${state.blocked.has(uid) ? '' : ' is-danger'}" data-block="${escapeHTML(uid)}">${state.blocked.has(uid) ? 'Débloquer' : 'Bloquer'}</button>` : ''}
                                 ${amAdmin && uid !== me() ? `
                                     <button type="button" class="chat-member-act" data-admin="${escapeHTML(uid)}">${admins.includes(uid) ? 'Retirer admin' : 'Nommer admin'}</button>
                                     <button type="button" class="chat-member-act is-danger" data-remove="${escapeHTML(uid)}">Retirer</button>` : ''}
@@ -754,6 +793,10 @@ function openInfoModal(chatId) {
             }, "Renommage impossible.");
         });
         modal.querySelector('#add-members')?.addEventListener('click', () => openAddMembers(chat, draw));
+        modal.querySelector('#toggle-block')?.addEventListener('click', () => toggleBlock(other, nameOf(chat, other)).then(draw));
+        modal.querySelectorAll('[data-block]').forEach(b => {
+            b.onclick = () => toggleBlock(b.dataset.block, nameOf(chat, b.dataset.block)).then(draw);
+        });
         modal.querySelectorAll('[data-admin]').forEach(b => {
             b.onclick = () => {
                 const uid = b.dataset.admin;
@@ -837,4 +880,48 @@ async function openAddMembers(chat, back) {
         } catch (error) { console.error(error); showToast("Ajout impossible.", 'warning'); }
         goBack();
     };
+}
+
+/* ------------------------------------------------------------------ Blocage */
+
+async function loadBlocked() {
+    try {
+        const snap = await getDoc(doc(db, "users", me()));
+        state.blocked = new Set(snap.data()?.blockedUsers || []);
+        renderConversations();
+        if (activeChat()) { renderHeader(activeChat()); renderMessages(false); }
+    } catch (error) { console.warn(error); }
+}
+
+/** Bloquer / débloquer : ma liste « blockedUsers » + la discussion à deux (créée si besoin, cachée des deux côtés) */
+async function toggleBlock(uid, name) {
+    if (!uid || uid === me()) return;
+    const block = !state.blocked.has(uid);
+    if (block && !await showConfirmationModal(`Bloquer ${name}`,
+        `${name} ne pourra plus vous écrire en privé, et vous non plus tant que vous ne l'aurez pas débloqué. Ses messages dans les groupes seront masqués pour vous, et vous ne recevrez plus de notification pour ses messages.`)) return;
+    const chatId = directId(uid);
+    const existing = state.chats.find(c => c.id === chatId);
+    try {
+        const batch = writeBatch(db);
+        batch.update(doc(db, "users", me()), { blockedUsers: block ? arrayUnion(uid) : arrayRemove(uid) });
+        if (existing) {
+            batch.update(doc(db, "chats", chatId), { blockedBy: block ? arrayUnion(me()) : arrayRemove(me()) });
+        } else if (block) {
+            const participants = [me(), uid].sort();
+            batch.set(doc(db, "chats", chatId), {
+                type: 'direct', participants,
+                participantNames: participants.map(id => id === me() ? myName() : name),
+                memberNames: { [me()]: myName(), [uid]: name },
+                lastMessageTime: serverTimestamp(), hiddenFor: participants, blockedBy: [me()],
+            }, { merge: true });
+        }
+        await batch.commit();
+        block ? state.blocked.add(uid) : state.blocked.delete(uid);
+        showToast(block ? `${name} est bloqué.` : `${name} est débloqué.`);
+        renderConversations();
+        if (activeChat()) { renderHeader(activeChat()); renderMessages(false); }
+    } catch (error) {
+        console.error(error);
+        showToast(block ? "Blocage impossible." : "Déblocage impossible.", 'warning');
+    }
 }
