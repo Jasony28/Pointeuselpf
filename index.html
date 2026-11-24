@@ -19,6 +19,26 @@
         window.deferredPrompt = null;
         window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); window.deferredPrompt = e; });
     </script>
+    <script>
+        // Appli Android déjà installée : sur Android 15+ elle s'affiche sous la barre d'état et sous
+        // les boutons Android (la vue web prend tout l'écran). On réserve alors leur place nous-mêmes.
+        (function () {
+            function fit() {
+                try {
+                    var C = window.Capacitor;
+                    if (!C || !C.getPlatform || C.getPlatform() !== 'android') return;
+                    var root = document.documentElement;
+                    var tall = Math.max(screen.width, screen.height), short = Math.min(screen.width, screen.height);
+                    var full = window.innerHeight >= (window.innerWidth < window.innerHeight ? tall : short) - 8;
+                    root.style.setProperty('--safe-top', full ? '32px' : '0px');
+                    root.style.setProperty('--safe-bottom', full ? '48px' : '0px');
+                } catch (e) { /* rien : affichage normal */ }
+            }
+            fit();
+            document.addEventListener('DOMContentLoaded', fit);
+            window.addEventListener('resize', fit);
+        })();
+    </script>
     <link rel="stylesheet" href="./styles/app.css">
     <!-- Tailwind précompilé (tailwind.config.js → npm run css) : après app.css, comme l'ancien script en ligne -->
     <link rel="stylesheet" href="./styles/tailwind.css">

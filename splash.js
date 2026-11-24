@@ -76,7 +76,7 @@
   @keyframes ptMsg{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 
   /* --- Bas : barre + indication --- */
-  #pt-splash .pt-bottom{position:absolute;left:24px;right:24px;bottom:calc(28px + env(safe-area-inset-bottom));
+  #pt-splash .pt-bottom{position:absolute;left:24px;right:24px;bottom:calc(28px + max(env(safe-area-inset-bottom), var(--safe-bottom, 0px)));
     text-align:center}
   #pt-splash .pt-bar{height:3px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden}
   #pt-splash .pt-bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#5b7cff,#33ccff);
