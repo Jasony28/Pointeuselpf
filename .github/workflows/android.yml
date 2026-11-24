@@ -16,6 +16,7 @@ on:
     paths:
       - '.github/workflows/android.yml'
       - 'scripts/android-config.mjs'
+      - 'scripts/android-mainactivity.mjs'
       - 'capacitor.config.json'
       - 'assets/**'
 
@@ -45,6 +46,7 @@ jobs:
           npm run build
           node scripts/android-config.mjs
           npx cap add android
+          node scripts/android-mainactivity.mjs
           npx --yes @capacitor/assets@3 generate --android \
             --iconBackgroundColor '#111833' --iconBackgroundColorDark '#111833' \
             --splashBackgroundColor '#0f172a' --splashBackgroundColorDark '#0f172a'
