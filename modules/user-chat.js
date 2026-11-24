@@ -349,7 +349,7 @@ function renderBlockedBar(chat) {
     bar.innerHTML = mine
         ? `<span>🚫 Vous avez bloqué ${escapeHTML(nameOf(chat, other))}. Vous ne recevez plus ses messages.</span><button type="button" class="btn btn-secondary" id="unblock-btn">Débloquer</button>`
         : '<span>🚫 Vous ne pouvez plus envoyer de messages dans cette discussion.</span>';
-    bar.querySelector('#unblock-btn')?.addEventListener('click', () => toggleBlock(other, nameOf(chat, other)));
+    bar.querySelector('#unblock-btn')?.addEventListener('click', () => toggleBlock(other, nameOf(chat, other), false));
 }
 
 function renderMessages(fromSnapshot) {
@@ -894,9 +894,8 @@ async function loadBlocked() {
 }
 
 /** Bloquer / débloquer : ma liste « blockedUsers » + la discussion à deux (créée si besoin, cachée des deux côtés) */
-async function toggleBlock(uid, name) {
+async function toggleBlock(uid, name, block = !state.blocked.has(uid)) {
     if (!uid || uid === me()) return;
-    const block = !state.blocked.has(uid);
     if (block && !await showConfirmationModal(`Bloquer ${name}`,
         `${name} ne pourra plus vous écrire en privé, et vous non plus tant que vous ne l'aurez pas débloqué. Ses messages dans les groupes seront masqués pour vous, et vous ne recevrez plus de notification pour ses messages.`)) return;
     const chatId = directId(uid);
