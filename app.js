@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 import { installNativeFileSaving } from './modules/native-files.js';
 
-const APP_VERSION = 'v4.16.0';
+const APP_VERSION = 'v4.16.1';
 
 // Appli Android / iPhone : PDF et CSV proposés dans le menu « Partager » du téléphone
 installNativeFileSaving();
@@ -1248,6 +1248,11 @@ export function reportError(error, context = '') {
         reporting = false;
     }
 }
+
+// Cadrage forcé : pas de zoom (iPhone ignore user-scalable=no) ni de décalage horizontal
+['gesturestart', 'gesturechange'].forEach(type => document.addEventListener(type, e => e.preventDefault(), { passive: false }));
+document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+window.addEventListener('scroll', () => { if (window.scrollX) window.scrollTo(0, window.scrollY); }, { passive: true });
 
 window.addEventListener('error', (event) => {
     // « Script error. » vient d'un script externe (Tailwind, Chart.js, extension du navigateur) :
