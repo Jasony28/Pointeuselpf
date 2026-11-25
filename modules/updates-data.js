@@ -1,5 +1,13 @@
 export const updatesLog = [
     {
+        version: 'v4.17.0',
+        date: '25 novembre 2026',
+        changes: [
+            "**Fiche de contrôle du chantier** : sur les chantiers qui en ont une, une personne de l'équipe la remplit à chaque passage, à tour de rôle (celle qui l'a remplie il y a le plus longtemps). La carte « Fiche de contrôle à remplir » apparaît sous le minuteur : on coche Fait, À revoir ou S.O. pour chaque point. Elle est obligatoire avant d'arrêter son pointage ; les collègues ne sont pas bloqués et peuvent la reprendre si la personne prévue n'est pas là.",
+            "**Admin** : le modèle (A1 autres locaux pro, A2 espaces communs, B1 bureaux), la zone et les lignes hors prestation se règlent dans la fiche du chantier. Nouvelle page « Fiches de contrôle » : chaque chantier et toutes ses fiches en détail, avec l'aperçu et le PDF. La fiche validée part automatiquement au client avec le mail « Nettoyage effectué » du soir.",
+        ]
+    },
+    {
         version: 'v4.16.0',
         date: '24 novembre 2026',
         changes: [

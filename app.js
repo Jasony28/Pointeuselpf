@@ -1,7 +1,7 @@
 import { updatesLog } from './modules/updates-data.js';
 import { installNativeFileSaving } from './modules/native-files.js';
 
-const APP_VERSION = 'v4.16.3';
+const APP_VERSION = 'v4.17.0';
 
 // Appli Android / iPhone : PDF et CSV proposés dans le menu « Partager » du téléphone
 installNativeFileSaving();
@@ -500,6 +500,7 @@ const icons = {
     alert: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/>',
     bug: '<path d="M8 2l1.88 1.88M14.12 3.88 16 2M9 7.13v-1a3 3 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6zM12 20v-9M6.53 9C4.6 8.8 3 7.1 3 5M6 13H2M3 21c0-2.1 1.7-3.9 3.8-4M20.97 5c0 2.1-1.6 3.8-3.5 4M22 13h-4M17.2 17c2.1.1 3.8 1.9 3.8 4"/>',
     fuel: '<path d="M3 22h12M4 22V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v17M4 10h10M14 13h2a2 2 0 0 1 2 2v2.5a1.5 1.5 0 0 0 3 0V9l-3-3"/>',
+    fiche: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 3v2h6V3M8.5 12l2 2 4.5-4.5M8 18h8"/>',
     more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
 };
 
@@ -526,6 +527,7 @@ const adminTabs = [
     { id: 'admin-invoicing', name: 'Heures chantiers', icon: 'chart' },
     { id: 'admin-contracts', name: 'Fiches équipe', icon: 'card' },
     { id: 'admin-chantiers', name: 'Chantiers', icon: 'building' },
+    { id: 'admin-fiches', name: 'Fiches de contrôle', icon: 'fiche' },
     { id: 'admin-retours', name: 'Retours clients', icon: 'feedback' },
     { id: 'admin-leave', name: 'Congés', icon: 'sun' },
     { id: 'admin-travel-report', name: 'Rapport trajets', icon: 'route' },
@@ -545,6 +547,7 @@ const extraPageNames = {
     'user-updates': 'Mises à jour chantiers',
     'route-optimizer': 'Optimiseur de tournées',
     'add-entry': 'Nouveau pointage',
+    'user-fiche': 'Fiche de contrôle',
 };
 
 function setMobileNav(open) {
