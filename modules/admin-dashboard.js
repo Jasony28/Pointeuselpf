@@ -3,6 +3,7 @@ import { db, pageContent, showConfirmationModal, navigateTo, isShowingAllHours }
 import { getWeekDateRange, formatMilliseconds } from "./utils.js";
 import { getUsers, getActiveChantiers } from "./data-service.js";
 import { getDocsFast } from "./fast-data.js";
+import { resume } from "./fiches-controle.js";
 
 // --- VARIABLES GLOBALES POUR LES CARTES NAVIGABLES ---
 let globalWeekOffset = 0;
@@ -264,13 +265,14 @@ async function loadTodoPanel() {
     const weekId = getWeekDateRange(0).startOfWeek.toISOString().split('T')[0];
 
     // Chaque requête peut échouer indépendamment sans bloquer les autres tuiles
-    const [openSnap, todaySnap, planningSnap, publishedDoc, leaveSnap, users] = await Promise.all([
+    const [openSnap, todaySnap, planningSnap, publishedDoc, leaveSnap, users, fichesSnap] = await Promise.all([
         getDocs(query(collection(db, "pointages"), where("endTime", "==", null))),
         getDocs(query(collection(db, "pointages"), where("timestamp", ">=", startOfToday.toISOString()))),
         getDocs(query(collection(db, "planning"), where("date", "==", todayStr))),
         getDoc(doc(db, "publishedSchedules", weekId)),
         getDocs(query(collection(db, "leaveRequests"), where("status", "==", "pending"))),
         getUsers(),
+        getDocs(query(collection(db, "fichesControle"), where("date", "==", todayStr))),
     ].map(request => request.catch(error => { console.error("Bloc À traiter :", error); return null; })));
 
     if (!document.getElementById('todo-panel')) return;
@@ -342,11 +344,24 @@ async function loadTodoPanel() {
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
                     <span><strong>Pointage oublié ?</strong> ${escapeHTML(p.userName)} pointe sur ${escapeHTML(p.chantier)} depuis ${hours} h.</span>
                 </button>`;
-        }).join('');
+        }).join('') + fichesAlertsHTML(fichesSnap);
         alerts.querySelectorAll('[data-page]').forEach(alert => {
             alert.onclick = () => navigateTo(alert.dataset.page);
         });
     }
+}
+
+// Fiches de contrôle du jour : un résumé, et une alerte par fiche avec un point « À revoir »
+const FICHE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 3v2h6V3M8.5 12l2 2 4.5-4.5M8 18h8"/></svg>';
+function fichesAlertsHTML(snap) {
+    if (!snap || snap.empty) return '';
+    const fiches = snap.docs.map(d => d.data());
+    const validees = fiches.filter(f => f.statut === 'validee');
+    const revoir = validees.filter(f => { try { return resume(f).R > 0; } catch { return false; } });
+    const aFaire = fiches.length - validees.length;
+    const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    return `<button type="button" class="todo-alert is-info" data-page="admin-fiches">${FICHE_ICON}<span><strong>Fiches de contrôle :</strong> ${validees.length} remplie${validees.length > 1 ? 's' : ''}${aFaire ? `, ${aFaire} en attente` : ''} aujourd'hui. Elles partent au client avec le mail du soir.</span></button>`
+        + revoir.map(f => `<button type="button" class="todo-alert is-warn" data-page="admin-fiches">${FICHE_ICON}<span><strong>Point à revoir</strong> sur ${esc(f.chantierName)} (${esc(f.responsableNom)}) : « ${esc(f.observations)} »</span></button>`).join('');
 }
 
 function setupEventListeners() {

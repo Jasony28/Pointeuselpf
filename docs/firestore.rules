@@ -1,6 +1,6 @@
 rules_version = '2';
 // Règles Firestore de la Pointeuse LPF = règles en production + ajouts pour la planification automatique
-// (règle 1 : lecture réservée aux comptes validés, « affinites », « chats » et « retoursClients » exclus de la lecture générale ; règle 2 : skillsAdmin et superAdmin protégés ; règle 9 : affinites ; règle 10 : retours clients ; règle 11 : résumés quotidiens ; règle 4 : pointages privés ; règle 12 : durées par chantier ; règle 13 : pleins de carburant).
+// (règle 1 : lecture réservée aux comptes validés, « affinites », « chats » et « retoursClients » exclus de la lecture générale ; règle 2 : skillsAdmin et superAdmin protégés ; règle 9 : affinites ; règle 10 : retours clients ; règle 11 : résumés quotidiens ; règle 4 : pointages privés ; règle 12 : durées par chantier ; règle 13 : pleins de carburant ; règle 14 : fiches de contrôle).
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -216,6 +216,35 @@ service cloud.firestore {
                     && request.resource.data.photo is string
                     && request.resource.data.photo.matches('^data:image/jpeg;base64,.*');
       allow delete: if isAdmin() || (isApproved() && resource.data.uid == request.auth.uid);
+    }
+
+    // 14. FICHES DE CONTRÔLE : une par chantier et par jour (id « chantierId_AAAA-MM-JJ »), lisible par les comptes
+    //     validés (règle 1). L'équipe sur place la crée et la complète ; seule la personne qui la valide peut la
+    //     passer en « validee » (à son nom), et une fiche validée ne change plus. L'admin peut tout corriger.
+    //     L'appli Les Petites Fées note l'envoi au client (envoyeeLe) avec son compte de service (hors règles).
+    match /fichesControle/{ficheId} {
+      function ficheOk(d) {
+        return d.chantierId is string && d.date is string && d.date.size() == 10
+            && ficheId == d.chantierId + '_' + d.date
+            && d.modele in ['A1', 'A2', 'B1']
+            && d.get('statut', 'a_remplir') in ['a_remplir', 'en_cours', 'validee']
+            && d.get('observations', '') is string && d.get('observations', '').size() <= 600
+            && !('envoyeeLe' in d);
+      }
+      allow create: if isAdmin() || (isApproved() && ficheOk(request.resource.data)
+                    && request.resource.data.get('statut', 'a_remplir') != 'validee');
+      allow update: if isAdmin() || (isApproved()
+                    && resource.data.get('statut', '') != 'validee'
+                    && ficheOk(request.resource.data)
+                    && request.resource.data.chantierId == resource.data.chantierId
+                    && request.resource.data.date == resource.data.date
+                    && (request.resource.data.get('statut', '') != 'validee'
+                        || request.resource.data.responsableUid == request.auth.uid));
+      allow delete: if isAdmin();
+    }
+    // Rotation : dernière fiche remplie par chacun sur ce chantier (qui remplit la prochaine)
+    match /fichesRotation/{chantierId} {
+      allow write: if isApproved();
     }
   }
 }

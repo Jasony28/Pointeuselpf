@@ -8,6 +8,8 @@ import { mailButtonHTML } from './mail.js';
 import { missingProfileParts, escapeHTML } from './work-profile.js';
 import { getUnreadRetours } from './retours-clients.js';
 import { photoFieldHTML, bindPhotoField, uploadPointagePhoto } from './photos-chantier.js';
+import { ficheConfig, ficheId, jourLocal, sortieBloquee, resume, MODELES } from './fiches-controle.js';
+import { noterArrivee, suivreFiche, reprendreFiche } from './fiches-store.js';
 
 
 let timerInterval = null;
@@ -15,12 +17,18 @@ let chantiersCache = [];
 let colleaguesCache = [];
 let currentWeekOffset = 0;
 let unreadListener = null;
+// Fiche de contrôle du chantier en cours : suivie en direct (undefined = pas encore lue, null = pas encore créée)
+let ficheUnsub = null;
+let ficheSuivieId = null;
+let ficheActuelle;
+const arriveesNotees = new Set();
 
 // Appelé par app.js quand on quitte la page : stoppe l'écoute des messages et le minuteur affiché
 export function cleanup() {
     if (unreadListener) { unreadListener(); unreadListener = null; }
     clearInterval(timerInterval);
     clearInterval(returnTripTimer);
+    arreterSuiviFiche();
 }
 
 export async function render() {
@@ -34,6 +42,7 @@ export async function render() {
             <div id="retours-clients-banner" hidden></div>
             <div id="profile-reminder" class="hidden"></div>
             <div id="live-tracker-container" class="p-6 rounded-lg shadow-lg" style="background-color: var(--color-surface); border: 1px solid var(--color-border);"></div>
+            <div id="fiche-controle-card" hidden></div>
             <button type="button" id="fuelShortcut" class="fu-shortcut"${currentUser?.isDriver === true ? '' : ' hidden'}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 22h12M4 22V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v17M4 10h10M14 13h2a2 2 0 0 1 2 2v2.5a1.5 1.5 0 0 0 3 0V9l-3-3"/></svg>
                 <span><b>J'ai fait le plein</b><small>Noter les litres, le prix et la photo du ticket</small></span>
@@ -75,6 +84,19 @@ export async function render() {
             </form>
         </div>
 
+        <div id="ficheBloqueeModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="ficheBloqueeTitle">
+            <div class="modal-panel modal-panel-sm">
+                <div class="modal-body">
+                    <h3 id="ficheBloqueeTitle" class="modal-title">Fiche de contrôle à remplir</h3>
+                    <p class="modal-text">Aujourd'hui, c'est toi qui remplis la fiche de ce chantier. Valide-la avant d'arrêter ton pointage.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" id="cancelFicheBloquee" class="btn btn-secondary">Plus tard</button>
+                    <button type="button" id="ouvrirFicheBloquee" class="btn btn-primary">Remplir la fiche</button>
+                </div>
+            </div>
+        </div>
+
         <div id="stopPointageModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="stopPointageTitle">
             <form id="stopPointageForm" class="modal-panel">
                 <div class="modal-body space-y-4">
@@ -104,6 +126,8 @@ export async function render() {
         if (addDayBtn) openAddTaskModal(addDayBtn.dataset.date);
         if (e.target.id === 'cancelStartPointage') document.getElementById('startPointageModal').classList.add('hidden');
         if (e.target.id === 'cancelStopPointage') document.getElementById('stopPointageModal').classList.add('hidden');
+        if (e.target.id === 'cancelFicheBloquee') document.getElementById('ficheBloqueeModal').classList.add('hidden');
+        if (e.target.id === 'ouvrirFicheBloquee' && ficheActuelle) navigateTo('user-fiche', { id: ficheActuelle.id });
         if (e.target.id === 'closeDetailsBtn') document.getElementById('detailsModal').classList.add('hidden');
         if (e.target.id === 'closeNavModalBtn') document.getElementById('navigationModal').classList.add('hidden');
     };
@@ -187,7 +211,15 @@ function initLiveTracker() {
         clearInterval(timerInterval);
         if (!isPaused) timerInterval = setInterval(updateTimerUI, 1000);
         document.getElementById('pauseResumeBtn').onclick = isPaused ? resumePointage : pausePointage;
-        document.getElementById('stopBtn').onclick = openStopModal;
+        document.getElementById('stopBtn').onclick = () => {
+            // La personne désignée valide d'abord la fiche de contrôle (les collègues ne sont pas bloqués)
+            if (sortieBloquee(ficheActuelle, currentUser.uid)) {
+                vibrate(60);
+                document.getElementById('ficheBloqueeModal').classList.remove('hidden');
+                return;
+            }
+            openStopModal();
+        };
     } else {
         if (document.getElementById('breadcrumb-page')?.textContent === 'Planning') document.title = 'Planning · Pointeuse LPF';
         const hour = new Date().getHours();
@@ -206,6 +238,84 @@ function initLiveTracker() {
             </div>`;
     }
     loadTodaySummary();
+    initFicheCard();
+}
+
+// ---------------------------------------------------------------
+// Fiche de contrôle : carte sous le minuteur pendant le pointage.
+// Une personne par passage la remplit (rotation) ; sa sortie attend la validation.
+// ---------------------------------------------------------------
+function arreterSuiviFiche() {
+    if (ficheUnsub) { ficheUnsub(); ficheUnsub = null; }
+    ficheSuivieId = null;
+    ficheActuelle = undefined;
+}
+
+function initFicheCard() {
+    const box = document.getElementById('fiche-controle-card');
+    if (!box) return;
+    const active = JSON.parse(localStorage.getItem('activePointage') || 'null');
+    const chantier = active && chantiersCache.find(c => c.id === active.chantierId);
+    if (!active || !chantier || !ficheConfig(chantier)) {
+        arreterSuiviFiche();
+        box.hidden = true;
+        box.innerHTML = '';
+        return;
+    }
+    const id = ficheId(chantier.id, jourLocal(new Date(active.timestamp)));
+    if (ficheSuivieId === id) { renderFicheCard(); return; }
+    arreterSuiviFiche();
+    ficheSuivieId = id;
+    ficheUnsub = suivreFiche(id, (fiche) => {
+        ficheActuelle = fiche;
+        // Première arrivée (ou pointage démarré avant la mise à jour) : on s'inscrit sur la fiche du jour
+        const dejaInscrit = fiche?.presentsUid && Object.values(fiche.presentsUid).includes(currentUser.uid);
+        if (fiche !== undefined && !dejaInscrit && !arriveesNotees.has(id)) {
+            arriveesNotees.add(id);
+            noterArrivee(chantier, new Date(active.timestamp));
+        }
+        renderFicheCard();
+    });
+}
+
+const FICHE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 3v2h6V3M8.5 12l2 2 4.5-4.5M8 18h8"/></svg>';
+const OK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+
+function renderFicheCard() {
+    const box = document.getElementById('fiche-controle-card');
+    if (!box) return;
+    const f = ficheActuelle;
+    if (!f || !f.responsableUid || !MODELES[f.modele]) { box.hidden = true; box.innerHTML = ''; return; }
+    const modele = MODELES[f.modele];
+    const moi = f.responsableUid === currentUser.uid;
+    box.hidden = false;
+    if (f.statut === 'validee') {
+        const r = resume(f);
+        box.innerHTML = `<div class="fc-card is-done"><div class="fc-head"><span class="fc-ico">${OK_ICON}</span><div>
+            <p class="fc-title">Fiche de contrôle validée</p>
+            <p class="fc-sub">${moi ? 'Merci ! ' : ''}Remplie par ${escapeHTML(f.responsableNom)} à ${escapeHTML(f.heure || '')} · ${r.coches}/${r.aCocher} points${r.R ? ` · ${r.R} à revoir` : ''}. Elle part au client avec le mail du soir.</p>
+        </div></div></div>`;
+    } else if (moi) {
+        box.innerHTML = `<div class="fc-card is-todo"><div class="fc-head"><span class="fc-ico">${FICHE_ICON}</span><div>
+            <p class="fc-title">Fiche de contrôle à remplir</p>
+            <p class="fc-sub">C'est ton tour aujourd'hui (${escapeHTML(modele.titre)}). Obligatoire avant d'arrêter ton pointage.</p>
+        </div></div><button type="button" class="btn btn-primary" id="ouvrirFiche">${f.statut === 'en_cours' ? 'Continuer la fiche' : 'Remplir la fiche'}</button></div>`;
+        document.getElementById('ouvrirFiche').onclick = () => navigateTo('user-fiche', { id: f.id });
+    } else {
+        box.innerHTML = `<div class="fc-card is-info"><div class="fc-head"><span class="fc-ico">${FICHE_ICON}</span><div>
+            <p class="fc-title">Fiche de contrôle</p>
+            <p class="fc-sub">${escapeHTML(f.responsableNom)} la remplit aujourd'hui. Rien à faire pour toi.</p>
+        </div></div><button type="button" class="link fc-link" id="reprendreFiche">${escapeHTML(f.responsableNom)} n'est pas là ? Je la remplis à sa place</button></div>`;
+        document.getElementById('reprendreFiche').onclick = async () => {
+            try {
+                await reprendreFiche(f.id);
+                navigateTo('user-fiche', { id: f.id });
+            } catch (e) {
+                console.error('Reprise de la fiche :', e);
+                showInfoModal('Erreur', "Impossible de reprendre la fiche (elle vient peut-être d'être validée).");
+            }
+        };
+    }
 }
 
 // Boutons d'itinéraire vers le chantier en cours (Waze / Google Maps)

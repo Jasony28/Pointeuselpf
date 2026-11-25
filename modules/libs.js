@@ -9,6 +9,8 @@ const PDF_URLS = [
     'https://cdn.jsdelivr.net/npm/jspdf-autotable@5.0.9/dist/jspdf.plugin.autotable.min.js',
 ];
 const CHART_URL = 'https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js';
+// Remplissage des fiches de contrôle (le PDF d'origine, ses cases et ses champs)
+const PDF_LIB_URL = 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js';
 
 const loading = new Map();
 
@@ -39,4 +41,10 @@ export async function loadChart() {
     await loadScript(CHART_URL);
     applyChartDefaults();
     return window.Chart;
+}
+
+/** pdf-lib (remplir un PDF existant). Renvoie window.PDFLib. */
+export async function loadPdfLib() {
+    await loadScript(PDF_LIB_URL);
+    return window.PDFLib;
 }

@@ -22,6 +22,7 @@ const entries = [
     'icons',
     'themes',
     'data',      // prix du carburant (relevés chaque semaine par le workflow « Prix carburant »)
+    'assets/fiches', // fiches de contrôle : PDF d'origine (remplis) et leur image (aperçu)
 ];
 
 rmSync(out, { recursive: true, force: true });

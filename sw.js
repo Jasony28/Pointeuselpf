@@ -4,7 +4,7 @@ const { precaching, routing, strategies, core } = workbox;
 core.setCacheNameDetails({ prefix: 'pointeuse-lpf-cache' });
 
 // Version synchronisée avec app.js
-const APP_VERSION = 'v4.16.3'; // <--- CHANGEMENT ICI
+const APP_VERSION = 'v4.17.0'; // <--- CHANGEMENT ICI
 
 precaching.precacheAndRoute([
     { url: './', revision: APP_VERSION },
@@ -46,6 +46,9 @@ precaching.precacheAndRoute([
     { url: 'modules/photos-chantier.js', revision: APP_VERSION },
     { url: 'modules/pleins.js', revision: APP_VERSION },
     { url: 'modules/user-fuel.js', revision: APP_VERSION },
+    { url: 'modules/fiches-controle.js', revision: APP_VERSION },
+    { url: 'modules/fiches-store.js', revision: APP_VERSION },
+    { url: 'modules/user-fiche.js', revision: APP_VERSION },
 
     // Modules Admin
     { url: 'modules/admin-chantiers.js', revision: APP_VERSION },
@@ -62,6 +65,7 @@ precaching.precacheAndRoute([
     { url: 'modules/admin-travel-report.js', revision: APP_VERSION },
     { url: 'modules/admin-live-view.js', revision: APP_VERSION },
     { url: 'modules/admin-retours.js', revision: APP_VERSION },
+    { url: 'modules/admin-fiches.js', revision: APP_VERSION },
     
     // Ressources statiques
     { url: 'icons/lpf-192.png', revision: APP_VERSION },
