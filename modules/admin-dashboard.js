@@ -361,7 +361,7 @@ function fichesAlertsHTML(snap) {
     const aFaire = fiches.length - validees.length;
     const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     return `<button type="button" class="todo-alert is-info" data-page="admin-fiches">${FICHE_ICON}<span><strong>Fiches de contrôle :</strong> ${validees.length} remplie${validees.length > 1 ? 's' : ''}${aFaire ? `, ${aFaire} en attente` : ''} aujourd'hui. Elles partent au client avec le mail du soir.</span></button>`
-        + revoir.map(f => `<button type="button" class="todo-alert is-warn" data-page="admin-fiches">${FICHE_ICON}<span><strong>Point à revoir</strong> sur ${esc(f.chantierName)} (${esc(f.responsableNom)}) : « ${esc(f.observations)} »</span></button>`).join('');
+        + revoir.map(f => `<button type="button" class="todo-alert is-warn" data-page="admin-fiches">${FICHE_ICON}<span><strong>Point à revoir</strong> sur ${esc(f.chantierName)} (${esc(f.responsableNom)})${f.observations ? ` : « ${esc(f.observations)} »` : ''}</span></button>`).join('');
 }
 
 function setupEventListeners() {

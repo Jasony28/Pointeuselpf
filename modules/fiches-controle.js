@@ -124,12 +124,11 @@ export function resume(fiche) {
     return { total, coches: aCocher.filter(n => rep[n]).length, aCocher: aCocher.length, ...compte, aRevoir: Object.keys(rep).filter(n => rep[n] === 'R').map(Number) };
 }
 
-/** null si la fiche peut être validée, sinon le message à afficher. */
+/** null si la fiche peut être validée (tous les points cochés), sinon le message à afficher. Observations : facultatives. */
 export function erreurValidation(fiche) {
     const rep = reponsesCompletes(fiche);
     const manquants = pointsACocher(fiche).filter(n => !rep[n]);
     if (manquants.length) return manquants.length === 1 ? `Il reste le point ${manquants[0]} à cocher.` : `Il reste ${manquants.length} points à cocher (n° ${manquants.join(', ')}).`;
-    if (Object.values(rep).includes('R') && !String(fiche.observations || '').trim()) return 'Un point est « À revoir » : explique-le dans les observations (avec son n°).';
     return null;
 }
 

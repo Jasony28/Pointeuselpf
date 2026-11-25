@@ -84,7 +84,7 @@ function draw() {
         }).join('')}
         <div class="fc-card">
             <div class="field">
-                <label for="ficheObs" class="field-label">Observations / correction faite ou à prévoir ${aRevoir ? '<span class="fc-err">obligatoire : indique le n° du point</span>' : '<span class="field-optional">(facultatif)</span>'}</label>
+                <label for="ficheObs" class="field-label">Observations / correction faite ou à prévoir <span class="field-optional">(facultatif${aRevoir ? ', indique le n° du point' : ''})</span></label>
                 <textarea id="ficheObs" class="input" rows="3" maxlength="600" placeholder="Ex. n°9 : chasse d'eau du WC du 2e qui coule" ${lectureSeule ? 'readonly' : ''}>${escapeHTML(saisie.observations)}</textarea>
             </div>
             ${aRevoir || saisie.personnePrevenue || saisie.aCorrigerAvant ? `
@@ -115,12 +115,7 @@ function draw() {
         redraw();
     });
     const obs = document.getElementById('ficheObs');
-    obs.oninput = () => {
-        const avant = !!saisie.observations.trim();
-        saisie.observations = obs.value;
-        garderBrouillon();
-        if (essai && avant !== !!obs.value.trim()) updateHint();
-    };
+    obs.oninput = () => { saisie.observations = obs.value; garderBrouillon(); };
     const prev = document.getElementById('fichePrevenu');
     if (prev) prev.oninput = () => { saisie.personnePrevenue = prev.value; garderBrouillon(); };
     const ech = document.getElementById('ficheEcheance');
@@ -134,13 +129,6 @@ function redraw() {
     draw();
     window.scrollTo(0, y);
 }
-function updateHint() {
-    const hint = document.getElementById('ficheHint');
-    const err = erreurValidation(courante());
-    const r = resume(courante());
-    if (hint) hint.innerHTML = err ? `<span class="fc-err">${escapeHTML(err)}</span>` : `${r.coches}/${r.aCocher} points cochés`;
-}
-
 async function valider() {
     essai = true;
     const err = erreurValidation(courante());
@@ -148,7 +136,6 @@ async function valider() {
         redraw();
         const premier = pageContent.querySelector('.fc-pt.is-missing');
         if (premier) premier.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        else document.getElementById('ficheObs')?.focus();
         return;
     }
     const btn = document.getElementById('ficheValider');

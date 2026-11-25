@@ -44,10 +44,10 @@ test('les lignes hors prestation sont S.O. d\'office', () => {
     assert.equal(rep[9], undefined);
 });
 
-test('validation : tous les points cochés, et une observation pour un « À revoir »', () => {
+test('validation : tous les points cochés ; observations facultatives, même pour un « À revoir »', () => {
     assert.match(erreurValidation(fiche({ reponses: tout('F', { 3: null }) })), /point 3/);
     assert.match(erreurValidation(fiche({ reponses: {} })), /13 points/);
-    assert.match(erreurValidation(fiche({ reponses: tout('F', { 9: 'R' }) })), /observations/);
+    assert.equal(erreurValidation(fiche({ reponses: tout('F', { 9: 'R' }) })), null);
     assert.equal(erreurValidation(fiche({ reponses: tout('F', { 9: 'R' }), observations: 'n°9 : fuite' })), null);
     assert.equal(erreurValidation(fiche({ reponses: tout('F') })), null);
 });
