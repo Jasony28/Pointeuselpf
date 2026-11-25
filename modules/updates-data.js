@@ -1,5 +1,12 @@
 export const updatesLog = [
     {
+        version: 'v4.17.1',
+        date: '25 novembre 2026',
+        changes: [
+            "**Admin - Classer les chantiers** : dans « Fiches de contrôle », le bouton « Classer les chantiers » liste tous les chantiers avec A1, A2, B1 ou Aucune. Un toucher suffit, c'est enregistré tout de suite. Recherche et filtre par modèle pour retrouver vite ceux à corriger.",
+        ]
+    },
+    {
         version: 'v4.17.0',
         date: '25 novembre 2026',
         changes: [

@@ -1,6 +1,6 @@
 // Page admin « Fiches de contrôle » : les fiches du jour, puis chaque chantier → toutes ses fiches, en détail.
-import { collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
-import { db, pageContent, navigateTo, showInfoModal } from "../app.js";
+import { collection, query, where, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { db, pageContent, navigateTo, showInfoModal, showToast } from "../app.js";
 import { getActiveChantiers } from "./data-service.js";
 import { MODELES, LIBELLES, PAGE, caseRect, ficheConfig, reponsesCompletes, resume, etat, champsTexte, dateFr, jourLocal } from "./fiches-controle.js";
 import { fichesDuJour, fichesDuChantier, fichesDepuis, telechargerPdf } from "./fiches-store.js";
@@ -29,6 +29,7 @@ export async function render(params = {}) {
     pageContent.innerHTML = `<div class="page-loader"><div class="spinner" role="status" aria-label="Chargement"></div></div>`;
     try {
         if (params.chantierId) await renderChantier(params.chantierId);
+        else if (params.vue === 'classer') await renderClasser();
         else await renderListe();
     } catch (error) {
         console.error('Fiches de contrôle :', error);
@@ -64,6 +65,7 @@ async function renderListe() {
             <h2 class="text-2xl font-bold">Fiches de contrôle</h2>
             <p class="fc-sub">Remplies sur place à chaque passage, à tour de rôle. Chaque fiche validée part automatiquement au client en PDF avec le mail « Nettoyage effectué » du soir.</p>
         </div>
+        <button type="button" class="btn btn-primary" id="goClasser">Classer les chantiers (A1, A2, B1)</button>
 
         <section class="space-y-3">
             <h3 class="kpi-label">Aujourd'hui · ${esc(jourLong(today))}</h3>
@@ -93,6 +95,86 @@ async function renderListe() {
 
     pageContent.querySelectorAll('[data-chantier]').forEach(b => b.onclick = () => navigateTo('admin-fiches', { chantierId: b.dataset.chantier }));
     document.getElementById('goChantiers').onclick = () => navigateTo('admin-chantiers');
+    document.getElementById('goClasser').onclick = () => navigateTo('admin-fiches', { vue: 'classer' });
+}
+
+/* ---------- Classer les chantiers : un modèle par chantier, en un toucher ---------- */
+let classerChantiers = [];
+let classerFiltre = 'tous';
+let classerTexte = '';
+async function renderClasser() {
+    classerChantiers = await getActiveChantiers(true);
+    const choix = [...Object.values(MODELES).map(m => [m.code, m.court]), ['', 'Pas de fiche']];
+    pageContent.innerHTML = `
+    <div class="max-w-4xl mx-auto space-y-5">
+        <button type="button" class="link font-semibold fc-back" id="backFiches">&larr; Fiches de contrôle</button>
+        <div>
+            <h2 class="text-2xl font-bold">Classer les chantiers</h2>
+            <p class="fc-sub">Touchez le bon modèle pour chaque chantier : c'est enregistré tout de suite. ${choix.slice(0, 3).map(([c, n]) => `<b>${c}</b> ${esc(n.toLowerCase())}`).join(' · ')}. Votre choix n'est jamais remplacé automatiquement.</p>
+        </div>
+        <div class="hours-toolbar">
+            <div class="hours-search">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <input type="search" id="classerRecherche" placeholder="Rechercher un chantier…" autocomplete="off" value="${esc(classerTexte)}">
+            </div>
+            <div class="segmented" role="group" aria-label="Filtre">
+                ${[['tous', 'Tous'], ['A1', 'A1'], ['A2', 'A2'], ['B1', 'B1'], ['aucune', 'Sans fiche']].map(([v, l]) =>
+                    `<button type="button" data-filtre="${v}" class="${classerFiltre === v ? 'is-active' : ''}" aria-pressed="${classerFiltre === v}">${l}</button>`).join('')}
+            </div>
+        </div>
+        <div class="fc-count" id="classerCompte" style="flex-wrap:wrap"></div>
+        <div class="fc-list" id="classerListe"></div>
+    </div>`;
+    document.getElementById('backFiches').onclick = () => navigateTo('admin-fiches');
+    document.getElementById('classerRecherche').oninput = (e) => { classerTexte = e.target.value; dessinerClasser(); };
+    pageContent.querySelectorAll('[data-filtre]').forEach(b => b.onclick = () => {
+        classerFiltre = b.dataset.filtre;
+        pageContent.querySelectorAll('[data-filtre]').forEach(x => { x.classList.toggle('is-active', x === b); x.setAttribute('aria-pressed', String(x === b)); });
+        dessinerClasser();
+    });
+    dessinerClasser();
+}
+
+function dessinerClasser() {
+    const liste = document.getElementById('classerListe');
+    if (!liste) return;
+    const t = classerTexte.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const visibles = classerChantiers.filter(c => {
+        const m = ficheConfig(c)?.modele || 'aucune';
+        if (classerFiltre !== 'tous' && m !== classerFiltre) return false;
+        return !t || String(c.name).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(t);
+    });
+    const compte = (code) => classerChantiers.filter(c => (ficheConfig(c)?.modele || 'aucune') === code).length;
+    document.getElementById('classerCompte').innerHTML = `<span><b>${visibles.length}</b> chantier${visibles.length > 1 ? 's' : ''}</span><span class="fc-sub">A1 : ${compte('A1')} · A2 : ${compte('A2')} · B1 : ${compte('B1')} · sans fiche : ${compte('aucune')}</span>`;
+    liste.innerHTML = visibles.length ? visibles.map(c => {
+        const actuel = ficheConfig(c)?.modele || '';
+        return `<div class="fc-row" style="cursor:default"><div><b>${esc(c.name)}</b><small>${esc(c.address || 'Adresse non renseignée')}</small></div>
+            <div class="wp-chips" role="group" aria-label="Fiche de ${esc(c.name)}">${[...Object.keys(MODELES), ''].map(code =>
+                `<button type="button" class="wp-chip" data-classer="${esc(c.id)}" data-modele="${code}" aria-pressed="${actuel === code}" title="${code ? esc(MODELES[code].titre) : 'Pas de fiche de contrôle'}">${code || 'Aucune'}</button>`).join('')}</div></div>`;
+    }).join('') : `<p class="fc-sub">Aucun chantier ne correspond.</p>`;
+    liste.querySelectorAll('[data-classer]').forEach(b => b.onclick = () => classer(b.dataset.classer, b.dataset.modele || null, b));
+}
+
+async function classer(chantierId, modele, bouton) {
+    const c = classerChantiers.find(x => x.id === chantierId);
+    if (!c) return;
+    const avant = ficheConfig(c);
+    if ((avant?.modele || null) === modele) return;
+    // Nouveau modèle : la zone est gardée, les lignes hors prestation sont remises à zéro (ce ne sont plus les mêmes)
+    const valeur = modele ? { modele, zone: avant?.zone || '', horsPrestation: avant?.modele === modele ? avant.horsPrestation : [] } : null;
+    const ancien = c.ficheControle;
+    c.ficheControle = valeur;
+    dessinerClasser();
+    try {
+        await updateDoc(doc(db, 'chantiers', chantierId), { ficheControle: valeur });
+        getActiveChantiers(true).catch(() => {});
+        showToast(`${c.name} : ${modele ? `fiche ${modele}` : 'pas de fiche'}.`, 'success');
+    } catch (error) {
+        console.error('Classement du chantier :', error);
+        c.ficheControle = ancien;
+        dessinerClasser();
+        showInfoModal('Erreur', "Le classement n'a pas pu être enregistré. Vérifiez la connexion et réessayez.");
+    }
 }
 
 /* ---------- Un chantier : toutes ses fiches, en détail ---------- */
