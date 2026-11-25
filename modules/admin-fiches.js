@@ -1,6 +1,11 @@
 // Page admin « Fiches de contrôle » : les fiches du jour, puis chaque chantier → toutes ses fiches, en détail.
+<<<<<<< HEAD
 import { collection, query, where, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
 import { db, pageContent, navigateTo, showInfoModal, showToast } from "../app.js";
+=======
+import { collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js";
+import { db, pageContent, navigateTo, showInfoModal } from "../app.js";
+>>>>>>> 26d3b52bc99c33b56ecebf3aa3633ba6caa06486
 import { getActiveChantiers } from "./data-service.js";
 import { MODELES, LIBELLES, PAGE, caseRect, ficheConfig, reponsesCompletes, resume, etat, champsTexte, dateFr, jourLocal } from "./fiches-controle.js";
 import { fichesDuJour, fichesDuChantier, fichesDepuis, telechargerPdf } from "./fiches-store.js";
@@ -29,7 +34,10 @@ export async function render(params = {}) {
     pageContent.innerHTML = `<div class="page-loader"><div class="spinner" role="status" aria-label="Chargement"></div></div>`;
     try {
         if (params.chantierId) await renderChantier(params.chantierId);
+<<<<<<< HEAD
         else if (params.vue === 'classer') await renderClasser();
+=======
+>>>>>>> 26d3b52bc99c33b56ecebf3aa3633ba6caa06486
         else await renderListe();
     } catch (error) {
         console.error('Fiches de contrôle :', error);
@@ -65,7 +73,10 @@ async function renderListe() {
             <h2 class="text-2xl font-bold">Fiches de contrôle</h2>
             <p class="fc-sub">Remplies sur place à chaque passage, à tour de rôle. Chaque fiche validée part automatiquement au client en PDF avec le mail « Nettoyage effectué » du soir.</p>
         </div>
+<<<<<<< HEAD
         <button type="button" class="btn btn-primary" id="goClasser">Classer les chantiers (A1, A2, B1)</button>
+=======
+>>>>>>> 26d3b52bc99c33b56ecebf3aa3633ba6caa06486
 
         <section class="space-y-3">
             <h3 class="kpi-label">Aujourd'hui · ${esc(jourLong(today))}</h3>
@@ -95,6 +106,7 @@ async function renderListe() {
 
     pageContent.querySelectorAll('[data-chantier]').forEach(b => b.onclick = () => navigateTo('admin-fiches', { chantierId: b.dataset.chantier }));
     document.getElementById('goChantiers').onclick = () => navigateTo('admin-chantiers');
+<<<<<<< HEAD
     document.getElementById('goClasser').onclick = () => navigateTo('admin-fiches', { vue: 'classer' });
 }
 
@@ -175,6 +187,8 @@ async function classer(chantierId, modele, bouton) {
         dessinerClasser();
         showInfoModal('Erreur', "Le classement n'a pas pu être enregistré. Vérifiez la connexion et réessayez.");
     }
+=======
+>>>>>>> 26d3b52bc99c33b56ecebf3aa3633ba6caa06486
 }
 
 /* ---------- Un chantier : toutes ses fiches, en détail ---------- */
