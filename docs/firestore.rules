@@ -226,7 +226,7 @@ service cloud.firestore {
       function ficheOk(d) {
         return d.chantierId is string && d.date is string && d.date.size() == 10
             && ficheId == d.chantierId + '_' + d.date
-            && d.modele in ['A1', 'A2', 'B1']
+            && d.modele in ['A1', 'A2', 'B1', 'G1']
             && d.get('statut', 'a_remplir') in ['a_remplir', 'en_cours', 'validee']
             && d.get('observations', '') is string && d.get('observations', '').size() <= 600
             && !('envoyeeLe' in d);

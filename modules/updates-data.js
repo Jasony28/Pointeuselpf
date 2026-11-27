@@ -1,5 +1,12 @@
 export const updatesLog = [
     {
+        version: 'v4.17.2',
+        date: '27 novembre 2026',
+        changes: [
+            "**Nouvelle fiche G1 · Gîtes et locations de vacances** : 15 points pensés pour les locations (chambres et lits, linge, cuisine, électroménager, vaisselle, salle de bain, extérieur, contrôle final…). Elle se choisit comme les autres dans « Classer les chantiers » ou dans la fiche du chantier, et part au client avec le mail du soir.",
+        ]
+    },
+    {
         version: 'v4.17.1',
         date: '25 novembre 2026',
         changes: [
