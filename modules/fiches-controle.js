@@ -56,6 +56,25 @@ export const MODELES = {
             ['Salle de pause', 'Évier, plans, tables et appareils extérieurs propres selon le périmètre convenu.'],
             ['Finition et signalement', 'Odeur, dégâts, matériel manquant ou anomalie signalés ; locaux refermés selon consigne.'],
         ], champs: { ...HAUT, ...BAS_14 } },
+    G1: { code: 'G1', titre: 'G1 · Gîtes et locations de vacances', court: 'Gîtes et locations de vacances',
+        intro: 'Fiche pour les gîtes, maisons et appartements de location entre deux séjours. Logement prêt pour les prochains hôtes.',
+        points: [
+            ['Entrée et accès', 'Porte, poignée, seuil et paillasson propres ; clés ou boîte à clés en place.'],
+            ['Sols', 'Aspiration et lavage de toutes les pièces, y compris sous les lits et derrière les portes.'],
+            ['Chambres et lits', 'Lits faits avec du linge propre, oreillers et couettes en ordre, rien oublié sous les lits.'],
+            ['Linge', 'Serviettes, draps de bain et torchons propres posés selon le nombre de personnes.'],
+            ['Cuisine', 'Plans de travail, évier, plaques, four et hotte propres ; aucun reste alimentaire.'],
+            ['Électroménager', 'Frigo vidé et nettoyé, micro-ondes, lave-vaisselle et cafetière propres et vides.'],
+            ['Vaisselle et ustensiles', 'Vaisselle propre, rangée et au complet ; casse ou manque signalé.'],
+            ['Salle de bain', 'Douche ou baignoire, lavabo, miroir et robinetterie propres, sans calcaire ni cheveux.'],
+            ['WC', 'Cuvette, abattant, chasse et sol propres ; papier en place.'],
+            ['Surfaces et mobilier', 'Tables, chaises, meubles, rebords et étagères dépoussiérés, remis à leur place.'],
+            ['Vitres et miroirs', 'Traces visibles retirées sur les vitres accessibles et les miroirs.'],
+            ['Consommables', "Papier toilette, savon, produit vaisselle, sacs poubelle et kit d'accueil complétés."],
+            ['Poubelles et tri', 'Poubelles vidées, nettoyées, sacs remplacés ; consignes de tri respectées.'],
+            ['Extérieur et terrasse', 'Terrasse, mobilier de jardin et barbecue propres si compris dans la prestation.'],
+            ['Contrôle final et fermeture', 'Odeur, chauffage, lumières, fenêtres et portes vérifiés ; dégâts ou objets oubliés signalés.'],
+        ], champs: { ...HAUT, ...BAS_15 } },
 };
 
 // Cases Fait / À revoir / S.O. : 16 pt, colonnes fixes, une ligne tous les 29 pt
@@ -68,7 +87,7 @@ export const LIBELLES = { F: 'Fait', R: 'À revoir', S: 'S.O.' };
 const OPTION_PDF = { F: 'Fait', R: 'A_revoir', S: 'Sans_objet' };
 
 // Modèle proposé d'après le « Type de lieu » du chantier (le choix reste à l'admin)
-export const MODELE_SUGGERE = { 'Bureau': 'B1', 'Gîte / Airbnb': 'A1', 'Maison': 'A1', 'Fin de chantier': 'A1' };
+export const MODELE_SUGGERE = { 'Bureau': 'B1', 'Gîte / Airbnb': 'G1', 'Maison': 'G1', 'Fin de chantier': 'A1' };
 
 /** Réglage de fiche d'un chantier, nettoyé ; null si le chantier n'a pas de fiche. */
 export function ficheConfig(chantier) {

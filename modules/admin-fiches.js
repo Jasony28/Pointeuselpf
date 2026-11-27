@@ -65,7 +65,7 @@ async function renderListe() {
             <h2 class="text-2xl font-bold">Fiches de contrôle</h2>
             <p class="fc-sub">Remplies sur place à chaque passage, à tour de rôle. Chaque fiche validée part automatiquement au client en PDF avec le mail « Nettoyage effectué » du soir.</p>
         </div>
-        <button type="button" class="btn btn-primary" id="goClasser">Classer les chantiers (A1, A2, B1)</button>
+        <button type="button" class="btn btn-primary" id="goClasser">Classer les chantiers (A1, A2, B1, G1)</button>
 
         <section class="space-y-3">
             <h3 class="kpi-label">Aujourd'hui · ${esc(jourLong(today))}</h3>
@@ -110,7 +110,7 @@ async function renderClasser() {
         <button type="button" class="link font-semibold fc-back" id="backFiches">&larr; Fiches de contrôle</button>
         <div>
             <h2 class="text-2xl font-bold">Classer les chantiers</h2>
-            <p class="fc-sub">Touchez le bon modèle pour chaque chantier : c'est enregistré tout de suite. ${choix.slice(0, 3).map(([c, n]) => `<b>${c}</b> ${esc(n.toLowerCase())}`).join(' · ')}. Votre choix n'est jamais remplacé automatiquement.</p>
+            <p class="fc-sub">Touchez le bon modèle pour chaque chantier : c'est enregistré tout de suite. ${choix.slice(0, -1).map(([c, n]) => `<b>${c}</b> ${esc(n.toLowerCase())}`).join(' · ')}. Votre choix n'est jamais remplacé automatiquement.</p>
         </div>
         <div class="hours-toolbar">
             <div class="hours-search">

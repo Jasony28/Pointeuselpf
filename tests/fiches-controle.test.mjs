@@ -9,10 +9,11 @@ import {
 const fiche = (extra = {}) => ({ modele: 'A2', horsPrestation: [7, 8], reponses: {}, observations: '', chantierName: 'Résidence Les Tilleuls', date: '2026-11-25', ...extra });
 const tout = (valeur, sauf = {}) => Object.fromEntries(Array.from({ length: 15 }, (_, i) => [i + 1, (i + 1) in sauf ? sauf[i + 1] : valeur]));
 
-test('les trois modèles ont le bon nombre de lignes', () => {
+test('les quatre modèles ont le bon nombre de lignes', () => {
     assert.equal(MODELES.A1.points.length, 15);
     assert.equal(MODELES.A2.points.length, 15);
     assert.equal(MODELES.B1.points.length, 14);
+    assert.equal(MODELES.G1.points.length, 15);
 });
 
 test('les cases tombent sur celles du PDF (ligne 1 et ligne 15)', () => {
